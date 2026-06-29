@@ -102,14 +102,6 @@ export interface RepoProfile {
 // Draft types — mutable, used only inside forms before validation/persist.
 // ---------------------------------------------------------------------------
 
-export interface DataPointDraft {
-  /** Row key for React; not persisted. */
-  id: string;
-  time: string;
-  temp_c: string;
-  rh_percent: string;
-}
-
 export interface ProfileDraft {
   name: string;
   description: string;
@@ -119,28 +111,6 @@ export interface ProfileDraft {
   conditionType?: CanonicalCondition;
   taxonomyPath: string[];
   dataset: DataPointDraft[];
-}
-
-// ---------------------------------------------------------------------------
-// Taxonomy
-// ---------------------------------------------------------------------------
-
-/** A node in the configurable taxonomy tree, persisted in localStorage. */
-export interface TaxonomyNode {
-  id: string;
-  parentId: string | null;
-  label: string;
-  /** Sibling sort order; multiples of 10 leave room for future insertions. */
-  order: number;
-}
-
-/** A TaxonomyNode enriched with resolved children and profile-presence flag. */
-export interface TaxonomyNodeItem extends TaxonomyNode {
-  children: TaxonomyNodeItem[];
-  /** True if at least one profile's taxonomyPath passes through this node. */
-  hasProfiles: boolean;
-  /** Full label path from root to this node, e.g. ["Humidity", "B3", "Operational"]. */
-  path: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -154,40 +124,9 @@ export interface DataPoint {
   rh_percent: number; // Relative Humidity in %RH
 }
 
-/**
- * The unified profile model used for BOTH builtin and user-created profiles.
- * Profiles are associated with the taxonomy through taxonomyPath (array of labels).
- */
-export interface RepoProfile {
-  id: string;
-  name: string;
-  description: string;
-  /** Ordered label path from root taxonomy node to the profile's leaf node. */
-  taxonomyPath: string[];
-  dataset: DataPoint[];
-  source: "builtin" | "user";
-  createdAt: string;
-  updatedAt: string;
-}
-
 // ---------------------------------------------------------------------------
 // Draft types — mutable, used only inside forms before validation/persist.
 // ---------------------------------------------------------------------------
-
-export interface DataPointDraft {
-  /** Row key for React; not persisted. */
-  id: string;
-  time: string;
-  temp_c: string;
-  rh_percent: string;
-}
-
-export interface ProfileDraft {
-  name: string;
-  description: string;
-  taxonomyPath: string[];
-  dataset: DataPointDraft[];
-}
 
 /**
  * A node in the navigation tree of a standard.
@@ -338,4 +277,11 @@ export interface LibraryProfileDraft {
   environmentSource: string;
   profileShape: string;
   dataset: LibraryDataPointDraft[];
+}
+
+export interface DataPointDraft {
+  id: string;
+  time: string;
+  temp_c: string;
+  rh_percent: string;
 }

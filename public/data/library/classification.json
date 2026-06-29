@@ -17,16 +17,11 @@
   "zones": [
     "B1",
     "B2",
-    "B3",
-    "B4"
+    "B3"
   ],
   "exposureModes": [
     "Operational",
     "Storage"
-  ],
-  "environmentSources": [
-    "Natural",
-    "Induced"
   ],
   "profileShapes": [
     "Steady",

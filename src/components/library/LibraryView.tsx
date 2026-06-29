@@ -10,7 +10,8 @@ import type { UseRepositoryResult } from "../../hooks/useRepository";
 import { ProfileList } from "./ProfileList";
 import { ProfileForm } from "./ProfileForm";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
-import { exportProfiles } from "../../lib/repositoryStorage";
+import { exportProfiles, importProfiles } from "../../lib/repositoryStorage";
+import { useRef } from "react";
 
 type SubView = "list" | "create" | "edit";
 
@@ -79,6 +80,27 @@ export function LibraryView({
     null
   );
   const [search, setSearch] = useState("");
+
+  const importProfilesInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleImportProfiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    try {
+      const importedProfiles = await importProfiles(file);
+
+      repository.replaceProfiles(importedProfiles);
+
+      alert(`${importedProfiles.length} profiles imported`);
+    } catch (error) {
+      console.error(error);
+      alert("Invalid profile file");
+    }
+
+    e.target.value = "";
+  }
 
   const { userProfiles } = repository;
 
@@ -173,6 +195,21 @@ export function LibraryView({
         </div>
 
         <div className="flex items-center gap-2">
+          <input
+            ref={importProfilesInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportProfiles}
+            className="hidden"
+          />
+
+          <button
+            onClick={() => importProfilesInputRef.current?.click()}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            Import Profiles
+          </button>
+
           <button
             onClick={() => exportProfiles(userProfiles)}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"

@@ -32,3 +32,19 @@ export function exportProfiles(profiles: ReadonlyArray<RepoProfile>): void {
 
   URL.revokeObjectURL(url);
 }
+
+export function replaceUserProfiles(profiles: RepoProfile[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+}
+
+export async function importProfiles(file: File): Promise<RepoProfile[]> {
+  const text = await file.text();
+
+  const parsed: unknown = JSON.parse(text);
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("Invalid profiles file");
+  }
+
+  return parsed as RepoProfile[];
+}

@@ -1,8 +1,12 @@
-import { useState, type FormEvent } from 'react';
-import type { TaxonomyNodeItem, RepoProfile, CanonicalCondition } from '../../types';
-import type { UseTaxonomyResult } from '../../hooks/useTaxonomy';
-import { buildTaxonomyTree } from '../../lib/treeBuilder';
-import { exportTaxonomy } from '../../lib/taxonomyStorage'; // ajout pour separer builtin tax et user tax
+import { useState, useRef, type FormEvent, type ChangeEvent } from "react";
+import type {
+  TaxonomyNodeItem,
+  RepoProfile,
+  CanonicalCondition,
+} from "../../types";
+import type { UseTaxonomyResult } from "../../hooks/useTaxonomy";
+import { buildTaxonomyTree } from "../../lib/treeBuilder";
+import { exportTaxonomy, importTaxonomy } from "../../lib/taxonomyStorage";
 
 interface TaxonomyManagerProps {
   taxonomy: UseTaxonomyResult;
@@ -23,10 +27,12 @@ interface NodeRowProps {
 function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
   const [expanded, setExpanded] = useState(depth < 2);
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
-  const [editingImageKey, setEditingImageKey] = useState('');
-  const [editingCondition, setEditingCondition] = useState<CanonicalCondition | ''>('');
+  const [editingImageKey, setEditingImageKey] = useState("");
+  const [editingCondition, setEditingCondition] = useState<
+    CanonicalCondition | ""
+  >("");
   const [addingChild, setAddingChild] = useState(false);
-  const [newChildLabel, setNewChildLabel] = useState('');
+  const [newChildLabel, setNewChildLabel] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const hasChildren = node.children.length > 0;
@@ -34,8 +40,8 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
 
   function startEdit() {
     setEditingLabel(node.label);
-    setEditingImageKey(node.imageKey ?? '');
-    setEditingCondition(node.canonicalCondition ?? '');
+    setEditingImageKey(node.imageKey ?? "");
+    setEditingCondition(node.canonicalCondition ?? "");
   }
 
   function saveEdit(e: FormEvent) {
@@ -55,7 +61,7 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
     e.preventDefault();
     if (newChildLabel.trim()) {
       taxonomy.addNode(node.id, newChildLabel.trim());
-      setNewChildLabel('');
+      setNewChildLabel("");
       setAddingChild(false);
       setExpanded(true);
     }
@@ -81,23 +87,32 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
           type="button"
           onClick={() => hasChildren && setExpanded((p) => !p)}
           className={`flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs text-gray-400 rounded transition-colors ${
-            hasChildren ? 'hover:text-gray-700 cursor-pointer' : 'cursor-default'
+            hasChildren
+              ? "hover:text-gray-700 cursor-pointer"
+              : "cursor-default"
           }`}
-          aria-label={hasChildren ? (expanded ? 'Collapse' : 'Expand') : undefined}
+          aria-label={
+            hasChildren ? (expanded ? "Collapse" : "Expand") : undefined
+          }
         >
-          {hasChildren ? (expanded ? '▾' : '▸') : '·'}
+          {hasChildren ? (expanded ? "▾" : "▸") : "·"}
         </button>
 
         {/* Label (normal or edit-mode) */}
         {editingLabel !== null ? (
-          <form onSubmit={saveEdit} className="flex-1 min-w-0 space-y-2 py-1 pr-2">
+          <form
+            onSubmit={saveEdit}
+            className="flex-1 min-w-0 space-y-2 py-1 pr-2"
+          >
             <div className="flex items-center gap-1.5">
               <input
                 autoFocus
                 type="text"
                 value={editingLabel}
                 onChange={(e) => setEditingLabel(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Escape') setEditingLabel(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setEditingLabel(null);
+                }}
                 placeholder="Node label"
                 className="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
@@ -105,7 +120,9 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
             <div className="flex items-center gap-2">
               <select
                 value={editingCondition}
-                onChange={(e) => setEditingCondition(e.target.value as CanonicalCondition | '')}
+                onChange={(e) =>
+                  setEditingCondition(e.target.value as CanonicalCondition | "")
+                }
                 className="px-2 py-0.5 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="">— no condition —</option>
@@ -121,17 +138,26 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <button type="submit" className="text-xs text-green-600 hover:text-green-800 font-medium">
+              <button
+                type="submit"
+                className="text-xs text-green-600 hover:text-green-800 font-medium"
+              >
                 Save
               </button>
-              <button type="button" onClick={() => setEditingLabel(null)} className="text-xs text-gray-400 hover:text-gray-600">
+              <button
+                type="button"
+                onClick={() => setEditingLabel(null)}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >
                 Cancel
               </button>
             </div>
           </form>
         ) : (
           <>
-            <span className="flex-1 text-sm text-gray-800 select-none truncate">{node.label}</span>
+            <span className="flex-1 text-sm text-gray-800 select-none truncate">
+              {node.label}
+            </span>
 
             {node.hasProfiles && (
               <span
@@ -184,8 +210,8 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
                   type="button"
                   title={
                     node.hasProfiles
-                      ? 'Delete — profiles referencing this node will lose their path segment'
-                      : 'Delete node and all children'
+                      ? "Delete — profiles referencing this node will lose their path segment"
+                      : "Delete node and all children"
                   }
                   onClick={handleDeleteClick}
                   className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
@@ -223,7 +249,7 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
             type="button"
             onClick={() => {
               setAddingChild(false);
-              setNewChildLabel('');
+              setNewChildLabel("");
             }}
             className="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0"
           >
@@ -254,19 +280,43 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
 // TaxonomyManager — top-level view
 // ---------------------------------------------------------------------------
 
-export function TaxonomyManager({ taxonomy, allProfiles }: TaxonomyManagerProps) {
+export function TaxonomyManager({
+  taxonomy,
+  allProfiles,
+}: TaxonomyManagerProps) {
   const [addingRoot, setAddingRoot] = useState(false);
-  const [newRootLabel, setNewRootLabel] = useState('');
+  const [newRootLabel, setNewRootLabel] = useState("");
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const tree = buildTaxonomyTree(taxonomy.nodes, allProfiles);
 
   function saveNewRoot(e: FormEvent) {
     e.preventDefault();
+
     if (newRootLabel.trim()) {
       taxonomy.addNode(null, newRootLabel.trim());
-      setNewRootLabel('');
+      setNewRootLabel("");
       setAddingRoot(false);
     }
+  }
+
+  async function handleImportTaxonomy(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    try {
+      const importedNodes = await importTaxonomy(file);
+
+      taxonomy.importTaxonomy(importedNodes);
+
+      alert(`${importedNodes.length} taxonomy nodes imported`);
+    } catch (error) {
+      console.error(error);
+      alert("Invalid taxonomy file");
+    }
+
+    e.target.value = "";
   }
 
   return (
@@ -274,27 +324,50 @@ export function TaxonomyManager({ taxonomy, allProfiles }: TaxonomyManagerProps)
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Taxonomy Management</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            Taxonomy Management
+          </h2>
+
           <p className="text-sm text-gray-400 mt-0.5">
-            {taxonomy.nodes.length} node{taxonomy.nodes.length !== 1 ? 's' : ''} · Build the
-            classification hierarchy used for Browse and profile creation
+            {taxonomy.nodes.length} node{taxonomy.nodes.length !== 1 ? "s" : ""}{" "}
+            · Build the classification hierarchy used for Browse and profile
+            creation
           </p>
         </div>
-        <button
-          onClick={() => exportTaxonomy(taxonomy.nodes)}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-        >
-          Export Taxonomy
-        </button>
-        <button
-          onClick={() => setAddingRoot(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-            <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z" />
-          </svg>
-          Add Root Category
-        </button>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => importInputRef.current?.click()}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            Import Taxonomy
+          </button>
+
+          <button
+            type="button"
+            onClick={() => exportTaxonomy(taxonomy.nodes)}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            Export Taxonomy
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAddingRoot(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            <svg
+              className="w-4 h-4"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z" />
+            </svg>
+            Add Root Category
+          </button>
+        </div>
       </div>
 
       {/* ── Add root form ────────────────────────────────────────── */}
@@ -321,7 +394,7 @@ export function TaxonomyManager({ taxonomy, allProfiles }: TaxonomyManagerProps)
             type="button"
             onClick={() => {
               setAddingRoot(false);
-              setNewRootLabel('');
+              setNewRootLabel("");
             }}
             className="text-sm text-gray-500 hover:text-gray-700 flex-shrink-0"
           >
@@ -330,11 +403,21 @@ export function TaxonomyManager({ taxonomy, allProfiles }: TaxonomyManagerProps)
         </form>
       )}
 
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".json"
+        onChange={handleImportTaxonomy}
+        className="hidden"
+      />
+
       {/* ── Tree ────────────────────────────────────────────────── */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         {tree.length === 0 ? (
           <div className="p-10 text-center">
-            <p className="text-sm font-medium text-gray-500">No taxonomy categories defined.</p>
+            <p className="text-sm font-medium text-gray-500">
+              No taxonomy categories defined.
+            </p>
             <p className="mt-1 text-sm text-gray-400">
               Click "Add Root Category" to start building your classification.
             </p>
@@ -356,7 +439,9 @@ export function TaxonomyManager({ taxonomy, allProfiles }: TaxonomyManagerProps)
 
       {/* ── Help text ────────────────────────────────────────────── */}
       <div className="mt-3 text-xs text-gray-400 space-y-0.5">
-        <p>Hover over any node to reveal Rename, + Child, and Delete actions.</p>
+        <p>
+          Hover over any node to reveal Rename, + Child, and Delete actions.
+        </p>
         <p>● A blue dot indicates that profiles reference this node.</p>
         <p>Deleting a node also removes all its children from the taxonomy.</p>
       </div>
