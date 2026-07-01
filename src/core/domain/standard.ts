@@ -95,6 +95,10 @@ export const StandardNodeSchema = z.object({
   tags: z.array(z.string()),
   /** Standard-specific extra data. Ignored by generic code. */
   metadata: z.record(z.unknown()).default({}),
+  /** Optional free-text description shown in the browser and editor. */
+  description: z.string().optional(),
+  /** Optional base64 data-URI image for decision support in the browser. */
+  imageData: z.string().optional(),
 });
 
 export type StandardNode = z.infer<typeof StandardNodeSchema>;

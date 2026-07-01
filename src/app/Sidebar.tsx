@@ -24,7 +24,6 @@ import { saveActiveStandard } from "../core/db/repositories/settings.repo";
 // ---------------------------------------------------------------------------
 
 const NAV_ITEMS: { view: AdminView; label: string; icon: string }[] = [
-  { view: "browse",    label: "Browse",    icon: "⊞" },
   { view: "library",  label: "Library",   icon: "◧" },
   { view: "standards", label: "Standards", icon: "≡" },
   { view: "settings",  label: "Settings",  icon: "⚙" },
@@ -53,7 +52,7 @@ export function Sidebar() {
   }, [activeStandard, allProfiles]);
 
   const showTree =
-    (adminView === "browse" || adminView === "library") &&
+    adminView === "library" &&
     activeStandard !== null;
 
   function handleStandardChange(id: string) {
@@ -74,6 +73,9 @@ export function Sidebar() {
           MIL-Browser
         </p>
         <p className="text-xs text-slate-500 mt-0.5">Env. Testing KB</p>
+        <span className="inline-block mt-1.5 px-1.5 py-0.5 text-xs font-semibold text-amber-300 bg-amber-900/50 border border-amber-700 rounded tracking-wide">
+          ✏ MANAGEMENT
+        </span>
       </div>
 
       {/* Standard selector */}
@@ -138,7 +140,10 @@ export function Sidebar() {
           className="w-full flex items-center gap-2 px-3 py-2 rounded text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
         >
           <span className="w-4 text-center">◈</span>
-          Assistant Mode
+          <div className="text-left">
+            <div>Browse Standards ↗</div>
+            <div className="text-xs text-slate-500">Read-only exploration</div>
+          </div>
         </button>
       </div>
     </div>

@@ -8,6 +8,7 @@
  * FieldDefinition arrays — no hardcoded field names.
  */
 
+import { useState } from "react";
 import type { Profile } from "../../core/domain/profile";
 import type { ProfileDefinition } from "../../core/domain/standard";
 import { Card } from "../../shared/components/ui/Card";
@@ -42,6 +43,11 @@ const GROUPS: { key: FieldGroup; label: string }[] = [
 ];
 
 export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: ProfileDetailProps) {
+  const [dataView, setDataView] = useState<"chart" | "table" | "both">("both");
+
+  const btnBase = "px-3 py-1 text-xs font-medium rounded border transition-colors";
+  const btnActive = "bg-blue-600 text-white border-blue-600";
+  const btnInactive = "text-gray-600 border-gray-200 bg-white hover:bg-gray-50";
   return (
     <div className="space-y-5">
       {/* ── Back button ─────────────────────────────────────────────── */}
@@ -100,15 +106,26 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: P
         );
       })}
 
+      {/* ── Data view toggle + chart + table ────────────────────────── */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-400 font-medium">Show:</span>
+        <button className={`${btnBase} ${dataView === "both" ? btnActive : btnInactive}`} onClick={() => setDataView("both")}>Both</button>
+        <button className={`${btnBase} ${dataView === "chart" ? btnActive : btnInactive}`} onClick={() => setDataView("chart")}>Chart</button>
+        <button className={`${btnBase} ${dataView === "table" ? btnActive : btnInactive}`} onClick={() => setDataView("table")}>Table</button>
+      </div>
+
       {/* ── Chart ───────────────────────────────────────────────────── */}
+      {dataView !== "table" && (
       <Card title="Chart">
         <TimeSeriesChart
           columns={schema.datasetColumns}
           data={profile.dataset}
         />
       </Card>
+      )}
 
       {/* ── Data table ──────────────────────────────────────────────── */}
+      {dataView !== "chart" && (
       <Card title={`Dataset — ${profile.dataset.length} rows`}>
         {profile.dataset.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-8">
@@ -157,6 +174,7 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: P
           </div>
         )}
       </Card>
+      )}
     </div>
   );
 }

@@ -79,16 +79,22 @@ function AdminLayout() {
         {/* Slim topbar */}
         <header className="flex-shrink-0 h-11 bg-white border-b border-gray-200 flex items-center px-5 gap-3">
           <span className="font-semibold text-gray-900 text-sm">MIL Browser</span>
+          <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 rounded">
+            MANAGEMENT
+          </span>
           <span className="text-gray-200 select-none mx-1">|</span>
           <span className="text-sm text-blue-600 font-medium capitalize">
-            {adminView}
+            {adminView === 'library' ? 'Library'
+              : adminView === 'standards' ? 'Standards'
+              : adminView === 'settings' ? 'Settings'
+              : adminView}
           </span>
           <span className="ml-auto">
             <button
               onClick={() => setMode('assistant')}
               className="text-xs text-gray-400 hover:text-gray-700 transition-colors px-2 py-1 rounded hover:bg-gray-100"
             >
-              ‹ Assistant
+              Browse Standards ↗
             </button>
           </span>
         </header>
@@ -123,20 +129,19 @@ function ContentPane({
   activeNodeId,
   onNodeSelect,
 }: ContentPaneProps) {
+  const setMode = useAppStore((s) => s.setMode);
+
   if (adminView === 'browse') {
-    if (standard === undefined) {
-      return (
-        <div className="flex items-center justify-center h-48 text-sm text-gray-400">
-          Select a standard in the sidebar to start browsing.
-        </div>
-      );
-    }
     return (
-      <BrowsePage
-        standard={standard}
-        activeNodeId={activeNodeId}
-        onNodeSelect={onNodeSelect}
-      />
+      <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+        <p className="text-gray-500 text-sm">The Standards Browser is in full-screen Browse mode.</p>
+        <button
+          onClick={() => setMode('assistant')}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+        >
+          Open Standards Browser ↗
+        </button>
+      </div>
     );
   }
 

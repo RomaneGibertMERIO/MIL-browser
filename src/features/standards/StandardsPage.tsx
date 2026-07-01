@@ -1,35 +1,74 @@
 /**
  * Standards management page (admin mode).
  *
- * Lists all loaded standards. Allows importing a new standard plugin from a
- * JSON file via loadStandardFromFile. Builtin standards cannot be deleted;
- * user-imported standards can be removed via deleteStandardAndProfiles.
- *
- * Import and delete are the only write operations here.
+ * Lists all loaded standards.
+ * Allows: import from JSON, create new, edit taxonomy, delete (user standards).
  */
 
 import { useRef, useState } from "react";
-import type { StandardPlugin } from "../../core/domain/standard";
+import type { StandardPlugin, StandardNode } from "../../core/domain/standard";
 import { loadStandardFromFile } from "../../core/engine/standardLoader";
-import { deleteStandardAndProfiles } from "../../core/db/repositories/standards.repo";
+import {
+  deleteStandardAndProfiles,
+  updateStandardNodes,
+  createStandard,
+} from "../../core/db/repositories/standards.repo";
 import { useStandards } from "../../shared/hooks/useStandards";
 import { Badge } from "../../shared/components/ui/Badge";
 import { EmptyState } from "../../shared/components/ui/EmptyState";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 import { ErrorBanner } from "../../shared/components/ui/ErrorBanner";
+import { TaxonomyEditor } from "./TaxonomyEditor";
 
 // ---------------------------------------------------------------------------
 // StandardsPage
 // ---------------------------------------------------------------------------
+
+type SubView = "list" | "create" | "edit-taxonomy";
 
 export function StandardsPage() {
   const standards = useStandards();
   const [importError, setImportError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [subView, setSubView] = useState<SubView>("list");
+  const [editingStandard, setEditingStandard] = useState<StandardPlugin | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   if (standards === undefined) return <LoadingSpinner />;
+
+  // ── Taxonomy editor ─────────────────────────────────────────────────────
+  if (subView === "edit-taxonomy" && editingStandard !== null) {
+    return (
+      <div className="h-full">
+        <TaxonomyEditor
+          standard={editingStandard}
+          onSave={async (nodes: StandardNode[]) => {
+            await updateStandardNodes(editingStandard.manifest.id, nodes);
+            setSubView("list");
+            setEditingStandard(null);
+          }}
+          onCancel={() => { setSubView("list"); setEditingStandard(null); }}
+        />
+      </div>
+    );
+  }
+
+  // ── Create new standard ─────────────────────────────────────────────────
+  if (subView === "create") {
+    return (
+      <NewStandardForm
+        existingIds={(standards ?? []).map(s => s.manifest.id)}
+        onCreated={async (plugin) => {
+          await createStandard(plugin);
+          // Open the taxonomy editor immediately so the user can add nodes
+          setEditingStandard(plugin);
+          setSubView("edit-taxonomy");
+        }}
+        onCancel={() => setSubView("list")}
+      />
+    );
+  }
 
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -89,6 +128,12 @@ export function StandardsPage() {
             className="hidden"
           />
           <button
+            onClick={() => setSubView("create")}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            + New Standard
+          </button>
+          <button
             onClick={() => importInputRef.current?.click()}
             disabled={importing}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
@@ -114,6 +159,10 @@ export function StandardsPage() {
               key={s.manifest.id}
               standard={s}
               onDelete={() => setDeletingId(s.manifest.id)}
+              onEditTaxonomy={() => {
+                setEditingStandard(s);
+                setSubView("edit-taxonomy");
+              }}
             />
           ))}
         </div>
@@ -141,9 +190,10 @@ export function StandardsPage() {
 interface StandardCardProps {
   standard: StandardPlugin;
   onDelete: () => void;
+  onEditTaxonomy: () => void;
 }
 
-function StandardCard({ standard, onDelete }: StandardCardProps) {
+function StandardCard({ standard, onDelete, onEditTaxonomy }: StandardCardProps) {
   const m = standard.manifest;
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -169,22 +219,27 @@ function StandardCard({ standard, onDelete }: StandardCardProps) {
               schema fields
             </span>
             {m.organization !== undefined && (
-              <span>
-                Org:{" "}
-                <span className="text-gray-600 font-medium">{m.organization}</span>
-              </span>
+              <span>Org: <span className="text-gray-600 font-medium">{m.organization}</span></span>
             )}
             <span className="font-mono">{m.id}</span>
           </div>
         </div>
-        {!m.isBuiltin && (
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
-            onClick={onDelete}
-            className="flex-shrink-0 px-3 py-1 text-xs font-medium text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors"
+            onClick={onEditTaxonomy}
+            className="px-3 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
           >
-            Remove
+            Edit Taxonomy
           </button>
-        )}
+          {!m.isBuiltin && (
+            <button
+              onClick={onDelete}
+              className="px-3 py-1 text-xs font-medium text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors"
+            >
+              Remove
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -230,6 +285,169 @@ function StandardDeleteDialog({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// NewStandardForm — create a blank standard from within the UI
+// ---------------------------------------------------------------------------
+
+interface NewStandardFormProps {
+  existingIds: string[];
+  onCreated: (plugin: StandardPlugin) => Promise<void>;
+  onCancel: () => void;
+}
+
+function NewStandardForm({ existingIds, onCreated, onCancel }: NewStandardFormProps) {
+  const [label, setLabel]         = useState("");
+  const [id, setId]               = useState("");
+  const [organization, setOrg]    = useState("");
+  const [version, setVersion]     = useState("1.0");
+  const [description, setDesc]    = useState("");
+  const [error, setError]         = useState<string | null>(null);
+  const [saving, setSaving]       = useState(false);
+
+  // Auto-generate ID from label
+  function handleLabelChange(value: string) {
+    setLabel(value);
+    setId(value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    const trimId = id.trim();
+    if (trimId.length === 0) { setError("ID is required."); return; }
+    if (label.trim().length === 0) { setError("Label is required."); return; }
+    if (organization.trim().length === 0) { setError("Organization is required."); return; }
+    if (existingIds.includes(trimId)) {
+      setError(`A standard with ID "${trimId}" already exists.`);
+      return;
+    }
+
+    const plugin: StandardPlugin = {
+      manifest: {
+        id: trimId,
+        version: version.trim() || "1.0",
+        schemaVersion: 1,
+        organization: organization.trim(),
+        label: label.trim(),
+        description: description.trim(),
+        isBuiltin: false,
+      },
+      nodes: [],
+      profileSchema: { version: 1, fields: [], datasetColumns: [] },
+      migrations: [],
+    };
+
+    setSaving(true);
+    try {
+      await onCreated(plugin);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create standard.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputCls = "w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
+  const labelCls = "block text-xs font-medium text-gray-700 mb-1";
+
+  return (
+    <div className="max-w-xl">
+      <div className="flex items-center gap-3 mb-6">
+        <button
+          onClick={onCancel}
+          className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z" />
+          </svg>
+          Back
+        </button>
+        <h2 className="text-lg font-semibold text-gray-900">Create New Standard</h2>
+      </div>
+
+      <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
+        <div>
+          <label className={labelCls}>Label <span className="text-red-500">*</span></label>
+          <input
+            type="text"
+            value={label}
+            onChange={e => handleLabelChange(e.target.value)}
+            placeholder="e.g. Company Environmental Standard 2024"
+            className={inputCls}
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <label className={labelCls}>ID <span className="text-red-500">*</span></label>
+          <input
+            type="text"
+            value={id}
+            onChange={e => setId(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+            placeholder="e.g. company-env-2024"
+            className={`${inputCls} font-mono`}
+          />
+          <p className="mt-1 text-xs text-gray-400">
+            Used as the unique key. Lowercase letters, numbers, and hyphens only. Cannot be changed after creation.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Organization <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={organization}
+              onChange={e => setOrg(e.target.value)}
+              placeholder="e.g. ACME Corp"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Version</label>
+            <input
+              type="text"
+              value={version}
+              onChange={e => setVersion(e.target.value)}
+              placeholder="e.g. 1.0"
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className={labelCls}>Description</label>
+          <textarea
+            value={description}
+            onChange={e => setDesc(e.target.value)}
+            rows={3}
+            placeholder="Optional description of this standard…"
+            className={`${inputCls} resize-none`}
+          />
+        </div>
+
+        {error !== null && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{error}</p>
+        )}
+
+        <div className="flex justify-end gap-3 pt-1">
+          <button type="button" onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? "Creating…" : "Create & Edit Taxonomy →"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

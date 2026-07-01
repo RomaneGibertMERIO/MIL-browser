@@ -10,6 +10,7 @@
 
 import { useState, useRef } from "react";
 import type { Profile, ProfileDraft } from "../../core/domain/profile";
+import { ProfileSchema } from "../../core/domain/profile";
 import type { StandardPlugin } from "../../core/domain/standard";
 import type { ValidationError } from "../../core/domain/profile";
 import {
@@ -57,6 +58,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [search, setSearch] = useState("");
+  const [pendingImport, setPendingImport] = useState<{ file: File; conflictCount: number } | null>(null);
 
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -105,6 +107,19 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     setSubView("list");
   }
 
+  // ── Duplicate ─────────────────────────────────────────────────────────────
+  async function handleDuplicate(profile: Profile) {
+    const copy: Profile = {
+      ...profile,
+      id: crypto.randomUUID(),
+      name: `${profile.name} (copy)`,
+      source: "user",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await upsertProfile(copy);
+  }
+
   // ── Delete ───────────────────────────────────────────────────────────────
   async function handleDeleteConfirm() {
     if (deletingProfileId === null) return;
@@ -125,9 +140,38 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file === undefined) return;
+    e.target.value = "";
+
+    // Count conflicts before importing
+    try {
+      const text = await file.text();
+      const raw = JSON.parse(text) as Record<string, unknown>;
+      const profilesArray = raw["profiles"];
+      if (Array.isArray(profilesArray)) {
+        const existingIds = new Set(userProfiles.map(p => p.id));
+        let conflicts = 0;
+        for (const item of profilesArray) {
+          const parsed = ProfileSchema.safeParse(item);
+          if (parsed.success && existingIds.has(parsed.data.id)) conflicts++;
+        }
+        if (conflicts > 0) {
+          setPendingImport({ file, conflictCount: conflicts });
+          return;
+        }
+      }
+    } catch {
+      // Ignore parse errors here; importProfilesForStandard will report them
+    }
+
     const result = await importProfilesForStandard(file, standard);
     setImportResult(result);
-    e.target.value = "";
+  }
+
+  async function confirmImport() {
+    if (pendingImport === null) return;
+    const result = await importProfilesForStandard(pendingImport.file, standard);
+    setImportResult(result);
+    setPendingImport(null);
   }
 
   // ── Sub-view: Detail ────────────────────────────────────────────────────
@@ -193,6 +237,15 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   // ── Sub-view: List ───────────────────────────────────────────────────────
   return (
     <>
+      {/* Import conflict confirmation overlay */}
+      {pendingImport !== null && (
+        <ImportOverwriteDialog
+          conflictCount={pendingImport.conflictCount}
+          onConfirm={() => { void confirmImport(); }}
+          onCancel={() => setPendingImport(null)}
+        />
+      )}
+
       {/* Delete confirmation overlay */}
       {deletingProfileId !== null && (
         <DeleteConfirmDialog
@@ -284,6 +337,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
               profile={profile}
               onView={() => { setViewingProfile(profile); setSubView("detail"); }}
               onEdit={() => { setEditingProfile(profile); setSubView("edit"); }}
+              onDuplicate={() => { void handleDuplicate(profile); }}
               onDelete={() => setDeletingProfileId(profile.id)}
             />
           ))}
@@ -324,10 +378,11 @@ interface ProfileListRowProps {
   profile: Profile;
   onView: () => void;
   onEdit: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }
 
-function ProfileListRow({ profile, onView, onEdit, onDelete }: ProfileListRowProps) {
+function ProfileListRow({ profile, onView, onEdit, onDuplicate, onDelete }: ProfileListRowProps) {
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
       <div className="flex items-start gap-4">
@@ -355,6 +410,12 @@ function ProfileListRow({ profile, onView, onEdit, onDelete }: ProfileListRowPro
             className="px-3 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
           >
             Edit
+          </button>
+          <button
+            onClick={onDuplicate}
+            className="px-3 py-1 text-xs font-medium text-gray-600 border border-gray-200 rounded hover:bg-gray-50 transition-colors"
+          >
+            Duplicate
           </button>
           <button
             onClick={onDelete}
@@ -401,6 +462,47 @@ function DeleteConfirmDialog({
             className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
           >
             Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ImportOverwriteDialog
+// ---------------------------------------------------------------------------
+
+interface ImportOverwriteDialogProps {
+  conflictCount: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ImportOverwriteDialog({ conflictCount, onConfirm, onCancel }: ImportOverwriteDialogProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm mx-4">
+        <h3 className="text-base font-semibold text-gray-900 mb-2">
+          Overwrite existing profiles?
+        </h3>
+        <p className="text-sm text-gray-500 mb-5">
+          The import file contains{" "}
+          <span className="font-medium text-gray-800">{conflictCount} profile{conflictCount !== 1 ? "s" : ""}</span>{" "}
+          that already exist in your library. Proceeding will overwrite them with the imported versions.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700 transition-colors"
+          >
+            Overwrite & Import
           </button>
         </div>
       </div>

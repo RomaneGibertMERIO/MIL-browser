@@ -10,7 +10,7 @@
  */
 
 import { db } from "../schema";
-import type { StandardPlugin } from "../../domain/standard";
+import type { StandardPlugin, StandardNode } from "../../domain/standard";
 import type { SyncEvent } from "../../domain/sync";
 import { getDeviceId } from "../../utils/deviceId";
 
@@ -69,6 +69,34 @@ export async function upsertStandard(standard: StandardPlugin): Promise<void> {
     await db.standards.put(standard);
     await logStandardEvent("upsert", standard);
   });
+}
+
+/**
+ * Replaces the nodes array of an existing standard without touching the
+ * rest of the plugin (schema, migrations, manifest). Used by the taxonomy
+ * editor so saves are targeted and never overwrite profileSchema changes.
+ */
+export async function updateStandardNodes(
+  standardId: string,
+  nodes: StandardNode[],
+): Promise<void> {
+  const standard = await getStandardById(standardId);
+  if (standard === undefined) {
+    throw new Error(`Standard "${standardId}" not found.`);
+  }
+  await upsertStandard({ ...standard, nodes });
+}
+
+/**
+ * Creates a brand-new user standard with an empty taxonomy and empty schema.
+ * The caller is responsible for ensuring the id does not already exist.
+ */
+export async function createStandard(standard: StandardPlugin): Promise<void> {
+  const existing = await getStandardById(standard.manifest.id);
+  if (existing !== undefined) {
+    throw new Error(`A standard with id "${standard.manifest.id}" already exists.`);
+  }
+  await upsertStandard(standard);
 }
 
 /**
