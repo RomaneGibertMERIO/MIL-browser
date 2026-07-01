@@ -16,7 +16,7 @@
  */
 
 import type { Profile, ProfileDraft, ValidationResult, ValidationError } from "../domain/profile";
-import type { ProfileSchema, ColumnDefinition } from "../domain/standard";
+import type { ProfileDefinition, ColumnDefinition } from "../domain/standard";
 
 // ---------------------------------------------------------------------------
 // buildEmptyProfile
@@ -30,7 +30,7 @@ import type { ProfileSchema, ColumnDefinition } from "../domain/standard";
 export function buildEmptyProfile(
   nodeId: string,
   standardId: string,
-  schema: ProfileSchema,
+  schema: ProfileDefinition,
 ): Profile {
   const fields: Record<string, unknown> = {};
   for (const field of schema.fields) {
@@ -68,7 +68,7 @@ export function buildEmptyProfile(
  * - All required dataset columns must be present in every dataset row.
  * - Number columns must contain finite numbers (NaN fails).
  */
-export function validateProfile(profile: Profile, schema: ProfileSchema): ValidationResult {
+export function validateProfile(profile: Profile, schema: ProfileDefinition): ValidationResult {
   const errors: ValidationError[] = [];
 
   // ── Field validation ─────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ export function validateProfile(profile: Profile, schema: ProfileSchema): Valida
     }
 
     for (const rule of def.validation) {
-      const fieldError = applyValidationRule(def.key, def.label, value, rule);
+      const fieldError = applyValidationRule(def.key, value, rule);
       if (fieldError !== null) errors.push(fieldError);
     }
   }
@@ -135,7 +135,7 @@ export function validateProfile(profile: Profile, schema: ProfileSchema): Valida
  */
 export function buildProfileFromDraft(
   draft: ProfileDraft,
-  schema: ProfileSchema,
+  schema: ProfileDefinition,
   existingId?: string,
   existingCreatedAt?: string,
 ): Profile {
@@ -185,7 +185,6 @@ function coerceColumnValue(
  */
 function applyValidationRule(
   key: string,
-  label: string,
   value: unknown,
   rule: { type: string; message: string; value?: number },
 ): ValidationError | null {

@@ -171,7 +171,7 @@ export const ProfileSchemaSchema = z.object({
   datasetColumns: z.array(ColumnDefinitionSchema),
 });
 
-export type ProfileSchema = z.infer<typeof ProfileSchemaSchema>;
+export type ProfileDefinition = z.infer<typeof ProfileSchemaSchema>;
 
 // ---------------------------------------------------------------------------
 // SchemaMigration

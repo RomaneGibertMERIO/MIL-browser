@@ -9,7 +9,7 @@
  */
 
 import type { Profile } from "../../core/domain/profile";
-import type { ProfileSchema } from "../../core/domain/standard";
+import type { ProfileDefinition } from "../../core/domain/standard";
 import { Card } from "../../shared/components/ui/Card";
 import { Badge } from "../../shared/components/ui/Badge";
 import { TimeSeriesChart } from "../../shared/components/charts/TimeSeriesChart";
@@ -21,7 +21,7 @@ import type { FieldGroup } from "../../core/domain/standard";
 
 interface ProfileDetailProps {
   profile: Profile;
-  schema: ProfileSchema;
+  schema: ProfileDefinition;
   onBack: () => void;
   backLabel?: string;
 }

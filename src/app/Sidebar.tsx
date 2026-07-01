@@ -12,12 +12,12 @@
  */
 
 import { useMemo } from "react";
-import { useAppStore, type AdminView } from "../../store/appStore";
-import { useStandards } from "../../shared/hooks/useStandards";
-import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
-import { buildTree } from "../../core/engine/treeBuilder";
-import { TaxonomyTree } from "../../features/browse/TaxonomyTree";
-import { saveActiveStandard } from "../../core/db/repositories/settings.repo";
+import { useAppStore, type AdminView } from "../store/appStore";
+import { useStandards } from "../shared/hooks/useStandards";
+import { useProfilesByStandard } from "../shared/hooks/useProfiles";
+import { buildTree } from "../core/engine/treeBuilder";
+import { TaxonomyTree } from "../features/browse/TaxonomyTree";
+import { saveActiveStandard } from "../core/db/repositories/settings.repo";
 
 // ---------------------------------------------------------------------------
 // Nav items
