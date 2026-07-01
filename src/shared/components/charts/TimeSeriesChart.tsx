@@ -20,8 +20,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import type { ColumnDefinition } from "../../core/domain/standard";
-import type { DataPoint } from "../../core/domain/profile";
+import type { ColumnDefinition } from "../../../core/domain/standard";
+import type { DataPoint } from "../../../core/domain/profile";
 
 // ---------------------------------------------------------------------------
 // Color palette for auto-assigned series colors

@@ -14,7 +14,7 @@ import type { Profile } from "../../core/domain/profile";
  * Returns undefined while loading.
  */
 export function useProfilesByStandard(standardId: string | null): Profile[] | undefined {
-  return useLiveQuery(
+  return useLiveQuery<Profile[]>(
     () =>
       standardId !== null
         ? db.profiles
@@ -22,7 +22,7 @@ export function useProfilesByStandard(standardId: string | null): Profile[] | un
             .equals(standardId)
             .reverse()
             .sortBy("updatedAt")
-        : Promise.resolve([]),
+        : Promise.resolve([] as Profile[]),
     [standardId],
   );
 }
@@ -32,11 +32,11 @@ export function useProfilesByStandard(standardId: string | null): Profile[] | un
  * Returns undefined while loading.
  */
 export function useProfilesByNode(nodeId: string | null): Profile[] | undefined {
-  return useLiveQuery(
+  return useLiveQuery<Profile[]>(
     () =>
       nodeId !== null
         ? db.profiles.where("nodeId").equals(nodeId).toArray()
-        : Promise.resolve([]),
+        : Promise.resolve([] as Profile[]),
     [nodeId],
   );
 }
@@ -46,5 +46,5 @@ export function useProfilesByNode(nodeId: string | null): Profile[] | undefined 
  * Use sparingly — prefer the more targeted hooks for large datasets.
  */
 export function useAllProfiles(): Profile[] | undefined {
-  return useLiveQuery(() => db.profiles.toArray());
+  return useLiveQuery<Profile[]>(() => db.profiles.toArray());
 }

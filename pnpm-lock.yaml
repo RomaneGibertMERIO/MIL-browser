@@ -8,6 +8,9 @@ dependencies:
   dexie:
     specifier: ^4.0.10
     version: 4.4.4
+  dexie-react-hooks:
+    specifier: ^1.1.7
+    version: 1.1.7(@types/react@18.3.31)(dexie@4.4.4)(react@18.3.1)
   react:
     specifier: ^18.3.1
     version: 18.3.1
@@ -1002,6 +1005,18 @@ packages:
 
   /decimal.js-light@2.5.1:
     resolution: {integrity: sha512-qIMFpTMZmny+MMIitAB6D7iVPEorVw6YQRWkvarTkT4tBeSLLiHzcwj6q0MmYSFCiVpiqPJTJEYIrpcPzVEIvg==}
+    dev: false
+
+  /dexie-react-hooks@1.1.7(@types/react@18.3.31)(dexie@4.4.4)(react@18.3.1):
+    resolution: {integrity: sha512-Lwv5W0Hk+uOW3kGnsU9GZoR1er1B7WQ5DSdonoNG+focTNeJbHW6vi6nBoX534VKI3/uwHebYzSw1fwY6a7mTw==}
+    peerDependencies:
+      '@types/react': '>=16'
+      dexie: ^3.2 || ^4.0.1-alpha
+      react: '>=16'
+    dependencies:
+      '@types/react': 18.3.31
+      dexie: 4.4.4
+      react: 18.3.1
     dev: false
 
   /dexie@4.4.4:

@@ -10,7 +10,7 @@
  * makes the form predictable.
  */
 
-import type { FieldDefinition } from "../../core/domain/standard";
+import type { FieldDefinition } from "../../../core/domain/standard";
 import type { ReactNode } from "react";
 
 // ---------------------------------------------------------------------------

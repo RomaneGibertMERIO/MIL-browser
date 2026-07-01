@@ -17,14 +17,14 @@ import type { StandardPlugin } from "../../core/domain/standard";
  * Components should show a loading state when the return value is undefined.
  */
 export function useStandards(): StandardPlugin[] | undefined {
-  return useLiveQuery(() => db.standards.toArray());
+  return useLiveQuery<StandardPlugin[]>(() => db.standards.toArray());
 }
 
 /**
  * Returns a single standard by id, or undefined while loading / not found.
  */
 export function useStandard(id: string | null): StandardPlugin | undefined {
-  return useLiveQuery(
+  return useLiveQuery<StandardPlugin | undefined>(
     () => (id !== null ? db.standards.get(id) : Promise.resolve(undefined)),
     [id],
   );

@@ -186,14 +186,14 @@ function coerceColumnValue(
 function applyValidationRule(
   key: string,
   value: unknown,
-  rule: { type: string; message: string; value?: number },
+  rule: { type: string; message: string; value?: number | string },
 ): ValidationError | null {
-  if (rule.type === "min" && rule.value !== undefined) {
+  if (rule.type === "min" && typeof rule.value === "number") {
     if (typeof value === "number" && value < rule.value) {
       return { field: key, message: rule.message };
     }
   }
-  if (rule.type === "max" && rule.value !== undefined) {
+  if (rule.type === "max" && typeof rule.value === "number") {
     if (typeof value === "number" && value > rule.value) {
       return { field: key, message: rule.message };
     }
