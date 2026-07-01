@@ -15,7 +15,7 @@ function generateId(): string {
 export interface TaxonomyNodeUpdate {
   label: string;
   parentId: string | null;
-  imageKey?: string;
+  imageData?: string;
   canonicalCondition?: CanonicalCondition;
 }
 
@@ -111,7 +111,7 @@ export function useTaxonomy(): UseTaxonomyResult {
                 ...n,
                 label: updates.label.trim(),
                 parentId: updates.parentId,
-                imageKey: updates.imageKey,
+                imageData: updates.imageData,
                 canonicalCondition: updates.canonicalCondition,
               }
             : n

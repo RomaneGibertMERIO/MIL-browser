@@ -27,7 +27,7 @@ interface NodeRowProps {
 function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
   const [expanded, setExpanded] = useState(depth < 2);
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
-  const [editingImageKey, setEditingImageKey] = useState("");
+  const [editingImageData, setEditingImageData] = useState("");
   const [editingCondition, setEditingCondition] = useState<
     CanonicalCondition | ""
   >("");
@@ -40,7 +40,7 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
 
   function startEdit() {
     setEditingLabel(node.label);
-    setEditingImageKey(node.imageKey ?? "");
+    setEditingImageData(node.imageData ?? "");
     setEditingCondition(node.canonicalCondition ?? "");
   }
 
@@ -50,7 +50,7 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
       taxonomy.updateNode(node.id, {
         label: editingLabel.trim(),
         parentId: node.parentId,
-        imageKey: editingImageKey.trim() || undefined,
+        imageData: editingImageData.trim() || undefined,
         canonicalCondition: editingCondition || undefined,
       });
     }
@@ -131,8 +131,8 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
               </select>
               <input
                 type="text"
-                value={editingImageKey}
-                onChange={(e) => setEditingImageKey(e.target.value)}
+                value={editingImageData}
+                onChange={(e) => setEditingImageData(e.target.value)}
                 placeholder="image.jpg"
                 className="flex-1 min-w-0 px-2 py-0.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
@@ -274,6 +274,20 @@ function NodeRow({ node, taxonomy, allProfiles, depth }: NodeRowProps) {
       )}
     </div>
   );
+
+  async function handleImageUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      setEditingImageData(reader.result as string);
+    };
+
+    reader.readAsDataURL(file);
+  }
 }
 
 // ---------------------------------------------------------------------------

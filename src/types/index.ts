@@ -50,7 +50,7 @@ export interface TaxonomyNode {
    * Administrators set this via the Taxonomy editor; it is shown automatically
    * during the assistant selection step that follows this node.
    */
-  imageKey?: string;
+  imageData?: string;
   /**
    * Canonical condition this node represents.
    * Drives standard-specific label translation in the assistant.
