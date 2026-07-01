@@ -1,0 +1,319 @@
+{
+  "manifest": {
+    "id": "mil-std-810h",
+    "version": "H",
+    "schemaVersion": 1,
+    "organization": "US DoD",
+    "label": "MIL-STD-810H",
+    "description": "Environmental Engineering Considerations and Laboratory Tests",
+    "isBuiltin": true
+  },
+  "profileSchema": {
+    "version": 1,
+    "fields": [
+      {
+        "key": "cycles",
+        "label": "Number of Cycles",
+        "group": "conditions",
+        "type": "number",
+        "required": true,
+        "unit": "cycles",
+        "defaultValue": null,
+        "validation": [
+          { "type": "min", "value": 1, "message": "Number of cycles must be at least 1." }
+        ]
+      },
+      {
+        "key": "cycleDuration",
+        "label": "Cycle Duration",
+        "group": "conditions",
+        "type": "duration",
+        "required": true,
+        "unit": "h",
+        "defaultValue": null,
+        "validation": []
+      },
+      {
+        "key": "tempMin",
+        "label": "Min Temperature",
+        "group": "conditions",
+        "type": "number",
+        "required": true,
+        "unit": "°C",
+        "defaultValue": null,
+        "validation": []
+      },
+      {
+        "key": "tempMax",
+        "label": "Max Temperature",
+        "group": "conditions",
+        "type": "number",
+        "required": true,
+        "unit": "°C",
+        "defaultValue": null,
+        "validation": []
+      },
+      {
+        "key": "rhMin",
+        "label": "Min Relative Humidity",
+        "group": "conditions",
+        "type": "number",
+        "required": false,
+        "unit": "%RH",
+        "defaultValue": null,
+        "validation": [
+          { "type": "min", "value": 0,   "message": "Relative humidity cannot be negative." },
+          { "type": "max", "value": 100, "message": "Relative humidity cannot exceed 100%." }
+        ]
+      },
+      {
+        "key": "rhMax",
+        "label": "Max Relative Humidity",
+        "group": "conditions",
+        "type": "number",
+        "required": false,
+        "unit": "%RH",
+        "defaultValue": null,
+        "validation": [
+          { "type": "min", "value": 0,   "message": "Relative humidity cannot be negative." },
+          { "type": "max", "value": 100, "message": "Relative humidity cannot exceed 100%." }
+        ]
+      },
+      {
+        "key": "acceptance",
+        "label": "Acceptance Criteria",
+        "group": "acceptance",
+        "type": "multiline",
+        "required": false,
+        "defaultValue": "",
+        "validation": []
+      },
+      {
+        "key": "tableRef",
+        "label": "Source Table Reference",
+        "group": "references",
+        "type": "text",
+        "required": false,
+        "defaultValue": "",
+        "validation": []
+      },
+      {
+        "key": "notes",
+        "label": "Notes",
+        "group": "notes",
+        "type": "multiline",
+        "required": false,
+        "defaultValue": "",
+        "validation": []
+      }
+    ],
+    "datasetColumns": [
+      {
+        "key": "time",
+        "label": "Time",
+        "unit": "hhmm",
+        "type": "string",
+        "axis": "x",
+        "color": null,
+        "required": true
+      },
+      {
+        "key": "temp_c",
+        "label": "Temperature",
+        "unit": "°C",
+        "type": "number",
+        "axis": "left",
+        "color": "#ef4444",
+        "required": true
+      },
+      {
+        "key": "rh_percent",
+        "label": "Relative Humidity",
+        "unit": "%RH",
+        "type": "number",
+        "axis": "right",
+        "color": "#3b82f6",
+        "required": false
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "mil810h_507",
+      "parentId": null,
+      "standardId": "mil-std-810h",
+      "type": "method",
+      "code": "507.6",
+      "label": "Method 507.6 — Humidity",
+      "order": 10,
+      "tags": ["humid"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_507_ia",
+      "parentId": "mil810h_507",
+      "standardId": "mil-std-810h",
+      "type": "procedure",
+      "code": "Ia",
+      "label": "Procedure Ia — Induced",
+      "order": 10,
+      "tags": ["induced"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_507_ia_b3",
+      "parentId": "mil810h_507_ia",
+      "standardId": "mil-std-810h",
+      "type": "zone",
+      "code": "B3",
+      "label": "Zone B3 — Hot Humid",
+      "order": 30,
+      "tags": ["b3", "hot", "humid"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_507_ib",
+      "parentId": "mil810h_507",
+      "standardId": "mil-std-810h",
+      "type": "procedure",
+      "code": "Ib",
+      "label": "Procedure Ib — Natural",
+      "order": 20,
+      "tags": ["natural"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_507_ib_b1",
+      "parentId": "mil810h_507_ib",
+      "standardId": "mil-std-810h",
+      "type": "zone",
+      "code": "B1",
+      "label": "Zone B1 — Basic Hot Humid",
+      "order": 10,
+      "tags": ["b1"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_507_ib_b2",
+      "parentId": "mil810h_507_ib",
+      "standardId": "mil-std-810h",
+      "type": "zone",
+      "code": "B2",
+      "label": "Zone B2 — Cyclic High Relative Humidity",
+      "order": 20,
+      "tags": ["b2", "cyclic"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_507_ib_b3",
+      "parentId": "mil810h_507_ib",
+      "standardId": "mil-std-810h",
+      "type": "zone",
+      "code": "B3",
+      "label": "Zone B3 — Hot Humid Natural",
+      "order": 30,
+      "tags": ["b3", "hot"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_507_ib_b4",
+      "parentId": "mil810h_507_ib",
+      "standardId": "mil-std-810h",
+      "type": "zone",
+      "code": "B4",
+      "label": "Zone B4 — Warm Humid",
+      "order": 40,
+      "tags": ["b4", "warm"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_501",
+      "parentId": null,
+      "standardId": "mil-std-810h",
+      "type": "method",
+      "code": "501.7",
+      "label": "Method 501.7 — High Temperature",
+      "order": 20,
+      "tags": ["high-temperature"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_501_hot_dry_a1",
+      "parentId": "mil810h_501",
+      "standardId": "mil-std-810h",
+      "type": "category",
+      "code": "A1",
+      "label": "A1 — Worldwide Extreme Hot Dry",
+      "order": 10,
+      "tags": ["a1", "hot", "dry"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_501_hot_dry_a2",
+      "parentId": "mil810h_501",
+      "standardId": "mil-std-810h",
+      "type": "category",
+      "code": "A2",
+      "label": "A2 — Worldwide Severe Hot Dry",
+      "order": 20,
+      "tags": ["a2", "hot"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_501_hot_dry_a3",
+      "parentId": "mil810h_501",
+      "standardId": "mil-std-810h",
+      "type": "category",
+      "code": "A3",
+      "label": "A3 — Moderate Hot Dry",
+      "order": 30,
+      "tags": ["a3"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_502",
+      "parentId": null,
+      "standardId": "mil-std-810h",
+      "type": "method",
+      "code": "502.7",
+      "label": "Method 502.7 — Low Temperature",
+      "order": 30,
+      "tags": ["low-temperature"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_502_c1",
+      "parentId": "mil810h_502",
+      "standardId": "mil-std-810h",
+      "type": "category",
+      "code": "C1",
+      "label": "C1 — Basic Cold",
+      "order": 10,
+      "tags": ["c1", "cold"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_502_c2",
+      "parentId": "mil810h_502",
+      "standardId": "mil-std-810h",
+      "type": "category",
+      "code": "C2",
+      "label": "C2 — Worldwide Severe Cold",
+      "order": 20,
+      "tags": ["c2", "cold"],
+      "metadata": {}
+    },
+    {
+      "id": "mil810h_502_c3",
+      "parentId": "mil810h_502",
+      "standardId": "mil-std-810h",
+      "type": "category",
+      "code": "C3",
+      "label": "C3 — Extreme Cold",
+      "order": 30,
+      "tags": ["c3", "cold", "extreme"],
+      "metadata": {}
+    }
+  ],
+  "migrations": []
+}
