@@ -16,7 +16,6 @@ import { useBootstrapStore } from './store/bootstrapStore';
 import { useBootstrap } from './shared/hooks/useBootstrap';
 import { useStandard } from './shared/hooks/useStandards';
 import { AssistantPage } from './features/assistant/AssistantPage';
-import { BrowsePage } from './features/browse/BrowsePage';
 import { LibraryPage } from './features/library/LibraryPage';
 import { StandardsPage } from './features/standards/StandardsPage';
 import { SettingsPage } from './features/settings/SettingsPage';
@@ -57,18 +56,11 @@ export default function App() {
 // ---------------------------------------------------------------------------
 
 function AdminLayout() {
-  const adminView     = useAppStore((s) => s.adminView);
-  const activeStdId   = useAppStore((s) => s.activeStandardId);
-  const activeNode    = useAppStore((s) => s.activeNode);
-  const setMode       = useAppStore((s) => s.setMode);
-  const setActiveNode = useAppStore((s) => s.setActiveNode);
+  const adminView   = useAppStore((s) => s.adminView);
+  const activeStdId = useAppStore((s) => s.activeStandardId);
+  const setMode     = useAppStore((s) => s.setMode);
 
   const standard = useStandard(activeStdId ?? '');
-
-  function handleNodeSelect(nodeId: string) {
-    if (activeStdId === null) return;
-    setActiveNode({ standardId: activeStdId, nodeId });
-  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -103,8 +95,6 @@ function AdminLayout() {
           <ContentPane
             adminView={adminView}
             standard={standard}
-            activeNodeId={activeNode?.nodeId ?? null}
-            onNodeSelect={handleNodeSelect}
           />
         </main>
       </div>
@@ -117,18 +107,11 @@ function AdminLayout() {
 // ---------------------------------------------------------------------------
 
 interface ContentPaneProps {
-  adminView:    AdminView;
-  standard:     ReturnType<typeof useStandard>;
-  activeNodeId: string | null;
-  onNodeSelect: (nodeId: string) => void;
+  adminView: AdminView;
+  standard:  ReturnType<typeof useStandard>;
 }
 
-function ContentPane({
-  adminView,
-  standard,
-  activeNodeId,
-  onNodeSelect,
-}: ContentPaneProps) {
+function ContentPane({ adminView, standard }: ContentPaneProps) {
   const setMode = useAppStore((s) => s.setMode);
 
   if (adminView === 'browse') {
