@@ -1,0 +1,9 @@
+version: 0.1.0
+files:
+  - url: MIL-Browser-0.1.0.AppImage
+    sha512: YBucNeaib8s5ZPvWlwf7cz/WCF/vSNzsW6LbE+u4IkZxPRNsBFPcDf/hHUel5BE58x8cpDyy+4OQs72z9cuU2Q==
+    size: 113398239
+    blockMapSize: 119283
+path: MIL-Browser-0.1.0.AppImage
+sha512: YBucNeaib8s5ZPvWlwf7cz/WCF/vSNzsW6LbE+u4IkZxPRNsBFPcDf/hHUel5BE58x8cpDyy+4OQs72z9cuU2Q==
+releaseDate: '2026-07-02T11:04:32.808Z'

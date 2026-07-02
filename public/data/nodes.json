@@ -1,7 +1,0 @@
-[
-  { "id": "mil810h_507",             "parentId": null,                  "standardId": "mil810h", "label": "Method 507.6 - Humidity",                        "order": 10 },
-  { "id": "mil810h_507_induced",     "parentId": "mil810h_507",         "standardId": "mil810h", "label": "Procedure Ia - Induced",                         "order": 10 },
-  { "id": "mil810h_507_induced_b3",  "parentId": "mil810h_507_induced", "standardId": "mil810h", "label": "Zone B3 - Hot Humid",                            "order": 10 },
-  { "id": "mil810h_507_natural",     "parentId": "mil810h_507",         "standardId": "mil810h", "label": "Procedure Ib - Natural",                         "order": 20 },
-  { "id": "mil810h_507_natural_b2",  "parentId": "mil810h_507_natural", "standardId": "mil810h", "label": "Zone B2 - Cyclic High Relative Humidity",         "order": 10 }
-]
