@@ -29,7 +29,9 @@ jobs:
         run: npm run build:electron
 
       - name: Build Electron installer
-        run: npx electron-builder --win portable nsis
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win portable nsis --publish never
 
       - name: Upload artifacts (portable)
         uses: actions/upload-artifact@v4
