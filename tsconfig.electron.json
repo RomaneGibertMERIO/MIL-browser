@@ -1,7 +1,8 @@
 {
     "compilerOptions": {
       "target": "ES2020",
-      "module": "CommonJS",
+      "module": "NodeNext",
+      "moduleResolution": "NodeNext",
       "outDir": "electron-dist",
       "moduleResolution": "node",
       "esModuleInterop": true,
