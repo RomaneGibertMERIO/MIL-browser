@@ -353,15 +353,16 @@ function renderFieldGroups(
 
     return (
       <Card key={group} title={groupLabels[group] ?? group}>
-        <div className="space-y-4">
+        <div className={groupFields.length > 1 ? "grid grid-cols-2 gap-x-6 gap-y-4" : ""}>
           {groupFields.map((field) => (
-            <FieldRenderer
-              key={field.key}
-              definition={field}
-              value={draft.fields[field.key]}
-              onChange={(value) => onFieldChange(field.key, value)}
-              error={getError(field.key)}
-            />
+            <div key={field.key} className={field.type === "multiline" ? "col-span-2" : ""}>
+              <FieldRenderer
+                definition={field}
+                value={draft.fields[field.key]}
+                onChange={(value) => onFieldChange(field.key, value)}
+                error={getError(field.key)}
+              />
+            </div>
           ))}
         </div>
       </Card>

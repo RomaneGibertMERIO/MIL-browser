@@ -68,14 +68,14 @@ function AdminLayout() {
 
       {/* Header + content */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* Slim topbar */}
-        <header className="flex-shrink-0 h-11 bg-white border-b border-gray-200 flex items-center px-5 gap-3">
-          <span className="font-semibold text-gray-900 text-sm">MIL Browser</span>
-          <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 rounded">
+        {/* Topbar */}
+        <header className="flex-shrink-0 h-13 bg-white border-b border-gray-200 flex items-center px-6 gap-4">
+          <span className="font-bold text-gray-900 text-base tracking-tight">MIL Browser</span>
+          <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 rounded-md">
             MANAGEMENT
           </span>
           <span className="text-gray-200 select-none mx-1">|</span>
-          <span className="text-sm text-blue-600 font-medium capitalize">
+          <span className="text-sm text-blue-600 font-semibold capitalize">
             {adminView === 'library' ? 'Library'
               : adminView === 'standards' ? 'Standards'
               : adminView === 'settings' ? 'Settings'
@@ -84,14 +84,14 @@ function AdminLayout() {
           <span className="ml-auto">
             <button
               onClick={() => setMode('assistant')}
-              className="text-xs text-gray-400 hover:text-gray-700 transition-colors px-2 py-1 rounded hover:bg-gray-100"
+              className="text-sm text-gray-400 hover:text-gray-700 transition-colors px-3 py-1.5 rounded-lg hover:bg-gray-100 font-medium"
             >
               Browse Standards ↗
             </button>
           </span>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-6 py-6">
+        <main className={adminView === 'library' ? 'flex-1 overflow-hidden' : 'flex-1 overflow-y-auto px-6 py-6'}>
           <ContentPane
             adminView={adminView}
             standard={standard}
@@ -131,7 +131,7 @@ function ContentPane({ adminView, standard }: ContentPaneProps) {
   if (adminView === 'library') {
     if (standard === undefined) {
       return (
-        <div className="flex items-center justify-center h-48 text-sm text-gray-400">
+        <div className="flex items-center justify-center h-full text-sm text-gray-400">
           Select a standard in the sidebar to manage profiles.
         </div>
       );

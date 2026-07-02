@@ -92,7 +92,7 @@ export function SettingsPage() {
       : "Never";
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
 
       {/* ── Sync ──────────────────────────────────────────────────────── */}

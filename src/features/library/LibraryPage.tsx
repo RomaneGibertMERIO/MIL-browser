@@ -29,7 +29,6 @@ import {
 } from "../../core/engine/importExportEngine";
 import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
 import { EmptyState } from "../../shared/components/ui/EmptyState";
-import { Badge } from "../../shared/components/ui/Badge";
 import { ProfileForm } from "./ProfileForm";
 import { ProfileDetail } from "../profile/ProfileDetail";
 
@@ -338,6 +337,10 @@ export function LibraryPage({ standard }: LibraryPageProps) {
             <ProfileListRow
               key={profile.id}
               profile={profile}
+              isActive={
+                (subView === "detail" && viewingProfile?.id === profile.id) ||
+                (subView === "edit" && editingProfile?.id === profile.id)
+              }
               onView={() => { setViewingProfile(profile); setSubView("detail"); }}
               onEdit={() => { setEditingProfile(profile); setSubView("edit"); }}
               onDuplicate={() => { void handleDuplicate(profile); }}
@@ -379,59 +382,52 @@ function SubViewHeader({
 
 interface ProfileListRowProps {
   profile: Profile;
+  isActive: boolean;
   onView: () => void;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }
 
-function ProfileListRow({ profile, onView, onEdit, onDuplicate, onDelete }: ProfileListRowProps) {
+function ProfileListRow({ profile, isActive, onView, onEdit, onDuplicate, onDelete }: ProfileListRowProps) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
-      <div className="flex items-start gap-4">
-        <div className="flex-1 min-w-0">
-          <button
-            onClick={onView}
-            className="text-sm font-semibold text-gray-900 hover:text-blue-700 transition-colors text-left"
-          >
-            {profile.name}
-          </button>
-          {profile.description !== "" && (
-            <p className="text-sm text-gray-500 line-clamp-1 mt-0.5">
-              {profile.description}
+    <div
+      className={`rounded-lg border transition-colors cursor-pointer ${
+        isActive
+          ? "bg-blue-50 border-blue-300"
+          : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+      }`}
+      onClick={onView}
+    >
+      <div className="px-3 py-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-semibold truncate ${
+              isActive ? "text-blue-700" : "text-gray-900"
+            }`}>
+              {profile.name}
             </p>
-          )}
-          <div className="mt-2 flex items-center gap-2">
-            <Badge variant="gray">
-              {profile.dataset.length} data point{profile.dataset.length !== 1 ? "s" : ""}
-            </Badge>
+            {profile.description !== "" && (
+              <p className="text-xs text-gray-400 truncate mt-0.5">{profile.description}</p>
+            )}
+            <p className="text-xs text-gray-300 mt-1">{profile.dataset.length} data points</p>
           </div>
-        </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button
-            onClick={onEdit}
-            className="px-3 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
-          >
-            Edit
-          </button>
-          <button
-            onClick={onDuplicate}
-            className="px-3 py-1 text-xs font-medium text-gray-600 border border-gray-200 rounded hover:bg-gray-50 transition-colors"
-          >
-            Duplicate
-          </button>
-          <button
-            onClick={onDelete}
-            className="px-3 py-1 text-xs font-medium text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors"
-          >
-            Delete
-          </button>
+          <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button onClick={onEdit} title="Edit" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
+              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"/></svg>
+            </button>
+            <button onClick={onDuplicate} title="Duplicate" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors">
+              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1H2z"/></svg>
+            </button>
+            <button onClick={onDelete} title="Delete" className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-
 interface DeleteConfirmDialogProps {
   profileName: string;
   onConfirm: () => void;

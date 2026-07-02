@@ -112,6 +112,7 @@ export function AssistantPage() {
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [searchQuery, setSearchQuery]       = useState("");
   const [colWidths, setColWidths]           = useState<Record<number, number>>({});
+  const [sideWidth, setSideWidth]           = useState(480);
 
   const standard = useMemo(
     () => standards?.find(s => s.manifest.id === activeStdId) ?? null,
@@ -139,6 +140,7 @@ export function AssistantPage() {
 
   const columnsRef = useRef<HTMLDivElement>(null);
   const resizingRef = useRef<{ colIdx: number; startX: number; startWidth: number } | null>(null);
+  const sideResizingRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
     if (columnsRef.current) {
@@ -170,6 +172,27 @@ export function AssistantPage() {
 
     const onMouseUp = () => {
       resizingRef.current = null;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }
+
+  function handleSideResizeStart(e: React.MouseEvent) {
+    e.preventDefault();
+    sideResizingRef.current = { startX: e.clientX, startWidth: sideWidth };
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!sideResizingRef.current) return;
+      const { startX, startWidth } = sideResizingRef.current;
+      const newWidth = Math.max(280, startWidth - (ev.clientX - startX));
+      setSideWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      sideResizingRef.current = null;
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
     };
@@ -334,6 +357,8 @@ export function AssistantPage() {
                 ? getEffectiveSchema(standard, selectedProfile.nodeId)
                 : null}
               onClearProfile={() => setSelectedProfile(null)}
+              width={sideWidth}
+              onResizeStart={handleSideResizeStart}
             />
           </>
         )}
@@ -471,12 +496,18 @@ interface BrowserSidePanelProps {
   profile: Profile | null;
   profileSchema: React.ComponentProps<typeof ProfileDetail>["schema"] | null;
   onClearProfile: () => void;
+  width: number;
+  onResizeStart: (e: React.MouseEvent) => void;
 }
 
-function BrowserSidePanel({ node, profile, profileSchema, onClearProfile }: BrowserSidePanelProps) {
+function BrowserSidePanel({ node, profile, profileSchema, onClearProfile, width, onResizeStart }: BrowserSidePanelProps) {
   if (profile !== null && profileSchema !== null) {
     return (
-      <aside className="w-[min(46vw,900px)] min-w-[360px] max-w-[960px] flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto">
+      <aside className="flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto relative" style={{ width }}>
+        <div
+          onMouseDown={onResizeStart}
+          className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-blue-400 transition-colors z-10"
+        />
         <div className="px-6 py-5">
           <ProfileDetail
             profile={profile}
@@ -491,7 +522,11 @@ function BrowserSidePanel({ node, profile, profileSchema, onClearProfile }: Brow
 
   if (node === null) {
     return (
-      <aside className="w-[min(38vw,720px)] min-w-[320px] flex-shrink-0 border-l border-gray-200 bg-white flex items-center justify-center">
+      <aside className="flex-shrink-0 border-l border-gray-200 bg-white flex items-center justify-center relative" style={{ width }}>
+        <div
+          onMouseDown={onResizeStart}
+          className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-blue-400 transition-colors z-10"
+        />
         <p className="text-sm text-gray-400 text-center px-8 leading-relaxed">
           Select a node to see its decision support image and details.
         </p>
@@ -500,7 +535,11 @@ function BrowserSidePanel({ node, profile, profileSchema, onClearProfile }: Brow
   }
 
   return (
-    <aside className="w-[min(38vw,720px)] min-w-[320px] flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto flex flex-col min-h-0">
+    <aside className="flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto flex flex-col min-h-0 relative" style={{ width }}>
+      <div
+        onMouseDown={onResizeStart}
+        className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-blue-400 transition-colors z-10"
+      />
       <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
           <span className="text-xs font-mono text-gray-400">{node.code}</span>

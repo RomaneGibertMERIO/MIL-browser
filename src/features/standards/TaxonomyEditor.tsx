@@ -193,18 +193,18 @@ export function TaxonomyEditor({ standard, onSave, onCancel }: TaxonomyEditorPro
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-5 py-3 flex items-center gap-4">
+      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4">
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-semibold text-gray-900 truncate">
+          <h2 className="text-base font-semibold text-gray-900">
             Taxonomy Editor — {standard.manifest.label}
           </h2>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {workingNodes.length} node{workingNodes.length !== 1 ? "s" : ""} · changes are not saved until you click Save
+          <p className="text-sm text-gray-400 mt-0.5">
+            {workingNodes.length} node{workingNodes.length !== 1 ? "s" : ""} · Changes are staged locally until you save.
           </p>
         </div>
         {standard.manifest.isBuiltin && (
-          <span className="flex-shrink-0 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md font-medium">
-            Built-in standard — edits saved locally
+          <span className="flex-shrink-0 text-sm text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg font-medium">
+            ⚠ Built-in standard — edits saved locally
           </span>
         )}
       </div>
@@ -244,23 +244,23 @@ export function TaxonomyEditor({ standard, onSave, onCancel }: TaxonomyEditorPro
         </div>
       )}
 
-      {/* Two-panel body */}
+      {/* Three-panel body */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: node tree */}
-        <div className="w-72 flex-shrink-0 flex flex-col border-r border-gray-200 bg-white overflow-hidden">
-          <div className="px-3 py-2.5 border-b border-gray-100 flex-shrink-0">
+        {/* Panel 1: Taxonomy tree */}
+        <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-200 bg-slate-50 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
             <button
               onClick={() => addNode(null)}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
             >
-              <span className="text-base leading-none">+</span>
-              Add root node
+              <span className="text-lg leading-none">+</span>
+              Add Root Node
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto py-1">
+          <div className="flex-1 overflow-y-auto py-2">
             {tree.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-6 px-3">
-                No nodes yet. Add a root node to start building the taxonomy.
+              <p className="text-sm text-gray-400 text-center py-10 px-4">
+                No nodes yet. Click "Add Root Node" to begin building the taxonomy.
               </p>
             ) : (
               tree.map(node => (
@@ -280,41 +280,56 @@ export function TaxonomyEditor({ standard, onSave, onCancel }: TaxonomyEditorPro
           </div>
         </div>
 
-        {/* Right: edit form */}
-        <div className="flex-1 overflow-y-auto p-5">
+        {/* Panel 2: Node properties */}
+        <div className="w-[480px] flex-shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
           {selectedNode !== null ? (
-            <NodeEditForm
+            <NodePropertiesPanel
+              node={selectedNode}
+              onChange={changes => updateNode(selectedNode.id, changes)}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
+              <span className="text-5xl text-gray-200">◱</span>
+              <p className="text-base font-medium text-gray-400">Select a node to edit its properties</p>
+              <p className="text-sm text-gray-300">or add a root node to get started</p>
+            </div>
+          )}
+        </div>
+
+        {/* Panel 3: Node schema */}
+        <div className="flex-1 bg-gray-50 overflow-y-auto">
+          {selectedNode !== null ? (
+            <NodeSchemaPanel
               node={selectedNode}
               standard={standard}
               onChange={changes => updateNode(selectedNode.id, changes)}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
-              <span className="text-4xl text-gray-200">◱</span>
-              <p className="text-sm text-gray-400 max-w-xs">
-                Select a node in the tree to edit its name, description, and image.
-              </p>
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
+              <span className="text-5xl text-gray-200">⊞</span>
+              <p className="text-base font-medium text-gray-400">Profile schema configuration</p>
+              <p className="text-sm text-gray-300">Select a node to configure its fields and columns</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Footer */}
-      <div className="flex-shrink-0 bg-white border-t border-gray-200 px-5 py-3 flex items-center justify-between gap-3">
+      <div className="flex-shrink-0 bg-white border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-3">
         {saveError !== null && (
           <p className="text-sm text-red-600">{saveError}</p>
         )}
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-3 ml-auto">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={() => { void handleSave(); }}
             disabled={saving}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+            className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             {saving ? "Saving…" : "Save Changes"}
           </button>
@@ -355,17 +370,19 @@ function EditorTreeNode({
   return (
     <div>
       <div
-        className={`flex items-center group transition-colors ${
+        className={`flex items-center group transition-colors cursor-pointer ${
           isSelected
-            ? "bg-blue-50 border-r-2 border-blue-600"
-            : "hover:bg-gray-50"
+            ? "bg-blue-600"
+            : "hover:bg-slate-100"
         }`}
-        style={{ paddingLeft: `${8 + depth * 14}px` }}
+        style={{ paddingLeft: `${12 + depth * 16}px` }}
       >
         {/* Expand toggle */}
         <button
           onClick={() => setExpanded(v => !v)}
-          className="flex-shrink-0 w-5 text-center text-xs text-gray-400 py-1.5"
+          className={`flex-shrink-0 w-6 text-center text-sm py-2.5 ${
+            isSelected ? "text-blue-200" : "text-gray-400"
+          }`}
         >
           {node.children.length > 0 ? (expanded ? "▾" : "▸") : "·"}
         </button>
@@ -373,43 +390,54 @@ function EditorTreeNode({
         {/* Label */}
         <button
           onClick={() => onSelect(node.id)}
-          className="flex-1 min-w-0 text-left py-1.5 pr-1"
+          className="flex-1 min-w-0 text-left py-2.5 pr-2"
         >
-          <span className={`font-mono text-xs mr-1 ${isSelected ? "text-blue-500" : "text-gray-400"}`}>
+          <span className={`font-mono text-xs mr-1.5 ${
+            isSelected ? "text-blue-200" : "text-gray-400"
+          }`}>
             {node.code}
           </span>
-          <span className={`text-sm truncate ${isSelected ? "text-blue-700 font-medium" : "text-gray-800"}`}>
+          <span className={`text-sm ${
+            isSelected ? "text-white font-medium" : "text-gray-900"
+          }`}>
             {node.label}
           </span>
         </button>
 
-        {/* Action buttons (always visible when selected, on hover otherwise) */}
-        <div className={`flex items-center gap-0.5 pr-1 flex-shrink-0 transition-opacity ${
+        {/* Action buttons */}
+        <div className={`flex items-center gap-0.5 pr-2 flex-shrink-0 transition-opacity ${
           isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         }`}>
           <button
-            onClick={() => onMoveUp(node.id)}
+            onClick={(e) => { e.stopPropagation(); onMoveUp(node.id); }}
             title="Move up"
-            className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded text-xs"
+            className={`p-1.5 rounded text-sm ${
+              isSelected ? "text-blue-200 hover:bg-blue-500" : "text-gray-400 hover:text-gray-700 hover:bg-gray-200"
+            }`}
           >↑</button>
           <button
-            onClick={() => onMoveDown(node.id)}
+            onClick={(e) => { e.stopPropagation(); onMoveDown(node.id); }}
             title="Move down"
-            className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded text-xs"
+            className={`p-1.5 rounded text-sm ${
+              isSelected ? "text-blue-200 hover:bg-blue-500" : "text-gray-400 hover:text-gray-700 hover:bg-gray-200"
+            }`}
           >↓</button>
           <button
-            onClick={() => onAddChild(node.id)}
+            onClick={(e) => { e.stopPropagation(); onAddChild(node.id); }}
             title="Add child node"
-            className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded text-xs"
+            className={`p-1.5 rounded text-sm font-bold ${
+              isSelected ? "text-blue-100 hover:bg-blue-500" : "text-gray-400 hover:text-green-600 hover:bg-green-50"
+            }`}
           >+</button>
           <button
-            onClick={() => onDelete(node.id)}
+            onClick={(e) => { e.stopPropagation(); onDelete(node.id); }}
             title="Delete node"
-            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded text-xs"
+            className={`p-1.5 rounded text-sm ${
+              isSelected ? "text-red-300 hover:bg-red-600" : "text-gray-400 hover:text-red-600 hover:bg-red-50"
+            }`}
           >✕</button>
         </div>
       </div>
-
       {expanded && node.children.length > 0 && (
         <div>
           {node.children.map(child => (
@@ -432,16 +460,15 @@ function EditorTreeNode({
 }
 
 // ---------------------------------------------------------------------------
-// NodeEditForm
+// NodePropertiesPanel — center panel: code, type, label, description, image
 // ---------------------------------------------------------------------------
 
-interface NodeEditFormProps {
+interface NodePropertiesPanelProps {
   node: StandardNode;
-  standard: StandardPlugin;
   onChange: (changes: Partial<StandardNode>) => void;
 }
 
-function NodeEditForm({ node, standard, onChange }: NodeEditFormProps) {
+function NodePropertiesPanel({ node, onChange }: NodePropertiesPanelProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -450,124 +477,95 @@ function NodeEditForm({ node, standard, onChange }: NodeEditFormProps) {
     const reader = new FileReader();
     reader.onload = ev => {
       const data = ev.target?.result;
-      if (typeof data === "string") {
-        onChange({ imageData: data });
-      }
+      if (typeof data === "string") onChange({ imageData: data });
     };
     reader.readAsDataURL(file);
     e.target.value = "";
   }
 
-  const inputCls =
-    "w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white";
-  const labelCls = "block text-xs font-medium text-gray-700 mb-1";
+  const fieldCls = "w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+  const labelCls = "block text-sm font-medium text-gray-700 mb-1.5";
 
   return (
-    <div className="space-y-5 max-w-lg">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Code</label>
-          <input
-            type="text"
-            value={node.code}
-            onChange={e => onChange({ code: e.target.value })}
-            className={inputCls}
-            placeholder="e.g. 507.6"
-          />
-        </div>
-        <div>
-          <label className={labelCls}>Type</label>
-          <select
-            value={node.type}
-            onChange={e => onChange({ type: e.target.value as NodeType })}
-            className={inputCls}
-          >
-            {NODE_TYPES.map(t => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
+    <div className="p-6 space-y-6">
       <div>
-        <label className={labelCls}>Label <span className="text-red-500">*</span></label>
-        <input
-          type="text"
-          value={node.label}
-          onChange={e => onChange({ label: e.target.value })}
-          className={inputCls}
-          placeholder="Node display name"
-        />
-      </div>
-
-      <div>
-        <label className={labelCls}>Description</label>
-        <textarea
-          value={node.description ?? ""}
-          onChange={e =>
-            onChange({ description: e.target.value.length > 0 ? e.target.value : undefined })
-          }
-          rows={4}
-          className={`${inputCls} resize-none`}
-          placeholder="Optional description shown in the browser when this node is selected…"
-        />
-      </div>
-
-      <div>
-        <label className={labelCls}>Image (optional)</label>
-        <p className="text-xs text-gray-400 mb-2">
-          Used as a decision-support aid in the browser. Stored locally as a compressed image.
-        </p>
-        {node.imageData !== undefined && (
-          <div className="mb-2 relative group w-fit">
-            <img
-              src={node.imageData}
-              alt="Node preview"
-              className="max-h-48 max-w-full rounded-md border border-gray-200 object-contain"
-            />
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-5">Node Properties</p>
+        <div className="grid grid-cols-2 gap-4 mb-5">
+          <div>
+            <label className={labelCls}>Code</label>
+            <input type="text" value={node.code} onChange={e => onChange({ code: e.target.value })} className={fieldCls} placeholder="e.g. 507.6" />
           </div>
-        )}
-        <div className="flex items-center gap-2">
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
+          <div>
+            <label className={labelCls}>Type</label>
+            <select value={node.type} onChange={e => onChange({ type: e.target.value as NodeType })} className={fieldCls}>
+              {NODE_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="mb-5">
+          <label className={labelCls}>Label <span className="text-red-500">*</span></label>
+          <input type="text" value={node.label} onChange={e => onChange({ label: e.target.value })} className={fieldCls} placeholder="Node display name" />
+        </div>
+        <div>
+          <label className={labelCls}>Description</label>
+          <textarea
+            value={node.description ?? ""}
+            onChange={e => onChange({ description: e.target.value.length > 0 ? e.target.value : undefined })}
+            rows={6}
+            className={`${fieldCls} resize-none`}
+            placeholder="Optional description shown in the browser when this node is selected…"
           />
-          <button
-            type="button"
-            onClick={() => imageInputRef.current?.click()}
-            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-200 rounded-md hover:bg-gray-200 transition-colors"
-          >
-            {node.imageData !== undefined ? "Replace image" : "Upload image"}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Decision Support Image</p>
+        <p className="text-sm text-gray-400 mb-3">Displayed full-size in the browser when this node is selected. Helps engineers pick the right profile.</p>
+        {node.imageData !== undefined && (
+          <img src={node.imageData} alt="Node preview" className="mb-3 max-h-56 max-w-full rounded-lg border border-gray-200 object-contain bg-gray-50" />
+        )}
+        <div className="flex items-center gap-3">
+          <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+          <button type="button" onClick={() => imageInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-colors">
+            {node.imageData !== undefined ? "Replace Image" : "Upload Image"}
           </button>
           {node.imageData !== undefined && (
-            <button
-              type="button"
-              onClick={() => onChange({ imageData: undefined })}
-              className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors"
-            >
-              Remove image
+            <button type="button" onClick={() => onChange({ imageData: undefined })} className="px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+              Remove
             </button>
           )}
         </div>
       </div>
 
-      <div>
-        <label className={labelCls}>Node Schema</label>
-        <NodeSchemaSection
-          nodeSchema={node.nodeSchema}
-          standardSchema={standard.profileSchema}
-          onChange={ns => onChange({ nodeSchema: ns })}
-        />
+      <div className="pt-4 border-t border-gray-100">
+        <p className="text-xs text-gray-400">Stable ID: <span className="font-mono text-gray-500 select-all">{node.id}</span></p>
       </div>
+    </div>
+  );
+}
 
-      <div className="pt-2 border-t border-gray-100">
-        <p className="text-xs text-gray-400">
-          Node ID: <span className="font-mono text-gray-500">{node.id}</span>
-        </p>
-      </div>
+// ---------------------------------------------------------------------------
+// NodeSchemaPanel — right panel: profile schema configuration
+// ---------------------------------------------------------------------------
+
+interface NodeSchemaPanelProps {
+  node: StandardNode;
+  standard: StandardPlugin;
+  onChange: (changes: Partial<StandardNode>) => void;
+}
+
+function NodeSchemaPanel({ node, standard, onChange }: NodeSchemaPanelProps) {
+  return (
+    <div className="p-6">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Profile Schema</p>
+      <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+        Custom fields and dataset columns for profiles created under this node. When active, overrides the standard-level schema.
+      </p>
+      <NodeSchemaSection
+        nodeSchema={node.nodeSchema}
+        standardSchema={standard.profileSchema}
+        onChange={ns => onChange({ nodeSchema: ns })}
+      />
     </div>
   );
 }
