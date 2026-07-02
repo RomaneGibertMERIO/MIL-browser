@@ -1,16 +1,17 @@
-name: Build Electron App
+name: build-electron-windows
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build-windows:
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node
@@ -21,17 +22,23 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build web app
+      - name: Build Vite app
         run: npm run build
 
-      - name: Build electron
+      - name: Build Electron TS
         run: npm run build:electron
 
-      - name: Package app
-        run: npx electron-builder --publish=never
+      - name: Build Electron installer
+        run: npx electron-builder --win portable nsis
 
-      - name: Upload artifacts
+      - name: Upload artifacts (portable)
         uses: actions/upload-artifact@v4
         with:
-          name: electron-builds
-          path: release/
+          name: mil-browser-portable
+          path: release/*portable*.exe
+
+      - name: Upload artifacts (installer)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mil-browser-installer
+          path: release/*Setup*.exe
