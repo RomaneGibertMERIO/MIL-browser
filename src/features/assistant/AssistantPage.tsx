@@ -195,45 +195,15 @@ export function AssistantPage() {
 
   if (standards === undefined) return <LoadingSpinner />;
 
-  // Profile detail full-page overlay
-  if (selectedProfile !== null && standard !== null) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white border-b border-gray-200 px-5 py-2.5 flex items-center gap-3">
-          <span className="text-xs font-bold text-gray-600 tracking-widest uppercase">MIL Browser</span>
-          <span className="text-gray-200 select-none">|</span>
-          <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-semibold uppercase tracking-wide">Browse</span>
-          <button
-            onClick={() => setSelectedProfile(null)}
-            className="ml-auto flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z" />
-            </svg>
-            Back to browser
-          </button>
-        </div>
-        <div className="max-w-4xl mx-auto px-6 py-6">
-          <ProfileDetail
-            profile={selectedProfile}
-            schema={standard.profileSchema}
-            onBack={() => setSelectedProfile(null)}
-            backLabel="Back to browser"
-          />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       {/* ── Header ───────────────────────────────────────────────────── */}
       <header className="flex-shrink-0 bg-white border-b border-gray-200">
         <div className="px-4 py-2.5 flex items-center gap-3 flex-wrap">
-        <span className="text-xs font-bold text-gray-600 tracking-widest uppercase mr-1">MIL Browser</span>
-        <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-semibold uppercase tracking-wide flex-shrink-0">
-          Read-Only
-        </span>
+          <span className="text-xs font-bold text-gray-600 tracking-widest uppercase mr-1">MIL Browser</span>
+          <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-semibold uppercase tracking-wide flex-shrink-0">
+            Read-Only
+          </span>
 
         <select
           value={activeStdId ?? ""}
@@ -329,29 +299,40 @@ export function AssistantPage() {
             </div>
           </div>
         ) : (
-          <div ref={columnsRef} className="flex flex-1 overflow-x-auto overflow-y-hidden" style={{ scrollBehavior: "smooth" }}>
-            {columns.map((colNodes, colIdx) => (
-              <BrowserColumn
-                key={colIdx}
-                heading={columnHeading(colNodes)}
-                nodes={colNodes}
-                selectedNodeId={selectedPath[colIdx] ?? null}
-                onSelect={nodeId => handleNodeSelect(colIdx, nodeId)}
-                width={getColWidth(colIdx)}
-                onResizeStart={e => handleResizeStart(e, colIdx)}
-              />
-            ))}
-            {selectedNode != null && (
-              <ProfilesColumn
-                node={selectedNode}
-                profiles={nodeProfiles}
-                onSelectProfile={setSelectedProfile}
-                width={getColWidth(columns.length, 280)}
-                onResizeStart={e => handleResizeStart(e, columns.length)}
-              />
-            )}
-            <div className="flex-shrink-0 w-4" />
-          </div>
+          <>
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <div ref={columnsRef} className="flex h-full overflow-x-auto overflow-y-hidden" style={{ scrollBehavior: "smooth" }}>
+                {columns.map((colNodes, colIdx) => (
+                  <BrowserColumn
+                    key={colIdx}
+                    heading={columnHeading(colNodes)}
+                    nodes={colNodes}
+                    selectedNodeId={selectedPath[colIdx] ?? null}
+                    onSelect={nodeId => handleNodeSelect(colIdx, nodeId)}
+                    width={getColWidth(colIdx)}
+                    onResizeStart={e => handleResizeStart(e, colIdx)}
+                  />
+                ))}
+                {selectedNode != null && (
+                  <ProfilesColumn
+                    profiles={nodeProfiles}
+                    onSelectProfile={setSelectedProfile}
+                    selectedProfileId={selectedProfile?.id ?? null}
+                    width={getColWidth(columns.length, 280)}
+                    onResizeStart={e => handleResizeStart(e, columns.length)}
+                  />
+                )}
+                <div className="flex-shrink-0 w-4" />
+              </div>
+            </div>
+
+            <BrowserSidePanel
+              node={selectedNode}
+              profile={selectedProfile}
+              profileSchema={standard?.profileSchema ?? null}
+              onClearProfile={() => setSelectedProfile(null)}
+            />
+          </>
         )}
       </div>
     </div>
@@ -422,45 +403,21 @@ function BrowserColumn({ heading, nodes, selectedNodeId, onSelect, width, onResi
 // ---------------------------------------------------------------------------
 
 interface ProfilesColumnProps {
-  node: TaxonomyNodeItem;
   profiles: Profile[];
   onSelectProfile: (profile: Profile) => void;
+  selectedProfileId: string | null;
   width: number;
   onResizeStart: (e: React.MouseEvent) => void;
 }
 
-function ProfilesColumn({ node, profiles, onSelectProfile, width, onResizeStart }: ProfilesColumnProps) {
+function ProfilesColumn({ profiles, onSelectProfile, selectedProfileId, width, onResizeStart }: ProfilesColumnProps) {
   return (
     <div className="flex-shrink-0 flex flex-col border-r border-gray-200 bg-white relative" style={{ width }}>
-      {/* Column heading */}
       <div className="flex-shrink-0 px-3 py-2 border-b border-gray-100">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
           {profiles.length === 0 ? "Profiles" : `Profiles (${profiles.length})`}
         </p>
       </div>
-
-      {/* Node info */}
-      <div className="flex-shrink-0 px-3 py-2 border-b border-gray-100 bg-gray-50">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <span className="text-xs font-mono text-gray-400">{node.code}</span>
-          <Badge variant="gray">{node.type}</Badge>
-        </div>
-        <p className="text-sm font-medium text-gray-900">{node.label}</p>
-      </div>
-
-      {node.imageData !== undefined && (
-        <div className="flex-shrink-0 px-3 py-3 border-b border-gray-100">
-          <img src={node.imageData} alt={node.label} className="w-full rounded-md object-contain max-h-40 bg-gray-50" />
-        </div>
-      )}
-
-      {node.description !== undefined && (
-        <div className="flex-shrink-0 px-3 py-3 border-b border-gray-100">
-          <p className="text-sm text-gray-600 leading-relaxed">{node.description}</p>
-        </div>
-      )}
-
-      {/* Profiles list */}
       <div className="flex-1 overflow-y-auto py-1">
         {profiles.length === 0 ? (
           <p className="text-xs text-gray-400 text-center px-3 py-6 italic">No profiles attached to this node.</p>
@@ -469,7 +426,11 @@ function ProfilesColumn({ node, profiles, onSelectProfile, width, onResizeStart 
             <button
               key={profile.id}
               onClick={() => onSelectProfile(profile)}
-              className="w-full text-left px-3 py-2.5 border-b border-gray-50 hover:bg-blue-50 transition-colors group"
+              className={`w-full text-left px-3 py-2.5 border-b border-gray-50 transition-colors group ${
+                profile.id === selectedProfileId
+                  ? "bg-blue-50 border-blue-100"
+                  : "hover:bg-blue-50"
+              }`}
             >
               <div className="flex items-start gap-2">
                 <div className="flex-1 min-w-0">
@@ -495,5 +456,78 @@ function ProfilesColumn({ node, profiles, onSelectProfile, width, onResizeStart 
         className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-400 transition-colors z-10"
       />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BrowserSidePanel
+// ---------------------------------------------------------------------------
+
+interface BrowserSidePanelProps {
+  node: TaxonomyNodeItem | null;
+  profile: Profile | null;
+  profileSchema: React.ComponentProps<typeof ProfileDetail>["schema"] | null;
+  onClearProfile: () => void;
+}
+
+function BrowserSidePanel({ node, profile, profileSchema, onClearProfile }: BrowserSidePanelProps) {
+  if (profile !== null && profileSchema !== null) {
+    return (
+      <aside className="w-[min(46vw,900px)] min-w-[360px] max-w-[960px] flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto">
+        <div className="px-6 py-5">
+          <ProfileDetail
+            profile={profile}
+            schema={profileSchema}
+            onBack={onClearProfile}
+            backLabel="Back to profiles"
+          />
+        </div>
+      </aside>
+    );
+  }
+
+  if (node === null) {
+    return (
+      <aside className="w-[min(38vw,720px)] min-w-[320px] flex-shrink-0 border-l border-gray-200 bg-white flex items-center justify-center">
+        <p className="text-sm text-gray-400 text-center px-8 leading-relaxed">
+          Select a node to see its decision support image and details.
+        </p>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="w-[min(38vw,720px)] min-w-[320px] flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto flex flex-col min-h-0">
+      <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+          <span className="text-xs font-mono text-gray-400">{node.code}</span>
+          <Badge variant="gray">{node.type}</Badge>
+        </div>
+        <h2 className="text-base font-semibold text-gray-900 leading-snug">{node.label}</h2>
+      </div>
+
+      {node.imageData !== undefined ? (
+        <div className="flex-1 min-h-0 p-5 flex items-center justify-center bg-gray-50">
+          <img
+            src={node.imageData}
+            alt={node.label}
+            className="max-w-full max-h-full object-contain rounded-lg shadow-sm bg-white"
+          />
+        </div>
+      ) : null}
+
+      {node.description !== undefined && (
+        <div className="px-5 py-4 border-t border-gray-100">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Description</p>
+          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{node.description}</p>
+        </div>
+      )}
+
+      {node.imageData === undefined && node.description === undefined && (
+        <div className="px-5 py-8 text-sm text-gray-400">
+          No image or descriptive guidance is attached to this node.
+        </div>
+      )}
+    </aside>
   );
 }
