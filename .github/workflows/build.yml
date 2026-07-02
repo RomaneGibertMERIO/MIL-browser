@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -24,13 +26,25 @@ jobs:
       - name: Build web app
         run: npm run build
 
+      - name: Detect electron sources
+        id: electron_sources
+        run: |
+          if [ -d electron ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build electron
+        if: steps.electron_sources.outputs.present == 'true'
         run: npm run build:electron
 
       - name: Package app
+        if: steps.electron_sources.outputs.present == 'true'
         run: npx electron-builder --publish=never
 
       - name: Upload artifacts
+        if: steps.electron_sources.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: electron-builds
