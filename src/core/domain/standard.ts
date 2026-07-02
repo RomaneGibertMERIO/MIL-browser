@@ -62,49 +62,7 @@ export const AxisPositionSchema = z.enum(["x", "left", "right", "none"]);
 export type AxisPosition = z.infer<typeof AxisPositionSchema>;
 
 // ---------------------------------------------------------------------------
-// StandardNode
-// ---------------------------------------------------------------------------
-
-/**
- * A node in the hierarchical classification tree of a standard.
- * Nodes form a tree via parentId references. The id is the stable key used by
- * Profile.nodeId — it must never change after the plugin is published.
- */
-export const StandardNodeSchema = z.object({
-  /** Stable identifier. Never renamed after first publication. */
-  id: z.string().min(1),
-  /** Parent node id, or null for root-level nodes. */
-  parentId: z.string().nullable(),
-  /** Back-reference to the owning standard. Redundant but aids queries. */
-  standardId: z.string().min(1),
-  /**
-   * Semantic type of this node (method, procedure, zone, …).
-   * Used by the UI to decide how to label and present the node.
-   */
-  type: NodeTypeSchema,
-  /** Short code displayed in breadcrumbs (e.g. "507", "Ia", "B3"). */
-  code: z.string().min(1),
-  /** Human-readable display label. May be updated freely — IDs are stable. */
-  label: z.string().min(1),
-  /** Sort order among siblings. Use multiples of 10 to allow later insertions. */
-  order: z.number().int().nonnegative(),
-  /**
-   * Semantic tags for cross-standard filtering (e.g. "humid", "operational").
-   * These are purely informational and not used for profile resolution.
-   */
-  tags: z.array(z.string()),
-  /** Standard-specific extra data. Ignored by generic code. */
-  metadata: z.record(z.unknown()).default({}),
-  /** Optional free-text description shown in the browser and editor. */
-  description: z.string().optional(),
-  /** Optional base64 data-URI image for decision support in the browser. */
-  imageData: z.string().optional(),
-});
-
-export type StandardNode = z.infer<typeof StandardNodeSchema>;
-
-// ---------------------------------------------------------------------------
-// ProfileSchema — defines what a profile for this standard must contain
+// Field and column schema definitions (shared by StandardNode and ProfileSchema)
 // ---------------------------------------------------------------------------
 
 /** Selectable value for enum-type fields. */
@@ -163,6 +121,66 @@ export const ColumnDefinitionSchema = z.object({
 });
 
 export type ColumnDefinition = z.infer<typeof ColumnDefinitionSchema>;
+
+/**
+ * Optional per-node schema override. When present on a StandardNode, the
+ * profile form and validation engine use these fields/columns instead of the
+ * standard-level profileSchema. An empty array means "fall back to standard".
+ */
+export const NodeSchemaDefinitionSchema = z.object({
+  fields: z.array(FieldDefinitionSchema).default([]),
+  datasetColumns: z.array(ColumnDefinitionSchema).default([]),
+});
+
+export type NodeSchemaDefinition = z.infer<typeof NodeSchemaDefinitionSchema>;
+
+// ---------------------------------------------------------------------------
+// StandardNode
+// ---------------------------------------------------------------------------
+
+/**
+ * A node in the hierarchical classification tree of a standard.
+ * Nodes form a tree via parentId references. The id is the stable key used by
+ * Profile.nodeId — it must never change after the plugin is published.
+ */
+export const StandardNodeSchema = z.object({
+  /** Stable identifier. Never renamed after first publication. */
+  id: z.string().min(1),
+  /** Parent node id, or null for root-level nodes. */
+  parentId: z.string().nullable(),
+  /** Back-reference to the owning standard. Redundant but aids queries. */
+  standardId: z.string().min(1),
+  /**
+   * Semantic type of this node (method, procedure, zone, …).
+   * Used by the UI to decide how to label and present the node.
+   */
+  type: NodeTypeSchema,
+  /** Short code displayed in breadcrumbs (e.g. "507", "Ia", "B3"). */
+  code: z.string().min(1),
+  /** Human-readable display label. May be updated freely — IDs are stable. */
+  label: z.string().min(1),
+  /** Sort order among siblings. Use multiples of 10 to allow later insertions. */
+  order: z.number().int().nonnegative(),
+  /**
+   * Semantic tags for cross-standard filtering (e.g. "humid", "operational").
+   * These are purely informational and not used for profile resolution.
+   */
+  tags: z.array(z.string()),
+  /** Standard-specific extra data. Ignored by generic code. */
+  metadata: z.record(z.unknown()).default({}),
+  /** Optional free-text description shown in the browser and editor. */
+  description: z.string().optional(),
+  /** Optional base64 data-URI image for decision support in the browser. */
+  imageData: z.string().optional(),
+  /** Optional per-node schema override. When set, takes precedence over standard.profileSchema. */
+  nodeSchema: NodeSchemaDefinitionSchema.optional(),
+});
+
+export type StandardNode = z.infer<typeof StandardNodeSchema>;
+
+// ---------------------------------------------------------------------------
+// ProfileSchema — defines what a profile for this standard must contain
+// ---------------------------------------------------------------------------
 
 /**
  * The complete schema describing what a profile created under a specific

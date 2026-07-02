@@ -16,7 +16,7 @@
  */
 
 import type { Profile, ProfileDraft, ValidationResult, ValidationError } from "../domain/profile";
-import type { ProfileDefinition, ColumnDefinition } from "../domain/standard";
+import type { ProfileDefinition, ColumnDefinition, StandardPlugin } from "../domain/standard";
 
 // ---------------------------------------------------------------------------
 // buildEmptyProfile
@@ -210,4 +210,29 @@ function applyValidationRule(
     }
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// getEffectiveSchema
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the effective ProfileDefinition for a given node.
+ * If the node carries its own nodeSchema, those fields/columns override
+ * the standard-level profileSchema. An empty array means "use standard".
+ */
+export function getEffectiveSchema(
+  standard: StandardPlugin,
+  nodeId: string,
+): ProfileDefinition {
+  const node = standard.nodes.find(n => n.id === nodeId);
+  const ns = node?.nodeSchema;
+  if (ns === undefined) return standard.profileSchema;
+  return {
+    version: standard.profileSchema.version,
+    fields: ns.fields.length > 0 ? ns.fields : standard.profileSchema.fields,
+    datasetColumns: ns.datasetColumns.length > 0
+      ? ns.datasetColumns
+      : standard.profileSchema.datasetColumns,
+  };
 }

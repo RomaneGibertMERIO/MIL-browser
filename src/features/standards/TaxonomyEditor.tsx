@@ -16,7 +16,12 @@
  */
 
 import { useState, useMemo, useRef } from "react";
-import type { StandardPlugin, StandardNode, NodeType } from "../../core/domain/standard";
+import type {
+  StandardPlugin, StandardNode, NodeType,
+  NodeSchemaDefinition, FieldDefinition, ColumnDefinition,
+  FieldGroup, FieldType, AxisPosition,
+} from "../../core/domain/standard";
+import type { ProfileDefinition } from "../../core/domain/standard";
 import { buildTree } from "../../core/engine/treeBuilder";
 import type { TaxonomyNodeItem } from "../../core/domain/tree";
 import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
@@ -280,6 +285,7 @@ export function TaxonomyEditor({ standard, onSave, onCancel }: TaxonomyEditorPro
           {selectedNode !== null ? (
             <NodeEditForm
               node={selectedNode}
+              standard={standard}
               onChange={changes => updateNode(selectedNode.id, changes)}
             />
           ) : (
@@ -431,10 +437,11 @@ function EditorTreeNode({
 
 interface NodeEditFormProps {
   node: StandardNode;
+  standard: StandardPlugin;
   onChange: (changes: Partial<StandardNode>) => void;
 }
 
-function NodeEditForm({ node, onChange }: NodeEditFormProps) {
+function NodeEditForm({ node, standard, onChange }: NodeEditFormProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -547,10 +554,268 @@ function NodeEditForm({ node, onChange }: NodeEditFormProps) {
         </div>
       </div>
 
+      <div>
+        <label className={labelCls}>Node Schema</label>
+        <NodeSchemaSection
+          nodeSchema={node.nodeSchema}
+          standardSchema={standard.profileSchema}
+          onChange={ns => onChange({ nodeSchema: ns })}
+        />
+      </div>
+
       <div className="pt-2 border-t border-gray-100">
         <p className="text-xs text-gray-400">
           Node ID: <span className="font-mono text-gray-500">{node.id}</span>
         </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// NodeSchemaSection — per-node field/column override editor
+// ---------------------------------------------------------------------------
+
+const FIELD_GROUPS: FieldGroup[] = ["identification", "conditions", "procedures", "acceptance", "references", "notes", "custom"];
+const FIELD_TYPES: FieldType[] = ["text", "number", "enum", "boolean", "multiline", "date", "duration"];
+const AXIS_OPTIONS: AxisPosition[] = ["x", "left", "right", "none"];
+
+interface NodeSchemaSectionProps {
+  nodeSchema: NodeSchemaDefinition | undefined;
+  standardSchema: ProfileDefinition;
+  onChange: (ns: NodeSchemaDefinition | undefined) => void;
+}
+
+function NodeSchemaSection({ nodeSchema, standardSchema, onChange }: NodeSchemaSectionProps) {
+  const hasCustom = nodeSchema !== undefined;
+
+  function enable() {
+    onChange({
+      fields: [...standardSchema.fields],
+      datasetColumns: [...standardSchema.datasetColumns],
+    });
+  }
+
+  function updateField(idx: number, changes: Partial<FieldDefinition>) {
+    if (!nodeSchema) return;
+    onChange({ ...nodeSchema, fields: nodeSchema.fields.map((f, i) => i === idx ? { ...f, ...changes } : f) });
+  }
+
+  function addField() {
+    if (!nodeSchema) return;
+    const newField: FieldDefinition = {
+      key: `field_${Date.now()}`,
+      label: "New Field",
+      group: "conditions",
+      type: "text",
+      required: false,
+      validation: [],
+    };
+    onChange({ ...nodeSchema, fields: [...nodeSchema.fields, newField] });
+  }
+
+  function removeField(idx: number) {
+    if (!nodeSchema) return;
+    onChange({ ...nodeSchema, fields: nodeSchema.fields.filter((_, i) => i !== idx) });
+  }
+
+  function updateColumn(idx: number, changes: Partial<ColumnDefinition>) {
+    if (!nodeSchema) return;
+    onChange({ ...nodeSchema, datasetColumns: nodeSchema.datasetColumns.map((c, i) => i === idx ? { ...c, ...changes } : c) });
+  }
+
+  function addColumn() {
+    if (!nodeSchema) return;
+    const newCol: ColumnDefinition = {
+      key: `col_${Date.now()}`,
+      label: "New Column",
+      unit: "",
+      type: "number",
+      axis: "left",
+      color: null,
+      required: false,
+    };
+    onChange({ ...nodeSchema, datasetColumns: [...nodeSchema.datasetColumns, newCol] });
+  }
+
+  function removeColumn(idx: number) {
+    if (!nodeSchema) return;
+    onChange({ ...nodeSchema, datasetColumns: nodeSchema.datasetColumns.filter((_, i) => i !== idx) });
+  }
+
+  const cellCls = "px-2 py-1 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500";
+
+  if (!hasCustom) {
+    return (
+      <div className="rounded-lg border border-dashed border-gray-300 p-3 bg-gray-50">
+        <p className="text-xs text-gray-500 mb-2">
+          This node uses the standard-level profile schema. You can override it with node-specific fields and dataset columns.
+        </p>
+        <button
+          type="button"
+          onClick={enable}
+          className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+        >
+          Define custom schema for this node
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 rounded-lg border border-blue-200 bg-blue-50/30 p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Custom schema active</span>
+        <button
+          type="button"
+          onClick={() => onChange(undefined)}
+          className="text-xs text-red-500 hover:text-red-700 transition-colors"
+        >
+          Revert to standard schema
+        </button>
+      </div>
+
+      {/* Fields */}
+      <div>
+        <p className="text-xs font-semibold text-gray-600 mb-1.5">Profile Fields</p>
+        {nodeSchema.fields.length === 0 && (
+          <p className="text-xs text-gray-400 italic mb-1">No fields — profile form will show nothing for this node.</p>
+        )}
+        <div className="space-y-1.5">
+          {nodeSchema.fields.map((field, idx) => (
+            <div key={idx} className="flex items-center gap-1.5 flex-wrap">
+              <input
+                type="text"
+                placeholder="key"
+                value={field.key}
+                onChange={e => updateField(idx, { key: e.target.value })}
+                className={`${cellCls} w-28 font-mono`}
+              />
+              <input
+                type="text"
+                placeholder="Label"
+                value={field.label}
+                onChange={e => updateField(idx, { label: e.target.value })}
+                className={`${cellCls} w-32`}
+              />
+              <select
+                value={field.group}
+                onChange={e => updateField(idx, { group: e.target.value as FieldGroup })}
+                className={cellCls}
+              >
+                {FIELD_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+              <select
+                value={field.type}
+                onChange={e => updateField(idx, { type: e.target.value as FieldType })}
+                className={cellCls}
+              >
+                {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <input
+                type="text"
+                placeholder="unit"
+                value={field.unit ?? ""}
+                onChange={e => updateField(idx, { unit: e.target.value || undefined })}
+                className={`${cellCls} w-14`}
+              />
+              <label className="flex items-center gap-1 text-xs text-gray-600 whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={field.required}
+                  onChange={e => updateField(idx, { required: e.target.checked })}
+                  className="w-3 h-3"
+                />
+                req
+              </label>
+              <button
+                type="button"
+                onClick={() => removeField(idx)}
+                className="text-red-400 hover:text-red-600 text-xs leading-none"
+                title="Remove field"
+              >✕</button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addField}
+          className="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+        >
+          + Add field
+        </button>
+      </div>
+
+      {/* Dataset columns */}
+      <div>
+        <p className="text-xs font-semibold text-gray-600 mb-1.5">Dataset Columns</p>
+        {nodeSchema.datasetColumns.length === 0 && (
+          <p className="text-xs text-gray-400 italic mb-1">No columns — dataset editor will be empty for this node.</p>
+        )}
+        <div className="space-y-1.5">
+          {nodeSchema.datasetColumns.map((col, idx) => (
+            <div key={idx} className="flex items-center gap-1.5 flex-wrap">
+              <input
+                type="text"
+                placeholder="key"
+                value={col.key}
+                onChange={e => updateColumn(idx, { key: e.target.value })}
+                className={`${cellCls} w-28 font-mono`}
+              />
+              <input
+                type="text"
+                placeholder="Label"
+                value={col.label}
+                onChange={e => updateColumn(idx, { label: e.target.value })}
+                className={`${cellCls} w-32`}
+              />
+              <input
+                type="text"
+                placeholder="unit"
+                value={col.unit}
+                onChange={e => updateColumn(idx, { unit: e.target.value })}
+                className={`${cellCls} w-14`}
+              />
+              <select
+                value={col.type}
+                onChange={e => updateColumn(idx, { type: e.target.value as "number" | "string" })}
+                className={cellCls}
+              >
+                <option value="number">number</option>
+                <option value="string">string</option>
+              </select>
+              <select
+                value={col.axis}
+                onChange={e => updateColumn(idx, { axis: e.target.value as AxisPosition })}
+                className={cellCls}
+              >
+                {AXIS_OPTIONS.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+              <label className="flex items-center gap-1 text-xs text-gray-600 whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={col.required}
+                  onChange={e => updateColumn(idx, { required: e.target.checked })}
+                  className="w-3 h-3"
+                />
+                req
+              </label>
+              <button
+                type="button"
+                onClick={() => removeColumn(idx)}
+                className="text-red-400 hover:text-red-600 text-xs leading-none"
+                title="Remove column"
+              >✕</button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addColumn}
+          className="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+        >
+          + Add column
+        </button>
       </div>
     </div>
   );

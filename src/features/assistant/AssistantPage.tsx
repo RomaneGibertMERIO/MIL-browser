@@ -27,6 +27,7 @@ import { saveActiveStandard } from "../../core/db/repositories/settings.repo";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 import { Badge } from "../../shared/components/ui/Badge";
 import { ProfileDetail } from "../profile/ProfileDetail";
+import { getEffectiveSchema } from "../../core/engine/profileEngine";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -329,7 +330,9 @@ export function AssistantPage() {
             <BrowserSidePanel
               node={selectedNode}
               profile={selectedProfile}
-              profileSchema={standard?.profileSchema ?? null}
+              profileSchema={selectedProfile !== null && standard !== null
+                ? getEffectiveSchema(standard, selectedProfile.nodeId)
+                : null}
               onClearProfile={() => setSelectedProfile(null)}
             />
           </>

@@ -16,6 +16,7 @@ import type { ValidationError } from "../../core/domain/profile";
 import {
   buildProfileFromDraft,
   validateProfile,
+  getEffectiveSchema,
 } from "../../core/engine/profileEngine";
 import {
   upsertProfile,
@@ -76,8 +77,9 @@ export function LibraryPage({ standard }: LibraryPageProps) {
 
   // ── Create ───────────────────────────────────────────────────────────────
   async function handleCreate(draft: ProfileDraft) {
-    const profile = buildProfileFromDraft(draft, standard.profileSchema);
-    const result = validateProfile(profile, standard.profileSchema);
+    const schema = getEffectiveSchema(standard, draft.nodeId);
+    const profile = buildProfileFromDraft(draft, schema);
+    const result = validateProfile(profile, schema);
     if (!result.valid) {
       setValidationErrors(result.errors);
       return;
@@ -90,13 +92,14 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   // ── Update ───────────────────────────────────────────────────────────────
   async function handleUpdate(draft: ProfileDraft) {
     if (editingProfile === null) return;
+    const schema = getEffectiveSchema(standard, draft.nodeId);
     const profile = buildProfileFromDraft(
       draft,
-      standard.profileSchema,
+      schema,
       editingProfile.id,
       editingProfile.createdAt,
     );
-    const result = validateProfile(profile, standard.profileSchema);
+    const result = validateProfile(profile, schema);
     if (!result.valid) {
       setValidationErrors(result.errors);
       return;
@@ -179,7 +182,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     return (
       <ProfileDetail
         profile={viewingProfile}
-        schema={standard.profileSchema}
+        schema={getEffectiveSchema(standard, viewingProfile.nodeId)}
         onBack={() => {
           setViewingProfile(null);
           setSubView("list");
@@ -220,7 +223,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
         />
         <ProfileForm
           standard={standard}
-          initialDraft={profileToDraft(editingProfile, standard.profileSchema.datasetColumns)}
+          initialDraft={profileToDraft(editingProfile, getEffectiveSchema(standard, editingProfile.nodeId).datasetColumns)}
           submitLabel="Save Changes"
           validationErrors={validationErrors}
           onSubmit={(draft) => { void handleUpdate(draft); }}

@@ -14,6 +14,7 @@ import type { ProfileDraft, ValidationError } from "../../core/domain/profile";
 import type { StandardPlugin } from "../../core/domain/standard";
 import type { TaxonomyNodeItem } from "../../core/domain/tree";
 import { buildTree } from "../../core/engine/treeBuilder";
+import { getEffectiveSchema } from "../../core/engine/profileEngine";
 import { Card } from "../../shared/components/ui/Card";
 import { FieldRenderer } from "../../shared/components/forms/FieldRenderer";
 import { DatasetEditor, type DatasetRow } from "./DatasetEditor";
@@ -61,7 +62,14 @@ export function ProfileForm({
   }
 
   function handleNodeSelect(nodeId: string) {
-    setDraft((prev) => ({ ...prev, nodeId }));
+    const newSchema = getEffectiveSchema(standard, nodeId);
+    setDraft(prev => {
+      const fields: Record<string, unknown> = { ...prev.fields };
+      for (const f of newSchema.fields) {
+        if (!(f.key in fields)) fields[f.key] = f.defaultValue ?? null;
+      }
+      return { ...prev, nodeId, fields };
+    });
   }
 
   function getError(key: string): string | undefined {
@@ -74,6 +82,7 @@ export function ProfileForm({
   }
 
   const selectedNode = findNodeById(tree, draft.nodeId);
+  const effectiveSchema = getEffectiveSchema(standard, draft.nodeId);
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-5">
@@ -134,12 +143,12 @@ export function ProfileForm({
       </Card>
 
       {/* ── Schema Fields (by group) ─────────────────────────────────── */}
-      {renderFieldGroups(standard, draft, handleFieldChange, getError)}
+      {renderFieldGroups(standard, draft, handleFieldChange, getError, effectiveSchema.fields)}
 
       {/* ── Dataset ─────────────────────────────────────────────────── */}
       <Card title="Dataset">
         <DatasetEditor
-          columns={standard.profileSchema.datasetColumns}
+          columns={effectiveSchema.datasetColumns}
           rows={draft.datasetRows}
           onChange={handleDatasetChange}
         />
@@ -312,6 +321,7 @@ function renderFieldGroups(
   draft: ProfileDraft,
   onFieldChange: (key: string, value: unknown) => void,
   getError: (key: string) => string | undefined,
+  fields?: StandardPlugin["profileSchema"]["fields"],
 ) {
   const groupOrder = [
     "identification",
@@ -333,8 +343,10 @@ function renderFieldGroups(
     custom:         "Custom Fields",
   };
 
+  const sourceFields = fields ?? standard.profileSchema.fields;
+
   return groupOrder.map((group) => {
-    const groupFields = standard.profileSchema.fields.filter(
+    const groupFields = sourceFields.filter(
       (f) => f.group === group,
     );
     if (groupFields.length === 0) return null;
