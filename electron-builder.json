@@ -1,0 +1,14 @@
+{
+    "appId": "mil.browser.app",
+    "productName": "MIL Browser",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+        "dist",
+        "electron-dist"
+      ],
+    "win": {
+      "target": ["portable", "nsis"]
+    }
+  }

@@ -1,0 +1,2850 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MIL Browser</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body, #root { height: 100%; margin: 0; }
+    body {
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      font-size: 13px;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+
+    a {
+      text-decoration: none;
+      color: #464feb;
+    }
+
+    tr th, tr td {
+      border: 1px solid #e6e6e6;
+    }
+
+    tr th {
+      background-color: #f5f5f5;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .hdr {
+      flex-shrink: 0;
+      height: 52px;
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+    }
+
+    .hdr-title { font-weight: 700; font-size: 14px; }
+    .hdr-sub { color: #64748b; }
+    .hdr-path {
+      margin-left: auto;
+      color: #94a3b8;
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .body {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 300px;
+      flex-shrink: 0;
+      background: #0f172a;
+      border-right: 1px solid #1e293b;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sb-section {
+      padding: 14px;
+      border-bottom: 1px solid #1e293b;
+    }
+
+    .sb-label {
+      color: #64748b;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      font-weight: 700;
+      margin: 0 0 10px;
+    }
+
+    .nav-btn,
+    .std-btn,
+    .tree-row,
+    .chip,
+    .tab-btn,
+    .btn,
+    .icon-btn,
+    .mini-btn,
+    .seg-btn,
+    .list-btn {
+      appearance: none;
+      -webkit-appearance: none;
+      border: 0;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .nav-btn,
+    .std-btn {
+      display: block;
+      width: 100%;
+      border-radius: 8px;
+      text-align: left;
+      padding: 10px;
+      background: transparent;
+      color: #cbd5e1;
+      transition: background .15s, color .15s;
+    }
+
+    .nav-btn:hover,
+    .std-btn:hover { background: #1e293b; }
+    .nav-btn.active,
+    .std-btn.active { background: #1d4ed8; color: #fff; }
+
+    .nav-subtext,
+    .std-org {
+      font-size: 11px;
+      margin-top: 2px;
+      opacity: .78;
+    }
+
+    .std-name,
+    .nav-name { font-weight: 700; font-size: 13px; }
+
+    .tree-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+
+    .tree-wrap::-webkit-scrollbar,
+    .list-panel::-webkit-scrollbar,
+    .main::-webkit-scrollbar { width: 4px; }
+    .tree-wrap::-webkit-scrollbar-thumb,
+    .list-panel::-webkit-scrollbar-thumb,
+    .main::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,.15);
+      border-radius: 2px;
+    }
+
+    .tree-row {
+      width: 100%;
+      background: transparent;
+      color: #cbd5e1;
+      text-align: left;
+      border-radius: 6px;
+      padding: 6px 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      transition: background .12s;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .tree-row:hover { background: #1e293b; color: #fff; }
+    .tree-row.active { background: #2563eb; color: #fff; }
+    .tree-icon { width: 12px; flex-shrink: 0; color: #94a3b8; }
+    .tree-lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .tree-dot { width: 6px; height: 6px; border-radius: 999px; background: #60a5fa; flex-shrink: 0; }
+    .tree-dot.inv { background: #bfdbfe; }
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      overflow-y: auto;
+      padding: 18px;
+    }
+
+    .hero {
+      border: 1px solid #dbeafe;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 14px;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1.4fr .9fr;
+    }
+
+    .hero h2 {
+      margin: 0 0 6px;
+      font-size: 18px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: #64748b;
+      line-height: 1.5;
+    }
+
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .metric-label {
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .metric-value {
+      margin-top: 4px;
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .metric-sub {
+      margin-top: 3px;
+      color: #64748b;
+      font-size: 12px;
+    }
+
+    .empty {
+      border: 1px dashed #e2e8f0;
+      border-radius: 12px;
+      background: #fff;
+      padding: 48px 18px;
+      text-align: center;
+      color: #94a3b8;
+    }
+
+    .empty-title {
+      font-weight: 700;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+
+    .chips-row,
+    .toolbar,
+    .segmented,
+    .import-actions,
+    .legend,
+    .field-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .chips-row { margin-bottom: 14px; }
+
+    .chips-lbl,
+    .toolbar-label {
+      color: #94a3b8;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 700;
+    }
+
+    .chip,
+    .tab-btn,
+    .seg-btn,
+    .mini-btn {
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      color: #334155;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      transition: border-color .12s, background .12s, color .12s;
+    }
+
+    .chip:hover,
+    .tab-btn:hover,
+    .seg-btn:hover,
+    .mini-btn:hover {
+      border-color: #93c5fd;
+      color: #1d4ed8;
+    }
+
+    .chip.active,
+    .tab-btn.active,
+    .seg-btn.active {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #fff;
+    }
+
+    .card {
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      border-radius: 10px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+
+    .card-head {
+      padding: 10px 14px;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #64748b;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .card-body { padding: 14px; }
+
+    .profile-name { margin: 0; font-size: 17px; font-weight: 700; }
+    .profile-desc { margin: 6px 0 0; color: #64748b; }
+
+    .tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .tag {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3730a3;
+    }
+
+    .meta-grid,
+    .detail-grid,
+    .stats-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+
+    .meta-grid {
+      border-top: 1px solid #f1f5f9;
+      margin-top: 12px;
+      padding-top: 12px;
+    }
+
+    .meta-key,
+    .detail-key {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #94a3b8;
+      margin-bottom: 2px;
+    }
+
+    .meta-value,
+    .detail-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .tbl-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 8px 10px;
+      font-size: 12px;
+      vertical-align: top;
+    }
+
+    td.mono,
+    .mono {
+      font-family: "Cascadia Mono", "Consolas", monospace;
+    }
+
+    tbody tr:hover { background: #f8fafc; }
+
+    .chart-svg-wrap { width: 100%; overflow: hidden; }
+    .chart-svg-wrap svg { display: block; width: 100%; }
+
+    .legend {
+      gap: 18px;
+      margin-top: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #475569;
+    }
+
+    .legend-line {
+      width: 22px;
+      height: 3px;
+      border-radius: 2px;
+    }
+
+    .layout-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .list-panel {
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      max-height: calc(100vh - 180px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .list-panel-head {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #64748b;
+      font-weight: 700;
+    }
+
+    .list-panel-body {
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .list-btn {
+      width: 100%;
+      text-align: left;
+      border-radius: 8px;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      color: #334155;
+      transition: border-color .12s, background .12s;
+    }
+
+    .list-btn:hover {
+      border-color: #93c5fd;
+      background: #f8fbff;
+    }
+
+    .list-btn.active {
+      border-color: #2563eb;
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .list-title {
+      font-weight: 700;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .list-sub {
+      margin-top: 3px;
+      font-size: 11px;
+      color: #64748b;
+      line-height: 1.4;
+    }
+
+    .btn,
+    .icon-btn {
+      border-radius: 8px;
+      padding: 8px 12px;
+      background: #2563eb;
+      color: #fff;
+      transition: background .12s;
+    }
+
+    .btn:hover,
+    .icon-btn:hover { background: #1d4ed8; }
+
+    .btn.secondary,
+    .icon-btn.secondary {
+      background: #fff;
+      color: #334155;
+      border: 1px solid #e2e8f0;
+    }
+
+    .btn.secondary:hover,
+    .icon-btn.secondary:hover { background: #f8fafc; }
+
+    .btn.ghost {
+      background: transparent;
+      color: #334155;
+      border: 1px dashed #cbd5e1;
+    }
+
+    .btn.danger,
+    .mini-btn.danger,
+    .icon-btn.danger {
+      background: #fff1f2;
+      color: #be123c;
+      border: 1px solid #fecdd3;
+    }
+
+    .btn.small,
+    .mini-btn,
+    .icon-btn {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .icon-btn { min-width: 0; }
+
+    .form-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    .field label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #64748b;
+      font-weight: 700;
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      color: #0f172a;
+      background: #fff;
+    }
+
+    .field textarea {
+      resize: vertical;
+      min-height: 86px;
+    }
+
+    .field small {
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: #475569;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .muted {
+      color: #64748b;
+    }
+
+    .inline-note {
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      color: #475569;
+      line-height: 1.5;
+    }
+
+    .notice {
+      padding: 12px 14px;
+      border: 1px solid #dbeafe;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-radius: 10px;
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+
+    .two-col {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .dataset-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      background: #ecfeff;
+      color: #0f766e;
+      border: 1px solid #99f6e4;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .hint-list {
+      margin: 0;
+      padding-left: 18px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    .spacer {
+      flex: 1;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 1180px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .layout-grid,
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+
+      .list-panel {
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 860px) {
+      .body { flex-direction: column; }
+      .sidebar { width: 100%; border-right: 0; border-bottom: 1px solid #1e293b; max-height: 48vh; }
+      .hdr-sub { display: none; }
+      .hdr-path { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+"use strict";
+
+// -----------------------------------------------------------------------------
+// Data model
+// -----------------------------------------------------------------------------
+
+const STANDARDS = [
+  {
+    id: "mil810h",
+    name: "MIL-STD-810H",
+    version: "H",
+    organization: "US DoD",
+    description: "Environmental Engineering Considerations and Laboratory Tests",
+  },
+];
+
+const NODES = [
+  { id: "mil810h_507",            parentId: null,                  standardId: "mil810h", label: "Method 507.6 - Humidity",                  order: 10 },
+  { id: "mil810h_507_induced",    parentId: "mil810h_507",         standardId: "mil810h", label: "Procedure Ia - Induced",                   order: 10 },
+  { id: "mil810h_507_induced_b3", parentId: "mil810h_507_induced", standardId: "mil810h", label: "Zone B3 - Hot Humid",                      order: 10 },
+  { id: "mil810h_507_natural",    parentId: "mil810h_507",         standardId: "mil810h", label: "Procedure Ib - Natural",                   order: 20 },
+  { id: "mil810h_507_natural_b2", parentId: "mil810h_507_natural", standardId: "mil810h", label: "Zone B2 - Cyclic High Relative Humidity",  order: 10 },
+];
+
+const BROWSER_PROFILES = [
+  {
+    id: "prof_mil810h_507_induced_b3",
+    nodeId: "mil810h_507_induced_b3",
+    name: "Induced Cycle - Zone B3 Hot Humid",
+    description: "24-hour induced humidity cycle for Zone B3 (Hot Humid). Temperature peaks at 71 °C with minimum relative humidity of 14 %RH at 1500h.",
+    tags: ["humidity","induced-cycle","zone-b3","hot-humid","mil-810h"],
+    columns: [
+      { key:"time",       label:"Time",              unit:"hhmm", axis:"x",     color:null,      dataType:"string" },
+      { key:"temp_c",     label:"Temperature",       unit:"°C",   axis:"left",  color:"#ef4444", dataType:"number" },
+      { key:"rh_percent", label:"Relative Humidity", unit:"%RH",  axis:"right", color:"#3b82f6", dataType:"number" },
+      { key:"temp_f",     label:"Temperature",       unit:"°F",   axis:"none",  color:null,      dataType:"number" },
+    ],
+    metadata: {
+      "Standard":"MIL-STD-810H",
+      "Method":"507.6",
+      "Method Name":"Humidity",
+      "Procedure":"Procedure Ia",
+      "Procedure Name":"Induced",
+      "Zone":"B3-Hot humid",
+      "Test Profile":"Induced cycle",
+      "Duration":"15 cycles",
+      "Cycle Length":"24 hours",
+      "Source":"220"
+    },
+  },
+  {
+    id: "prof_mil810h_507_natural_b2",
+    nodeId: "mil810h_507_natural_b2",
+    name: "Natural Cycle - Zone B2 Cyclic High Relative Humidity",
+    description: "24-hour natural humidity cycle for Zone B2 (Cyclic high relative humidity). Temperature remains moderate (26–35 °C) while relative humidity stays very high.",
+    tags: ["humidity","natural-cycle","zone-b2","high-humidity","mil-810h"],
+    columns: [
+      { key:"time",       label:"Time",              unit:"hhmm", axis:"x",     color:null,      dataType:"string" },
+      { key:"temp_c",     label:"Temperature",       unit:"°C",   axis:"left",  color:"#ef4444", dataType:"number" },
+      { key:"rh_percent", label:"Relative Humidity", unit:"%RH",  axis:"right", color:"#3b82f6", dataType:"number" },
+      { key:"temp_f",     label:"Temperature",       unit:"°F",   axis:"none",  color:null,      dataType:"number" },
+    ],
+    metadata: {
+      "Standard":"MIL-STD-810H",
+      "Method":"507.6-VII",
+      "Method Name":"Humidity",
+      "Procedure":"Procedure Ib",
+      "Procedure Name":"Natural",
+      "Zone":"B2-Cyclic high relative humidity",
+      "Test Profile":"Natural cycle",
+      "Duration":"45",
+      "Cycle Length":"24hours",
+      "Source":"222"
+    },
+  }
+];
+
+const BROWSER_PROFILE_DATA = {
+  prof_mil810h_507_induced_b3: [
+    { time:"0100", temp_c:35, temp_f:95,  rh_percent:67 },
+    { time:"0200", temp_c:34, temp_f:94,  rh_percent:72 },
+    { time:"0300", temp_c:34, temp_f:94,  rh_percent:75 },
+    { time:"0400", temp_c:34, temp_f:93,  rh_percent:77 },
+    { time:"0500", temp_c:33, temp_f:92,  rh_percent:79 },
+    { time:"0600", temp_c:33, temp_f:91,  rh_percent:80 },
+    { time:"0700", temp_c:36, temp_f:97,  rh_percent:70 },
+    { time:"0800", temp_c:40, temp_f:104, rh_percent:54 },
+    { time:"0900", temp_c:44, temp_f:111, rh_percent:42 },
+    { time:"1000", temp_c:51, temp_f:124, rh_percent:31 },
+    { time:"1100", temp_c:57, temp_f:135, rh_percent:24 },
+    { time:"1200", temp_c:62, temp_f:144, rh_percent:17 },
+    { time:"1300", temp_c:66, temp_f:151, rh_percent:16 },
+    { time:"1400", temp_c:69, temp_f:156, rh_percent:15 },
+    { time:"1500", temp_c:71, temp_f:160, rh_percent:14 },
+    { time:"1600", temp_c:69, temp_f:156, rh_percent:16 },
+    { time:"1700", temp_c:66, temp_f:151, rh_percent:18 },
+    { time:"1800", temp_c:63, temp_f:145, rh_percent:21 },
+    { time:"1900", temp_c:58, temp_f:136, rh_percent:29 },
+    { time:"2000", temp_c:50, temp_f:122, rh_percent:41 },
+    { time:"2100", temp_c:41, temp_f:105, rh_percent:53 },
+    { time:"2200", temp_c:39, temp_f:103, rh_percent:58 },
+    { time:"2300", temp_c:37, temp_f:99,  rh_percent:62 },
+    { time:"2400", temp_c:35, temp_f:95,  rh_percent:63 }
+  ],
+  prof_mil810h_507_natural_b2: [
+    { time:"0100", temp_c:27, temp_f:80, rh_percent:100 },
+    { time:"0200", temp_c:26, temp_f:79, rh_percent:100 },
+    { time:"0300", temp_c:26, temp_f:79, rh_percent:100 },
+    { time:"0400", temp_c:26, temp_f:79, rh_percent:100 },
+    { time:"0500", temp_c:26, temp_f:78, rh_percent:100 },
+    { time:"0600", temp_c:26, temp_f:78, rh_percent:100 },
+    { time:"0700", temp_c:27, temp_f:81, rh_percent:94 },
+    { time:"0800", temp_c:29, temp_f:84, rh_percent:88 },
+    { time:"0900", temp_c:31, temp_f:87, rh_percent:82 },
+    { time:"1000", temp_c:32, temp_f:89, rh_percent:79 },
+    { time:"1100", temp_c:33, temp_f:92, rh_percent:77 },
+    { time:"1200", temp_c:34, temp_f:94, rh_percent:75 },
+    { time:"1300", temp_c:34, temp_f:94, rh_percent:74 },
+    { time:"1400", temp_c:35, temp_f:95, rh_percent:74 },
+    { time:"1500", temp_c:35, temp_f:95, rh_percent:74 },
+    { time:"1600", temp_c:34, temp_f:94, rh_percent:76 },
+    { time:"1700", temp_c:33, temp_f:92, rh_percent:79 },
+    { time:"1800", temp_c:32, temp_f:90, rh_percent:82 },
+    { time:"1900", temp_c:31, temp_f:88, rh_percent:86 },
+    { time:"2000", temp_c:29, temp_f:85, rh_percent:91 },
+    { time:"2100", temp_c:28, temp_f:83, rh_percent:95 },
+    { time:"2200", temp_c:28, temp_f:82, rh_percent:96 },
+    { time:"2300", temp_c:27, temp_f:81, rh_percent:100 },
+    { time:"2400", temp_c:27, temp_f:80, rh_percent:100 }
+  ]
+};
+
+const INITIAL_MANAGEMENT_DATA = {
+  domains: [
+    { id: "environmental", name: "Environmental", description: "Climatic and environmental exposure profiles." },
+    { id: "vibration", name: "Vibration", description: "Transport and installed vibration profiles." },
+    { id: "shock", name: "Shock", description: "Mechanical shock and impact profiles." }
+  ],
+  attributeSchemas: [
+    {
+      domainId: "environmental",
+      attributes: [
+        { id: "testType", label: "Test Type", type: "select", required: true, description: "Humidity, rain, temperature or other environmental test family." },
+        { id: "zone", label: "Zone", type: "select", required: true, description: "Climatic zone classification." },
+        { id: "exposure", label: "Exposure", type: "select", required: false, description: "Operational or storage exposure." },
+        { id: "source", label: "Source", type: "select", required: false, description: "Natural or induced origin." },
+        { id: "shape", label: "Profile Shape", type: "select", required: false, description: "Cyclic, steady, pulse, ramp..." },
+        { id: "cycleCount", label: "Cycle Count", type: "number", required: false, description: "Number of cycles in the planned exposure." }
+      ]
+    },
+    {
+      domainId: "vibration",
+      attributes: [
+        { id: "vibrationType", label: "Vibration Type", type: "select", required: true, description: "Random, sine, swept sine..." },
+        { id: "axis", label: "Axis", type: "select", required: true, description: "Principal test axis." },
+        { id: "installation", label: "Installation", type: "select", required: false, description: "Vehicle, bench, rack or installed condition." },
+        { id: "severity", label: "Severity", type: "select", required: false, description: "Qualification level or screening level." },
+        { id: "durationMin", label: "Duration (min)", type: "number", required: false, description: "Exposure duration in minutes." }
+      ]
+    },
+    {
+      domainId: "shock",
+      attributes: [
+        { id: "shockType", label: "Shock Type", type: "select", required: true, description: "Half-sine, sawtooth, trapezoid..." },
+        { id: "direction", label: "Direction", type: "select", required: true, description: "Shock direction or orientation." },
+        { id: "durationMs", label: "Duration (ms)", type: "number", required: true, description: "Pulse duration in milliseconds." },
+        { id: "severity", label: "Severity", type: "select", required: false, description: "Peak level family." }
+      ]
+    }
+  ],
+  attributeOptions: [
+    { attributeId: "testType", options: ["Humidity", "Rain", "High Temperature", "Low Temperature", "Sand and Dust"] },
+    { attributeId: "zone", options: ["B1", "B2", "B3", "B4"] },
+    { attributeId: "exposure", options: ["Operational", "Storage", "Transit"] },
+    { attributeId: "source", options: ["Natural", "Induced"] },
+    { attributeId: "shape", options: ["Cyclic", "Steady", "Ramp"] },
+    { attributeId: "vibrationType", options: ["Random", "Sine", "Swept Sine"] },
+    { attributeId: "axis", options: ["X", "Y", "Z"] },
+    { attributeId: "installation", options: ["Vehicle Mounted", "Bench", "Installed"] },
+    { attributeId: "severity", options: ["Low", "Medium", "High", "Qualification"] },
+    { attributeId: "shockType", options: ["Half-Sine", "Sawtooth", "Trapezoid"] },
+    { attributeId: "direction", options: ["Forward", "Aft", "Vertical Up", "Vertical Down", "Lateral"] }
+  ],
+  datasetSchemas: [
+    {
+      domainId: "environmental",
+      columns: [
+        { id: "time", label: "Time", type: "text", unit: "hhmm", required: true },
+        { id: "temperatureC", label: "Temperature", type: "number", unit: "°C", required: true },
+        { id: "humidityPct", label: "Humidity", type: "number", unit: "%RH", required: true }
+      ]
+    },
+    {
+      domainId: "vibration",
+      columns: [
+        { id: "frequencyHz", label: "Frequency", type: "number", unit: "Hz", required: true },
+        { id: "psd", label: "PSD", type: "number", unit: "g²/Hz", required: true }
+      ]
+    },
+    {
+      domainId: "shock",
+      columns: [
+        { id: "timeMs", label: "Time", type: "number", unit: "ms", required: true },
+        { id: "accelerationG", label: "Acceleration", type: "number", unit: "g", required: true }
+      ]
+    }
+  ],
+  managedProfiles: [
+    {
+      id: "managed_env_001",
+      domainId: "environmental",
+      name: "Humidity Cycle - Zone B3",
+      description: "Managed profile example aligned with environmental humidity classification.",
+      attributes: {
+        testType: "Humidity",
+        zone: "B3",
+        exposure: "Operational",
+        source: "Induced",
+        shape: "Cyclic",
+        cycleCount: 15
+      }
+    },
+    {
+      id: "managed_vib_001",
+      domainId: "vibration",
+      name: "Random Vibration - Bench Y",
+      description: "Managed profile example for vibration profile administration.",
+      attributes: {
+        vibrationType: "Random",
+        axis: "Y",
+        installation: "Bench",
+        severity: "Qualification",
+        durationMin: 30
+      }
+    }
+  ],
+  profileDatasets: {
+    managed_env_001: [
+      { time: "0000", temperatureC: 30, humidityPct: 95 },
+      { time: "0600", temperatureC: 35, humidityPct: 88 },
+      { time: "1200", temperatureC: 41, humidityPct: 62 },
+      { time: "1800", temperatureC: 34, humidityPct: 80 }
+    ],
+    managed_vib_001: [
+      { frequencyHz: 10, psd: 0.002 },
+      { frequencyHz: 50, psd: 0.01 },
+      { frequencyHz: 100, psd: 0.012 },
+      { frequencyHz: 500, psd: 0.004 }
+    ]
+  }
+};
+
+// -----------------------------------------------------------------------------
+// State
+// -----------------------------------------------------------------------------
+
+const state = {
+  route: "browser",
+  browser: {
+    selectedStandardId: null,
+    selectedNodeId: null,
+    selectedProfileId: null,
+    treeCache: {}
+  },
+  management: {
+    data: clone(INITIAL_MANAGEMENT_DATA),
+    activeTab: "domains",
+    selectedDomainId: "environmental",
+    selectedProfileId: "managed_env_001",
+    selectedAttributeId: null,
+    domainDraft: emptyDomainDraft(),
+    attributeDraft: emptyAttributeDraft(),
+    profileDraft: emptyProfileDraft(),
+    datasetDraftRow: {},
+    importMessage: ""
+  }
+};
+
+// -----------------------------------------------------------------------------
+// Utility functions
+// -----------------------------------------------------------------------------
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function esc(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;");
+}
+
+function el(tag, className, html) {
+  const node = document.createElement(tag);
+  if (className) {
+    node.className = className;
+  }
+  if (html !== undefined) {
+    node.innerHTML = html;
+  }
+  return node;
+}
+
+function byId(collection, id) {
+  return collection.find((item) => item.id === id) || null;
+}
+
+function emptyDomainDraft() {
+  return { mode: "create", originalId: "", id: "", name: "", description: "" };
+}
+
+function emptyAttributeDraft(domainId) {
+  return {
+    mode: "create",
+    originalId: "",
+    domainId: domainId || "",
+    id: "",
+    label: "",
+    type: "select",
+    required: true,
+    description: "",
+    optionsText: ""
+  };
+}
+
+function emptyProfileDraft(domainId) {
+  return {
+    mode: "create",
+    originalId: "",
+    domainId: domainId || "",
+    id: "",
+    name: "",
+    description: "",
+    attributes: {}
+  };
+}
+
+function slugify(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function uniqueId(prefix, existingIds) {
+  let candidate = prefix;
+  let index = 1;
+  while (existingIds.has(candidate)) {
+    candidate = `${prefix}_${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function managementData() {
+  return state.management.data;
+}
+
+function getSelectedDomain() {
+  return byId(managementData().domains, state.management.selectedDomainId) || managementData().domains[0] || null;
+}
+
+function ensureSelectedDomain() {
+  const data = managementData();
+  if (!data.domains.length) {
+    state.management.selectedDomainId = null;
+    return null;
+  }
+  const selected = getSelectedDomain();
+  if (!selected) {
+    state.management.selectedDomainId = data.domains[0].id;
+    return data.domains[0];
+  }
+  return selected;
+}
+
+function getAttributeSchema(domainId) {
+  const schema = managementData().attributeSchemas.find((item) => item.domainId === domainId);
+  return schema ? schema.attributes : [];
+}
+
+function getDatasetSchema(domainId) {
+  const schema = managementData().datasetSchemas.find((item) => item.domainId === domainId);
+  return schema ? schema.columns : [];
+}
+
+function getOptions(attributeId) {
+  const entry = managementData().attributeOptions.find((item) => item.attributeId === attributeId);
+  return entry ? entry.options.slice() : [];
+}
+
+function setOptions(attributeId, nextOptions) {
+  const data = managementData();
+  const index = data.attributeOptions.findIndex((item) => item.attributeId === attributeId);
+  if (index >= 0) {
+    data.attributeOptions[index].options = nextOptions.slice();
+  } else {
+    data.attributeOptions.push({ attributeId: attributeId, options: nextOptions.slice() });
+  }
+}
+
+function removeOptions(attributeId) {
+  const data = managementData();
+  data.attributeOptions = data.attributeOptions.filter((item) => item.attributeId !== attributeId);
+}
+
+function getManagedProfilesForDomain(domainId) {
+  return managementData().managedProfiles.filter((profile) => profile.domainId === domainId);
+}
+
+function getSelectedManagedProfile() {
+  const domain = ensureSelectedDomain();
+  if (!domain) {
+    state.management.selectedProfileId = null;
+    return null;
+  }
+  const profiles = getManagedProfilesForDomain(domain.id);
+  const found = profiles.find((item) => item.id === state.management.selectedProfileId) || profiles[0] || null;
+  state.management.selectedProfileId = found ? found.id : null;
+  return found;
+}
+
+function createBlankDatasetRow(domainId) {
+  const row = {};
+  getDatasetSchema(domainId).forEach((column) => {
+    row[column.id] = column.type === "number" ? "" : "";
+  });
+  return row;
+}
+
+function resetProfileDraft(domainId) {
+  const draft = emptyProfileDraft(domainId);
+  getAttributeSchema(domainId).forEach((attribute) => {
+    draft.attributes[attribute.id] = "";
+  });
+  state.management.profileDraft = draft;
+  state.management.datasetDraftRow = createBlankDatasetRow(domainId);
+}
+
+function resetAttributeDraft(domainId) {
+  state.management.attributeDraft = emptyAttributeDraft(domainId);
+}
+
+function buildBrowserTree(standardId) {
+  const nodeIdsWithProfiles = new Set(BROWSER_PROFILES.map((item) => item.nodeId));
+  const standardNodes = NODES
+    .filter((node) => node.standardId === standardId)
+    .slice()
+    .sort((left, right) => left.order - right.order);
+
+  function buildChildren(parentId) {
+    return standardNodes
+      .filter((node) => node.parentId === parentId)
+      .map((node) => ({
+        id: node.id,
+        label: node.label,
+        hasProfiles: nodeIdsWithProfiles.has(node.id),
+        expanded: parentId === null,
+        children: buildChildren(node.id)
+      }));
+  }
+
+  return buildChildren(null);
+}
+
+function getBrowserTree(standardId) {
+  const cache = state.browser.treeCache;
+  if (!cache[standardId]) {
+    cache[standardId] = buildBrowserTree(standardId);
+  }
+  return cache[standardId];
+}
+
+function walkTree(nodes, visitor) {
+  nodes.forEach((node) => {
+    visitor(node);
+    walkTree(node.children, visitor);
+  });
+}
+
+function toggleBrowserNode(nodeId) {
+  const standardId = state.browser.selectedStandardId;
+  if (!standardId) {
+    return;
+  }
+  const tree = getBrowserTree(standardId);
+  walkTree(tree, (node) => {
+    if (node.id === nodeId && node.children.length) {
+      node.expanded = !node.expanded;
+    }
+  });
+}
+
+function domainMetrics() {
+  const data = managementData();
+  const attributeCount = data.attributeSchemas.reduce((sum, schema) => sum + schema.attributes.length, 0);
+  const optionCount = data.attributeOptions.reduce((sum, entry) => sum + entry.options.length, 0);
+  const datasetColumns = data.datasetSchemas.reduce((sum, schema) => sum + schema.columns.length, 0);
+  return {
+    domainCount: data.domains.length,
+    attributeCount: attributeCount,
+    optionCount: optionCount,
+    profileCount: data.managedProfiles.length,
+    datasetColumns: datasetColumns
+  };
+}
+
+function triggerDownload(filename, payload) {
+  const blob = new Blob([payload], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function exportManagementJson() {
+  const payload = JSON.stringify(managementData(), null, 2);
+  triggerDownload("mil-browser-profile-management.json", payload);
+}
+
+function importManagementJson(file) {
+  const reader = new FileReader();
+  reader.onload = function onLoad() {
+    try {
+      const parsed = JSON.parse(reader.result);
+      validateImportedManagementData(parsed);
+      state.management.data = parsed;
+      const firstDomain = parsed.domains[0] ? parsed.domains[0].id : null;
+      state.management.selectedDomainId = firstDomain;
+      state.management.selectedAttributeId = null;
+      state.management.selectedProfileId = null;
+      state.management.domainDraft = emptyDomainDraft();
+      resetAttributeDraft(firstDomain);
+      resetProfileDraft(firstDomain);
+      state.management.importMessage = "Management configuration imported successfully.";
+      render();
+    } catch (error) {
+      state.management.importMessage = `Import failed: ${error.message}`;
+      render();
+    }
+  };
+  reader.readAsText(file);
+}
+
+function validateImportedManagementData(parsed) {
+  const requiredArrays = ["domains", "attributeSchemas", "attributeOptions", "datasetSchemas", "managedProfiles"];
+  requiredArrays.forEach((key) => {
+    if (!parsed || !Array.isArray(parsed[key])) {
+      throw new Error(`Missing array: ${key}`);
+    }
+  });
+  if (!parsed.profileDatasets || typeof parsed.profileDatasets !== "object") {
+    throw new Error("Missing object: profileDatasets");
+  }
+}
+
+function syncSelectionAfterDomainChange() {
+  const domain = ensureSelectedDomain();
+  const domainId = domain ? domain.id : "";
+  if (!domain) {
+    state.management.selectedAttributeId = null;
+    state.management.selectedProfileId = null;
+    state.management.domainDraft = emptyDomainDraft();
+    state.management.attributeDraft = emptyAttributeDraft("");
+    state.management.profileDraft = emptyProfileDraft("");
+    state.management.datasetDraftRow = {};
+    return;
+  }
+  if (state.management.attributeDraft.domainId !== domainId && state.management.attributeDraft.mode === "create") {
+    resetAttributeDraft(domainId);
+  }
+  if (state.management.profileDraft.domainId !== domainId && state.management.profileDraft.mode === "create") {
+    resetProfileDraft(domainId);
+  }
+  getSelectedManagedProfile();
+}
+
+// -----------------------------------------------------------------------------
+// SVG chart helpers
+// -----------------------------------------------------------------------------
+
+const NS = "http://www.w3.org/2000/svg";
+
+function svgEl(tag, attrs) {
+  const node = document.createElementNS(NS, tag);
+  Object.entries(attrs || {}).forEach(([key, value]) => {
+    node.setAttribute(key, value);
+  });
+  return node;
+}
+
+function svgText(x, y, content, attrs) {
+  const node = svgEl("text", Object.assign({ x: x, y: y, "font-size": "10", fill: "#94a3b8" }, attrs || {}));
+  node.textContent = content;
+  return node;
+}
+
+function buildChart(columns, data) {
+  const xColumn = columns.find((column) => column.axis === "x");
+  const leftColumns = columns.filter((column) => column.axis === "left");
+  const rightColumns = columns.filter((column) => column.axis === "right");
+  if (!xColumn || !data.length) {
+    return null;
+  }
+
+  const width = 800;
+  const height = 300;
+  const marginLeft = 52;
+  const marginRight = rightColumns.length ? 52 : 18;
+  const marginTop = 14;
+  const marginBottom = 40;
+  const innerWidth = width - marginLeft - marginRight;
+  const innerHeight = height - marginTop - marginBottom;
+  const count = data.length;
+
+  function calcRange(seriesColumns) {
+    const values = [];
+    seriesColumns.forEach((column) => {
+      data.forEach((row) => {
+        const value = Number(row[column.key]);
+        if (!Number.isNaN(value)) {
+          values.push(value);
+        }
+      });
+    });
+    if (!values.length) {
+      return [0, 100];
+    }
+    const min = Math.min.apply(null, values);
+    const max = Math.max.apply(null, values);
+    const padding = (max - min) * 0.08 || 5;
+    return [min - padding, max + padding];
+  }
+
+  const leftRange = calcRange(leftColumns);
+  const rightRange = calcRange(rightColumns);
+  const xScale = function xScale(index) {
+    return marginLeft + (count > 1 ? (index / (count - 1)) * innerWidth : innerWidth / 2);
+  };
+  const yScaleLeft = function yScaleLeft(value) {
+    return marginTop + innerHeight - ((value - leftRange[0]) / (leftRange[1] - leftRange[0])) * innerHeight;
+  };
+  const yScaleRight = function yScaleRight(value) {
+    return marginTop + innerHeight - ((value - rightRange[0]) / (rightRange[1] - rightRange[0])) * innerHeight;
+  };
+
+  const svg = svgEl("svg", { viewBox: `0 0 ${width} ${height}` });
+  const tickCount = 5;
+  for (let tickIndex = 0; tickIndex <= tickCount; tickIndex += 1) {
+    const ratio = tickIndex / tickCount;
+    const y = marginTop + innerHeight - ratio * innerHeight;
+    svg.appendChild(svgEl("line", {
+      x1: marginLeft,
+      y1: y,
+      x2: marginLeft + innerWidth,
+      y2: y,
+      stroke: "#f0f4f8",
+      "stroke-width": "1"
+    }));
+    const leftValue = leftRange[0] + ratio * (leftRange[1] - leftRange[0]);
+    svg.appendChild(svgText(marginLeft - 6, y + 3.5, Math.round(leftValue), { "text-anchor": "end" }));
+    if (rightColumns.length) {
+      const rightValue = rightRange[0] + ratio * (rightRange[1] - rightRange[0]);
+      svg.appendChild(svgText(marginLeft + innerWidth + 6, y + 3.5, Math.round(rightValue), { "text-anchor": "start" }));
+    }
+  }
+
+  const labelStep = Math.max(1, Math.floor(count / 12));
+  for (let pointIndex = 0; pointIndex < count; pointIndex += labelStep) {
+    svg.appendChild(svgText(xScale(pointIndex), marginTop + innerHeight + 14, data[pointIndex][xColumn.key], { "text-anchor": "middle" }));
+  }
+  if ((count - 1) % labelStep !== 0) {
+    svg.appendChild(svgText(xScale(count - 1), marginTop + innerHeight + 14, data[count - 1][xColumn.key], { "text-anchor": "middle" }));
+  }
+
+  svg.appendChild(svgEl("line", { x1: marginLeft, y1: marginTop, x2: marginLeft, y2: marginTop + innerHeight, stroke: "#e2e8f0", "stroke-width": "1" }));
+  svg.appendChild(svgEl("line", { x1: marginLeft, y1: marginTop + innerHeight, x2: marginLeft + innerWidth, y2: marginTop + innerHeight, stroke: "#e2e8f0", "stroke-width": "1" }));
+  if (rightColumns.length) {
+    svg.appendChild(svgEl("line", { x1: marginLeft + innerWidth, y1: marginTop, x2: marginLeft + innerWidth, y2: marginTop + innerHeight, stroke: "#e2e8f0", "stroke-width": "1" }));
+  }
+
+  if (leftColumns.length) {
+    const label = leftColumns.map((column) => `${column.label} (${column.unit})`).join(" / ");
+    const text = svgEl("text", {
+      x: 8,
+      y: marginTop + innerHeight / 2,
+      "font-size": "9",
+      fill: "#94a3b8",
+      "text-anchor": "middle",
+      transform: `rotate(-90,8,${marginTop + innerHeight / 2})`
+    });
+    text.textContent = label;
+    svg.appendChild(text);
+  }
+
+  if (rightColumns.length) {
+    const label = rightColumns.map((column) => `${column.label} (${column.unit})`).join(" / ");
+    const text = svgEl("text", {
+      x: width - 8,
+      y: marginTop + innerHeight / 2,
+      "font-size": "9",
+      fill: "#94a3b8",
+      "text-anchor": "middle",
+      transform: `rotate(90,${width - 8},${marginTop + innerHeight / 2})`
+    });
+    text.textContent = label;
+    svg.appendChild(text);
+  }
+
+  const series = leftColumns.map((column) => ({ column: column, scale: yScaleLeft }))
+    .concat(rightColumns.map((column) => ({ column: column, scale: yScaleRight })));
+
+  series.forEach((seriesItem) => {
+    const color = seriesItem.column.color || "#6b7280";
+    const points = data.map((row, index) => `${xScale(index)},${seriesItem.scale(Number(row[seriesItem.column.key]))}`).join(" ");
+    svg.appendChild(svgEl("polyline", {
+      points: points,
+      fill: "none",
+      stroke: color,
+      "stroke-width": "2",
+      "stroke-linejoin": "round",
+      "stroke-linecap": "round"
+    }));
+    data.forEach((row, index) => {
+      svg.appendChild(svgEl("circle", {
+        cx: xScale(index),
+        cy: seriesItem.scale(Number(row[seriesItem.column.key])),
+        r: "3",
+        fill: color
+      }));
+    });
+  });
+
+  const crosshair = svgEl("line", {
+    y1: marginTop,
+    y2: marginTop + innerHeight,
+    stroke: "#cbd5e1",
+    "stroke-width": "1",
+    "stroke-dasharray": "4 3"
+  });
+  crosshair.style.display = "none";
+  svg.appendChild(crosshair);
+
+  const tooltipGroup = svgEl("g");
+  const tooltipBackground = svgEl("rect", {
+    rx: "5",
+    fill: "white",
+    stroke: "#e2e8f0",
+    "stroke-width": "1",
+    filter: "drop-shadow(0 2px 4px rgba(0,0,0,.08))"
+  });
+  tooltipGroup.appendChild(tooltipBackground);
+  const tooltipLines = Array.from({ length: series.length + 1 }, () => {
+    const text = svgEl("text", { "font-size": "11" });
+    tooltipGroup.appendChild(text);
+    return text;
+  });
+  tooltipGroup.style.display = "none";
+  svg.appendChild(tooltipGroup);
+
+  const overlay = svgEl("rect", {
+    x: marginLeft,
+    y: marginTop,
+    width: innerWidth,
+    height: innerHeight,
+    fill: "transparent"
+  });
+  overlay.style.cursor = "crosshair";
+  svg.appendChild(overlay);
+
+  overlay.addEventListener("mousemove", (event) => {
+    const rect = svg.getBoundingClientRect();
+    const scale = width / rect.width;
+    const relativeX = (event.clientX - rect.left) * scale - marginLeft;
+    const index = Math.max(0, Math.min(count - 1, Math.round((relativeX / innerWidth) * (count - 1))));
+    const pixelX = xScale(index);
+    const row = data[index];
+
+    crosshair.setAttribute("x1", pixelX);
+    crosshair.setAttribute("x2", pixelX);
+    crosshair.style.display = "";
+
+    const lineHeight = 15;
+    const padding = 8;
+    let maxWidth = 90;
+    tooltipLines[0].textContent = String(row[xColumn.key]);
+    tooltipLines[0].setAttribute("font-weight", "700");
+    tooltipLines[0].setAttribute("fill", "#1e293b");
+    maxWidth = Math.max(maxWidth, String(row[xColumn.key]).length * 7);
+
+    series.forEach((seriesItem, indexLine) => {
+      const text = `${seriesItem.column.label}: ${row[seriesItem.column.key]} ${seriesItem.column.unit}`;
+      tooltipLines[indexLine + 1].textContent = text;
+      tooltipLines[indexLine + 1].setAttribute("fill", seriesItem.column.color || "#64748b");
+      tooltipLines[indexLine + 1].setAttribute("font-weight", "400");
+      maxWidth = Math.max(maxWidth, text.length * 6.2);
+    });
+
+    const tooltipWidth = maxWidth + padding * 2;
+    const tooltipHeight = padding * 2 + lineHeight * (series.length + 1);
+    let tooltipX = pixelX + 12;
+    if (tooltipX + tooltipWidth > marginLeft + innerWidth) {
+      tooltipX = pixelX - tooltipWidth - 12;
+    }
+    const tooltipY = marginTop + 10;
+
+    tooltipBackground.setAttribute("x", tooltipX);
+    tooltipBackground.setAttribute("y", tooltipY);
+    tooltipBackground.setAttribute("width", tooltipWidth);
+    tooltipBackground.setAttribute("height", tooltipHeight);
+
+    tooltipLines.forEach((line, lineIndex) => {
+      line.setAttribute("x", tooltipX + padding);
+      line.setAttribute("y", tooltipY + padding + lineHeight * (lineIndex + 0.8));
+    });
+
+    tooltipGroup.style.display = "";
+  });
+
+  overlay.addEventListener("mouseleave", () => {
+    crosshair.style.display = "none";
+    tooltipGroup.style.display = "none";
+  });
+
+  return { svg: svg, series: series };
+}
+
+// -----------------------------------------------------------------------------
+// Browser rendering
+// -----------------------------------------------------------------------------
+
+function renderBrowserTreeNodes(nodes, depth, fragment) {
+  nodes.forEach((node) => {
+    const button = document.createElement("button");
+    button.className = "tree-row" + (node.id === state.browser.selectedNodeId ? " active" : "");
+    button.style.paddingLeft = `${8 + depth * 16}px`;
+    button.title = node.label;
+    button.innerHTML = `
+      <span class="tree-icon">${node.children.length ? (node.expanded ? "&#9660;" : "&#9658;") : "&middot;"}</span>
+      <span class="tree-lbl">${esc(node.label)}</span>
+      ${node.hasProfiles ? `<span class="tree-dot${node.id === state.browser.selectedNodeId ? " inv" : ""}"></span>` : ""}
+    `;
+    button.addEventListener("click", () => {
+      if (node.children.length) {
+        node.expanded = !node.expanded;
+      }
+      state.browser.selectedNodeId = node.id;
+      state.browser.selectedProfileId = null;
+      render();
+    });
+    fragment.appendChild(button);
+    if (node.children.length && node.expanded) {
+      renderBrowserTreeNodes(node.children, depth + 1, fragment);
+    }
+  });
+}
+
+function renderBrowserSidebar(sidebar) {
+  const navSection = el("section", "sb-section");
+  const navLabel = el("p", "sb-label");
+  navLabel.textContent = "Workspace";
+  navSection.appendChild(navLabel);
+  navSection.appendChild(createNavButton("browser", "Standards Browser", "Browse existing read-only test profiles."));
+  navSection.appendChild(createNavButton("management", "Profile Management", "Manage domains, attributes, options and datasets."));
+  sidebar.appendChild(navSection);
+
+  const standardsSection = el("section", "sb-section");
+  const standardsLabel = el("p", "sb-label");
+  standardsLabel.textContent = "Standards";
+  standardsSection.appendChild(standardsLabel);
+  STANDARDS.forEach((standard) => {
+    const button = document.createElement("button");
+    button.className = "std-btn" + (standard.id === state.browser.selectedStandardId ? " active" : "");
+    button.innerHTML = `<div class="std-name">${esc(standard.name)}</div><div class="std-org">${esc(standard.organization)}</div>`;
+    button.addEventListener("click", () => {
+      state.browser.selectedStandardId = standard.id;
+      state.browser.selectedNodeId = null;
+      state.browser.selectedProfileId = null;
+      render();
+    });
+    standardsSection.appendChild(button);
+  });
+  sidebar.appendChild(standardsSection);
+
+  if (state.browser.selectedStandardId) {
+    const treeWrap = el("div", "tree-wrap");
+    const treeLabel = el("p", "sb-label");
+    treeLabel.textContent = "Structure";
+    treeLabel.style.margin = "0 0 10px 2px";
+    treeWrap.appendChild(treeLabel);
+    const fragment = document.createDocumentFragment();
+    renderBrowserTreeNodes(getBrowserTree(state.browser.selectedStandardId), 0, fragment);
+    treeWrap.appendChild(fragment);
+    sidebar.appendChild(treeWrap);
+  }
+}
+
+function createNavButton(route, title, subtitle) {
+  const button = document.createElement("button");
+  button.className = "nav-btn" + (state.route === route ? " active" : "");
+  button.innerHTML = `<div class="nav-name">${esc(title)}</div><div class="nav-subtext">${esc(subtitle)}</div>`;
+  button.addEventListener("click", () => {
+    state.route = route;
+    render();
+  });
+  return button;
+}
+
+function renderBrowserMain(main) {
+  const hero = el("section", "hero");
+  const heroLeft = el("div");
+  heroLeft.innerHTML = `
+    <h2>Standards Browser</h2>
+    <p>The read-only browser remains intact. Navigate MIL-STD-810 structures, select a terminal zone node, and inspect metadata, interactive visualization, and raw profile points.</p>
+  `;
+  hero.appendChild(heroLeft);
+  const heroRight = el("div", "hero-metrics");
+  [
+    { label: "Standards", value: STANDARDS.length, sub: "Current source datasets" },
+    { label: "Tree Nodes", value: NODES.length, sub: "Dynamic structural navigation" },
+    { label: "Profiles", value: BROWSER_PROFILES.length, sub: "Read-only browsing profiles" },
+    { label: "Management", value: "Ready", sub: "Schema-driven administration" }
+  ].forEach((metric) => {
+    const card = el("div", "metric");
+    card.innerHTML = `<div class="metric-label">${esc(metric.label)}</div><div class="metric-value">${esc(metric.value)}</div><div class="metric-sub">${esc(metric.sub)}</div>`;
+    heroRight.appendChild(card);
+  });
+  hero.appendChild(heroRight);
+  main.appendChild(hero);
+
+  const standardId = state.browser.selectedStandardId;
+  const nodeId = state.browser.selectedNodeId;
+  const nodeProfiles = nodeId ? BROWSER_PROFILES.filter((profile) => profile.nodeId === nodeId) : [];
+  const selectedProfile = state.browser.selectedProfileId ? byId(BROWSER_PROFILES, state.browser.selectedProfileId) : null;
+  const selectedData = selectedProfile ? (BROWSER_PROFILE_DATA[selectedProfile.id] || []) : [];
+
+  if (!standardId) {
+    const empty = el("div", "empty");
+    empty.innerHTML = `<p class="empty-title">Select a standard</p><p>Choose an environmental testing standard from the left panel to begin exploring test profiles.</p>`;
+    main.appendChild(empty);
+    return;
+  }
+
+  if (!nodeId) {
+    const empty = el("div", "empty");
+    empty.innerHTML = `<p class="empty-title">Navigate the tree</p><p>Select a node in the left panel to explore its test profiles.</p>`;
+    main.appendChild(empty);
+    return;
+  }
+
+  if (!nodeProfiles.length) {
+    const empty = el("div", "empty");
+    empty.innerHTML = `<p class="empty-title">No profiles at this level</p><p>This node is a container. Navigate deeper in the tree to find nodes with test profiles.</p>`;
+    main.appendChild(empty);
+    return;
+  }
+
+  const chipsRow = el("div", "chips-row");
+  const chipsLabel = el("span", "chips-lbl");
+  chipsLabel.textContent = "Profiles";
+  chipsRow.appendChild(chipsLabel);
+  nodeProfiles.forEach((profile) => {
+    const button = document.createElement("button");
+    button.className = "chip" + (profile.id === state.browser.selectedProfileId ? " active" : "");
+    button.textContent = profile.name;
+    button.addEventListener("click", () => {
+      state.browser.selectedProfileId = profile.id;
+      render();
+    });
+    chipsRow.appendChild(button);
+  });
+  main.appendChild(chipsRow);
+
+  if (!selectedProfile) {
+    const empty = el("div", "empty");
+    empty.innerHTML = `<p class="empty-title">Select a profile</p><p>Choose a profile above to view its data and chart.</p>`;
+    main.appendChild(empty);
+    return;
+  }
+
+  main.appendChild(renderMetadataCard(selectedProfile.name, selectedProfile.description, selectedProfile.tags, selectedProfile.metadata));
+  main.appendChild(renderChartCard(selectedProfile.columns, selectedData));
+  main.appendChild(renderDataTableCard(selectedProfile.columns, selectedData, `Data Points — ${selectedData.length} rows`));
+}
+
+function renderMetadataCard(name, description, tags, metadata) {
+  const card = el("div", "card");
+  const body = el("div", "card-body");
+  const title = el("h2", "profile-name");
+  title.textContent = name;
+  body.appendChild(title);
+  const desc = el("p", "profile-desc");
+  desc.textContent = description;
+  body.appendChild(desc);
+  if (tags && tags.length) {
+    const tagsWrap = el("div", "tags");
+    tags.forEach((tag) => {
+      const node = el("span", "tag");
+      node.textContent = tag;
+      tagsWrap.appendChild(node);
+    });
+    body.appendChild(tagsWrap);
+  }
+  const grid = el("div", "meta-grid");
+  Object.entries(metadata).forEach(([key, value]) => {
+    const item = el("div");
+    item.innerHTML = `<div class="meta-key">${esc(key)}</div><div class="meta-value">${esc(value)}</div>`;
+    grid.appendChild(item);
+  });
+  body.appendChild(grid);
+  card.appendChild(body);
+  return card;
+}
+
+function renderChartCard(columns, data) {
+  const card = el("div", "card");
+  const head = el("div", "card-head");
+  head.textContent = "Chart";
+  card.appendChild(head);
+  const body = el("div", "card-body");
+  const built = buildChart(columns, data);
+  if (!built) {
+    body.appendChild(el("div", "inline-note", "No chart data available."));
+    card.appendChild(body);
+    return card;
+  }
+  const chartWrap = el("div", "chart-svg-wrap");
+  chartWrap.appendChild(built.svg);
+  body.appendChild(chartWrap);
+  const legend = el("div", "legend");
+  built.series.forEach((seriesItem) => {
+    const item = el("div", "legend-item");
+    const line = el("div", "legend-line");
+    line.style.background = seriesItem.column.color || "#6b7280";
+    item.appendChild(line);
+    const label = el("span");
+    label.textContent = `${seriesItem.column.label} (${seriesItem.column.unit})`;
+    item.appendChild(label);
+    legend.appendChild(item);
+  });
+  body.appendChild(legend);
+  card.appendChild(body);
+  return card;
+}
+
+function renderDataTableCard(columns, rows, title) {
+  const card = el("div", "card");
+  const head = el("div", "card-head");
+  head.textContent = title;
+  card.appendChild(head);
+  const body = el("div", "card-body");
+  const wrap = el("div", "tbl-wrap");
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  columns.forEach((column) => {
+    const th = document.createElement("th");
+    th.textContent = `${column.label} (${column.unit || column.type || ""})`.replace(/ \(\)/g, "");
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    columns.forEach((column) => {
+      const td = document.createElement("td");
+      td.className = "mono";
+      td.textContent = row[column.key || column.id] !== undefined ? row[column.key || column.id] : "—";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  body.appendChild(wrap);
+  card.appendChild(body);
+  return card;
+}
+
+// -----------------------------------------------------------------------------
+// Management actions
+// -----------------------------------------------------------------------------
+
+function ensureSchemaEntriesForDomain(domainId) {
+  const data = managementData();
+  if (!data.attributeSchemas.find((schema) => schema.domainId === domainId)) {
+    data.attributeSchemas.push({ domainId: domainId, attributes: [] });
+  }
+  if (!data.datasetSchemas.find((schema) => schema.domainId === domainId)) {
+    data.datasetSchemas.push({ domainId: domainId, columns: [] });
+  }
+}
+
+function saveDomain() {
+  const draft = state.management.domainDraft;
+  const data = managementData();
+  const id = slugify(draft.id || draft.name);
+  if (!id || !draft.name.trim()) {
+    alert("Domain id/name is required.");
+    return;
+  }
+  if (draft.mode === "create") {
+    if (data.domains.some((domain) => domain.id === id)) {
+      alert("Domain id already exists.");
+      return;
+    }
+    data.domains.push({ id: id, name: draft.name.trim(), description: draft.description.trim() });
+    ensureSchemaEntriesForDomain(id);
+    state.management.selectedDomainId = id;
+    state.management.domainDraft = emptyDomainDraft();
+    resetAttributeDraft(id);
+    resetProfileDraft(id);
+  } else {
+    const domain = byId(data.domains, draft.originalId);
+    if (!domain) {
+      return;
+    }
+    if (draft.originalId !== id && data.domains.some((item) => item.id === id)) {
+      alert("Target domain id already exists.");
+      return;
+    }
+    const oldId = domain.id;
+    domain.id = id;
+    domain.name = draft.name.trim();
+    domain.description = draft.description.trim();
+    data.attributeSchemas.forEach((schema) => {
+      if (schema.domainId === oldId) {
+        schema.domainId = id;
+      }
+    });
+    data.datasetSchemas.forEach((schema) => {
+      if (schema.domainId === oldId) {
+        schema.domainId = id;
+      }
+    });
+    data.managedProfiles.forEach((profile) => {
+      if (profile.domainId === oldId) {
+        profile.domainId = id;
+      }
+    });
+    state.management.selectedDomainId = id;
+    state.management.domainDraft = emptyDomainDraft();
+  }
+  syncSelectionAfterDomainChange();
+  render();
+}
+
+function editDomain(domainId) {
+  const domain = byId(managementData().domains, domainId);
+  if (!domain) {
+    return;
+  }
+  state.management.domainDraft = {
+    mode: "edit",
+    originalId: domain.id,
+    id: domain.id,
+    name: domain.name,
+    description: domain.description || ""
+  };
+  render();
+}
+
+function deleteDomain(domainId) {
+  if (!confirm(`Delete domain ${domainId}? This will remove related attributes, profiles and datasets.`)) {
+    return;
+  }
+  const data = managementData();
+  const removedProfiles = data.managedProfiles.filter((profile) => profile.domainId === domainId).map((profile) => profile.id);
+  data.domains = data.domains.filter((domain) => domain.id !== domainId);
+  data.attributeSchemas = data.attributeSchemas.filter((schema) => schema.domainId !== domainId);
+  data.datasetSchemas = data.datasetSchemas.filter((schema) => schema.domainId !== domainId);
+  data.managedProfiles = data.managedProfiles.filter((profile) => profile.domainId !== domainId);
+  removedProfiles.forEach((profileId) => {
+    delete data.profileDatasets[profileId];
+  });
+  const remainingAttributeIds = new Set(data.attributeSchemas.flatMap((schema) => schema.attributes.map((attribute) => attribute.id)));
+  data.attributeOptions = data.attributeOptions.filter((entry) => remainingAttributeIds.has(entry.attributeId));
+  state.management.domainDraft = emptyDomainDraft();
+  state.management.selectedDomainId = data.domains[0] ? data.domains[0].id : null;
+  resetAttributeDraft(state.management.selectedDomainId || "");
+  resetProfileDraft(state.management.selectedDomainId || "");
+  render();
+}
+
+function saveAttribute() {
+  const draft = state.management.attributeDraft;
+  const domain = ensureSelectedDomain();
+  if (!domain) {
+    alert("Create a domain first.");
+    return;
+  }
+  const schema = managementData().attributeSchemas.find((item) => item.domainId === domain.id);
+  if (!schema) {
+    return;
+  }
+  const id = slugify(draft.id || draft.label);
+  if (!id || !draft.label.trim()) {
+    alert("Attribute id/label is required.");
+    return;
+  }
+  const options = draft.type === "select"
+    ? draft.optionsText.split(/\r?\n|,/).map((value) => value.trim()).filter(Boolean)
+    : [];
+
+  if (draft.mode === "create") {
+    if (schema.attributes.some((attribute) => attribute.id === id)) {
+      alert("Attribute id already exists in this domain.");
+      return;
+    }
+    schema.attributes.push({
+      id: id,
+      label: draft.label.trim(),
+      type: draft.type,
+      required: Boolean(draft.required),
+      description: draft.description.trim()
+    });
+    if (draft.type === "select") {
+      setOptions(id, options);
+    }
+  } else {
+    const attribute = schema.attributes.find((item) => item.id === draft.originalId);
+    if (!attribute) {
+      return;
+    }
+    if (draft.originalId !== id && schema.attributes.some((item) => item.id === id)) {
+      alert("Target attribute id already exists.");
+      return;
+    }
+    const oldId = attribute.id;
+    attribute.id = id;
+    attribute.label = draft.label.trim();
+    attribute.type = draft.type;
+    attribute.required = Boolean(draft.required);
+    attribute.description = draft.description.trim();
+    if (draft.type === "select") {
+      setOptions(id, options);
+    } else {
+      removeOptions(id);
+    }
+    if (oldId !== id) {
+      if (oldId !== id) {
+        const optionEntry = managementData().attributeOptions.find((entry) => entry.attributeId === oldId);
+        if (optionEntry) {
+          optionEntry.attributeId = id;
+        }
+      }
+      managementData().managedProfiles.forEach((profile) => {
+        if (profile.attributes[oldId] !== undefined) {
+          profile.attributes[id] = profile.attributes[oldId];
+          delete profile.attributes[oldId];
+        }
+      });
+    }
+  }
+  resetAttributeDraft(domain.id);
+  render();
+}
+
+function editAttribute(attributeId) {
+  const domain = ensureSelectedDomain();
+  if (!domain) {
+    return;
+  }
+  const attribute = getAttributeSchema(domain.id).find((item) => item.id === attributeId);
+  if (!attribute) {
+    return;
+  }
+  state.management.attributeDraft = {
+    mode: "edit",
+    originalId: attribute.id,
+    domainId: domain.id,
+    id: attribute.id,
+    label: attribute.label,
+    type: attribute.type,
+    required: Boolean(attribute.required),
+    description: attribute.description || "",
+    optionsText: getOptions(attribute.id).join("\n")
+  };
+  render();
+}
+
+function deleteAttribute(attributeId) {
+  const domain = ensureSelectedDomain();
+  if (!domain) {
+    return;
+  }
+  if (!confirm(`Delete attribute ${attributeId}?`)) {
+    return;
+  }
+  const schema = managementData().attributeSchemas.find((item) => item.domainId === domain.id);
+  if (!schema) {
+    return;
+  }
+  schema.attributes = schema.attributes.filter((attribute) => attribute.id !== attributeId);
+  removeOptions(attributeId);
+  managementData().managedProfiles.forEach((profile) => {
+    if (profile.domainId === domain.id) {
+      delete profile.attributes[attributeId];
+    }
+  });
+  state.management.attributeDraft = emptyAttributeDraft(domain.id);
+  render();
+}
+
+function saveProfile() {
+  const domain = ensureSelectedDomain();
+  if (!domain) {
+    alert("Create a domain first.");
+    return;
+  }
+  const draft = state.management.profileDraft;
+  const data = managementData();
+  const schema = getAttributeSchema(domain.id);
+  const idBase = slugify(draft.id || draft.name || `${domain.id}_profile`);
+  if (!idBase || !draft.name.trim()) {
+    alert("Profile id/name is required.");
+    return;
+  }
+  const normalizedAttributes = {};
+  schema.forEach((attribute) => {
+    const raw = draft.attributes[attribute.id];
+    normalizedAttributes[attribute.id] = attribute.type === "number" && raw !== "" ? Number(raw) : raw;
+  });
+
+  if (draft.mode === "create") {
+    const existingIds = new Set(data.managedProfiles.map((profile) => profile.id));
+    const id = uniqueId(idBase, existingIds);
+    data.managedProfiles.push({
+      id: id,
+      domainId: domain.id,
+      name: draft.name.trim(),
+      description: draft.description.trim(),
+      attributes: normalizedAttributes
+    });
+    data.profileDatasets[id] = [];
+    state.management.selectedProfileId = id;
+    resetProfileDraft(domain.id);
+    state.management.datasetDraftRow = createBlankDatasetRow(domain.id);
+  } else {
+    const profile = byId(data.managedProfiles, draft.originalId);
+    if (!profile) {
+      return;
+    }
+    const existingIds = new Set(data.managedProfiles.filter((item) => item.id !== draft.originalId).map((item) => item.id));
+    const nextId = existingIds.has(idBase) ? uniqueId(idBase, existingIds) : idBase;
+    if (profile.id !== nextId) {
+      data.profileDatasets[nextId] = data.profileDatasets[profile.id] || [];
+      delete data.profileDatasets[profile.id];
+    }
+    profile.id = nextId;
+    profile.domainId = domain.id;
+    profile.name = draft.name.trim();
+    profile.description = draft.description.trim();
+    profile.attributes = normalizedAttributes;
+    state.management.selectedProfileId = nextId;
+    resetProfileDraft(domain.id);
+  }
+  render();
+}
+
+function editProfile(profileId) {
+  const profile = byId(managementData().managedProfiles, profileId);
+  if (!profile) {
+    return;
+  }
+  const schema = getAttributeSchema(profile.domainId);
+  const nextAttributes = {};
+  schema.forEach((attribute) => {
+    const value = profile.attributes[attribute.id];
+    nextAttributes[attribute.id] = value !== undefined ? value : "";
+  });
+  state.management.profileDraft = {
+    mode: "edit",
+    originalId: profile.id,
+    domainId: profile.domainId,
+    id: profile.id,
+    name: profile.name,
+    description: profile.description || "",
+    attributes: nextAttributes
+  };
+  state.management.selectedDomainId = profile.domainId;
+  state.management.selectedProfileId = profile.id;
+  state.management.datasetDraftRow = createBlankDatasetRow(profile.domainId);
+  render();
+}
+
+function deleteProfile(profileId) {
+  if (!confirm(`Delete profile ${profileId}?`)) {
+    return;
+  }
+  const data = managementData();
+  data.managedProfiles = data.managedProfiles.filter((profile) => profile.id !== profileId);
+  delete data.profileDatasets[profileId];
+  const selectedDomain = ensureSelectedDomain();
+  state.management.selectedProfileId = null;
+  resetProfileDraft(selectedDomain ? selectedDomain.id : "");
+  render();
+}
+
+function addDatasetRow() {
+  const profile = getSelectedManagedProfile();
+  if (!profile) {
+    alert("Select a profile first.");
+    return;
+  }
+  const schema = getDatasetSchema(profile.domainId);
+  const row = {};
+  for (let i = 0; i < schema.length; i += 1) {
+    const column = schema[i];
+    const raw = state.management.datasetDraftRow[column.id];
+    if (column.required && (raw === "" || raw === undefined)) {
+      alert(`Dataset field required: ${column.label}`);
+      return;
+    }
+    row[column.id] = column.type === "number" && raw !== "" ? Number(raw) : raw;
+  }
+  managementData().profileDatasets[profile.id] = managementData().profileDatasets[profile.id] || [];
+  managementData().profileDatasets[profile.id].push(row);
+  state.management.datasetDraftRow = createBlankDatasetRow(profile.domainId);
+  render();
+}
+
+function removeDatasetRow(index) {
+  const profile = getSelectedManagedProfile();
+  if (!profile) {
+    return;
+  }
+  const rows = managementData().profileDatasets[profile.id] || [];
+  rows.splice(index, 1);
+  render();
+}
+
+function updateDatasetCell(profileId, rowIndex, columnId, value, type) {
+  const rows = managementData().profileDatasets[profileId] || [];
+  rows[rowIndex][columnId] = type === "number" && value !== "" ? Number(value) : value;
+}
+
+// -----------------------------------------------------------------------------
+// Management rendering
+// -----------------------------------------------------------------------------
+
+function renderManagementSidebar(sidebar) {
+  const navSection = el("section", "sb-section");
+  const navLabel = el("p", "sb-label");
+  navLabel.textContent = "Workspace";
+  navSection.appendChild(navLabel);
+  navSection.appendChild(createNavButton("browser", "Standards Browser", "Browse existing read-only test profiles."));
+  navSection.appendChild(createNavButton("management", "Profile Management", "Manage domains, attributes, options and datasets."));
+  sidebar.appendChild(navSection);
+
+  const mgmtSection = el("section", "sb-section");
+  const mgmtLabel = el("p", "sb-label");
+  mgmtLabel.textContent = "Management";
+  mgmtSection.appendChild(mgmtLabel);
+
+  const tabs = [
+    ["domains", "Domains"],
+    ["attributes", "Attributes"],
+    ["options", "Options"],
+    ["profiles", "Profiles"],
+    ["importExport", "Import / Export"]
+  ];
+  tabs.forEach(([key, label]) => {
+    const button = document.createElement("button");
+    button.className = "nav-btn" + (state.management.activeTab === key ? " active" : "");
+    button.innerHTML = `<div class="nav-name">${esc(label)}</div><div class="nav-subtext">${esc(tabDescription(key))}</div>`;
+    button.addEventListener("click", () => {
+      state.management.activeTab = key;
+      render();
+    });
+    mgmtSection.appendChild(button);
+  });
+  sidebar.appendChild(mgmtSection);
+
+  const domain = ensureSelectedDomain();
+  if (domain) {
+    const list = el("div", "tree-wrap");
+    const label = el("p", "sb-label");
+    label.textContent = "Selected Domain";
+    label.style.margin = "0 0 10px 2px";
+    list.appendChild(label);
+    managementData().domains.forEach((item) => {
+      const button = document.createElement("button");
+      button.className = "tree-row" + (item.id === domain.id ? " active" : "");
+      button.innerHTML = `<span class="tree-icon">&#9679;</span><span class="tree-lbl">${esc(item.name)}</span>`;
+      button.addEventListener("click", () => {
+        state.management.selectedDomainId = item.id;
+        state.management.selectedProfileId = null;
+        syncSelectionAfterDomainChange();
+        render();
+      });
+      list.appendChild(button);
+    });
+    sidebar.appendChild(list);
+  }
+}
+
+function tabDescription(key) {
+  const map = {
+    domains: "Create and classify profile domains.",
+    attributes: "Configure dynamic domain fields.",
+    options: "Maintain select-list values.",
+    profiles: "Generate forms and edit datasets.",
+    importExport: "Move collections with JSON files."
+  };
+  return map[key] || "";
+}
+
+function renderManagementMain(main) {
+  syncSelectionAfterDomainChange();
+  const metrics = domainMetrics();
+
+  const hero = el("section", "hero");
+  const heroText = el("div");
+  heroText.innerHTML = `
+    <h2>Profile Management System</h2>
+    <p>This standalone prototype extends the existing MIL Browser architecture with a taxonomy-driven management layer. Domains, attributes, options, profiles, and datasets are all rendered from configuration data without hardcoded environmental, vibration, or shock form logic.</p>
+  `;
+  hero.appendChild(heroText);
+
+  const heroMetrics = el("div", "hero-metrics");
+  [
+    { label: "Domains", value: metrics.domainCount, sub: "Reusable classification families" },
+    { label: "Attributes", value: metrics.attributeCount, sub: "Dynamic profile fields" },
+    { label: "Options", value: metrics.optionCount, sub: "Select values under configuration" },
+    { label: "Managed Profiles", value: metrics.profileCount, sub: "Local JSON profile records" }
+  ].forEach((metric) => {
+    const card = el("div", "metric");
+    card.innerHTML = `<div class="metric-label">${esc(metric.label)}</div><div class="metric-value">${esc(metric.value)}</div><div class="metric-sub">${esc(metric.sub)}</div>`;
+    heroMetrics.appendChild(card);
+  });
+  hero.appendChild(heroMetrics);
+  main.appendChild(hero);
+
+  const notice = el("div", "notice");
+  notice.innerHTML = "This HTML file is self-contained and runs directly from disk. All management operations are performed in-memory; use JSON export to persist changes and JSON import to reload collections.";
+  main.appendChild(notice);
+
+  const activeTab = state.management.activeTab;
+  if (activeTab === "domains") {
+    renderDomainManagement(main);
+  } else if (activeTab === "attributes") {
+    renderAttributeManagement(main);
+  } else if (activeTab === "options") {
+    renderOptionManagement(main);
+  } else if (activeTab === "profiles") {
+    renderProfileManagement(main);
+  } else if (activeTab === "importExport") {
+    renderImportExport(main);
+  }
+}
+
+function renderDomainManagement(main) {
+  const grid = el("section", "layout-grid");
+  const listPanel = el("div", "list-panel");
+  listPanel.appendChild(el("div", "list-panel-head", "Domains"));
+  const listBody = el("div", "list-panel-body");
+  managementData().domains.forEach((domain) => {
+    const button = document.createElement("button");
+    button.className = "list-btn" + (domain.id === state.management.selectedDomainId ? " active" : "");
+    button.innerHTML = `<div class="list-title">${esc(domain.name)}</div><div class="list-sub">${esc(domain.id)}</div>`;
+    button.addEventListener("click", () => {
+      state.management.selectedDomainId = domain.id;
+      syncSelectionAfterDomainChange();
+      render();
+    });
+    listBody.appendChild(button);
+  });
+  listPanel.appendChild(listBody);
+  grid.appendChild(listPanel);
+
+  const detail = el("div");
+  const current = ensureSelectedDomain();
+  if (current) {
+    const summary = el("div", "card");
+    summary.appendChild(el("div", "card-head", "Domain Overview"));
+    const body = el("div", "card-body");
+    body.appendChild(renderDetailGrid([
+      ["ID", current.id],
+      ["Name", current.name],
+      ["Description", current.description || "—"],
+      ["Attributes", String(getAttributeSchema(current.id).length)],
+      ["Managed Profiles", String(getManagedProfilesForDomain(current.id).length)],
+      ["Dataset Columns", String(getDatasetSchema(current.id).length)]
+    ]));
+    const actions = el("div", "form-actions");
+    actions.appendChild(createButton("Edit Domain", () => editDomain(current.id), "secondary"));
+    actions.appendChild(createButton("Delete Domain", () => deleteDomain(current.id), "danger"));
+    body.appendChild(actions);
+    summary.appendChild(body);
+    detail.appendChild(summary);
+  }
+
+  const formCard = el("div", "card");
+  formCard.appendChild(el("div", "card-head", state.management.domainDraft.mode === "edit" ? "Edit Domain" : "Create Domain"));
+  const formBody = el("div", "card-body");
+  formBody.appendChild(renderDomainForm());
+  formCard.appendChild(formBody);
+  detail.appendChild(formCard);
+  grid.appendChild(detail);
+
+  main.appendChild(grid);
+}
+
+function renderDomainForm() {
+  const wrapper = el("div");
+  const grid = el("div", "form-grid");
+  const draft = state.management.domainDraft;
+  grid.appendChild(createInputField("Domain ID", draft.id, (value) => { draft.id = value; }, "text", "Stable configuration key."));
+  grid.appendChild(createInputField("Name", draft.name, (value) => { draft.name = value; }, "text", "Display name used across the UI."));
+  grid.appendChild(createTextAreaField("Description", draft.description, (value) => { draft.description = value; }, "Short description of the domain."));
+  wrapper.appendChild(grid);
+  const actions = el("div", "form-actions");
+  actions.appendChild(createButton(draft.mode === "edit" ? "Save Domain" : "Create Domain", saveDomain));
+  actions.appendChild(createButton("Reset", () => { state.management.domainDraft = emptyDomainDraft(); render(); }, "secondary"));
+  wrapper.appendChild(actions);
+  return wrapper;
+}
+
+function renderAttributeManagement(main) {
+  const domain = ensureSelectedDomain();
+  if (!domain) {
+    main.appendChild(createEmptyBlock("No domain available", "Create a domain first to manage attributes."));
+    return;
+  }
+  const grid = el("section", "layout-grid");
+  const listPanel = el("div", "list-panel");
+  listPanel.appendChild(el("div", "list-panel-head", `Attributes — ${domain.name}`));
+  const listBody = el("div", "list-panel-body");
+  const attributes = getAttributeSchema(domain.id);
+  attributes.forEach((attribute) => {
+    const button = document.createElement("button");
+    button.className = "list-btn" + (attribute.id === state.management.selectedAttributeId ? " active" : "");
+    button.innerHTML = `<div class="list-title">${esc(attribute.label)}</div><div class="list-sub">${esc(attribute.id)} · ${esc(attribute.type)}</div>`;
+    button.addEventListener("click", () => {
+      state.management.selectedAttributeId = attribute.id;
+      render();
+    });
+    listBody.appendChild(button);
+  });
+  if (!attributes.length) {
+    listBody.appendChild(el("div", "inline-note", "No attributes defined for this domain yet."));
+  }
+  listPanel.appendChild(listBody);
+  grid.appendChild(listPanel);
+
+  const detail = el("div");
+  const selectedAttribute = attributes.find((attribute) => attribute.id === state.management.selectedAttributeId) || attributes[0] || null;
+  state.management.selectedAttributeId = selectedAttribute ? selectedAttribute.id : null;
+  if (selectedAttribute) {
+    const card = el("div", "card");
+    card.appendChild(el("div", "card-head", "Attribute Overview"));
+    const body = el("div", "card-body");
+    body.appendChild(renderDetailGrid([
+      ["ID", selectedAttribute.id],
+      ["Label", selectedAttribute.label],
+      ["Type", selectedAttribute.type],
+      ["Required", selectedAttribute.required ? "Yes" : "No"],
+      ["Description", selectedAttribute.description || "—"],
+      ["Options", selectedAttribute.type === "select" ? String(getOptions(selectedAttribute.id).length) : "—"]
+    ]));
+    const actions = el("div", "form-actions");
+    actions.appendChild(createButton("Edit Attribute", () => editAttribute(selectedAttribute.id), "secondary"));
+    actions.appendChild(createButton("Delete Attribute", () => deleteAttribute(selectedAttribute.id), "danger"));
+    body.appendChild(actions);
+    card.appendChild(body);
+    detail.appendChild(card);
+  }
+
+  const formCard = el("div", "card");
+  formCard.appendChild(el("div", "card-head", state.management.attributeDraft.mode === "edit" ? "Edit Attribute" : "Create Attribute"));
+  const formBody = el("div", "card-body");
+  formBody.appendChild(renderAttributeForm(domain.id));
+  formCard.appendChild(formBody);
+  detail.appendChild(formCard);
+  grid.appendChild(detail);
+  main.appendChild(grid);
+}
+
+function renderAttributeForm(domainId) {
+  const wrapper = el("div");
+  const draft = state.management.attributeDraft;
+  if (draft.domainId !== domainId && draft.mode === "create") {
+    resetAttributeDraft(domainId);
+  }
+  const grid = el("div", "form-grid");
+  grid.appendChild(createInputField("Attribute ID", draft.id, (value) => { draft.id = value; }, "text", "Configuration key used in profile objects."));
+  grid.appendChild(createInputField("Label", draft.label, (value) => { draft.label = value; }, "text", "User-facing field label."));
+  grid.appendChild(createSelectField("Type", draft.type, ["select", "text", "number"], (value) => { draft.type = value; render(); }, "Controls which dynamic input is rendered."));
+  grid.appendChild(createSelectField("Required", String(draft.required), ["true", "false"], (value) => { draft.required = value === "true"; }, "Marks whether the field is mandatory."));
+  grid.appendChild(createTextAreaField("Description", draft.description, (value) => { draft.description = value; }, "Optional guidance shown to users."));
+  if (draft.type === "select") {
+    grid.appendChild(createTextAreaField("Options", draft.optionsText, (value) => { draft.optionsText = value; }, "One value per line or comma-separated.", true));
+  }
+  wrapper.appendChild(grid);
+  const actions = el("div", "form-actions");
+  actions.appendChild(createButton(draft.mode === "edit" ? "Save Attribute" : "Create Attribute", saveAttribute));
+  actions.appendChild(createButton("Reset", () => { resetAttributeDraft(domainId); render(); }, "secondary"));
+  wrapper.appendChild(actions);
+  return wrapper;
+}
+
+function renderOptionManagement(main) {
+  const domain = ensureSelectedDomain();
+  if (!domain) {
+    main.appendChild(createEmptyBlock("No domain available", "Create a domain first to manage options."));
+    return;
+  }
+  const attributes = getAttributeSchema(domain.id).filter((attribute) => attribute.type === "select");
+  const card = el("div", "card");
+  card.appendChild(el("div", "card-head", `Option Management — ${domain.name}`));
+  const body = el("div", "card-body");
+  if (!attributes.length) {
+    body.appendChild(el("div", "inline-note", "This domain has no select attributes. Create one in the Attributes section to manage options here."));
+    card.appendChild(body);
+    main.appendChild(card);
+    return;
+  }
+
+  attributes.forEach((attribute) => {
+    const section = el("div", "card");
+    section.style.marginBottom = "12px";
+    const head = el("div", "card-head", `${attribute.label} (${attribute.id})`);
+    section.appendChild(head);
+    const sectionBody = el("div", "card-body");
+    const options = getOptions(attribute.id);
+    if (!options.length) {
+      sectionBody.appendChild(el("div", "inline-note", "No options defined yet."));
+    } else {
+      const pills = el("div", "tags");
+      options.forEach((option, index) => {
+        const pill = el("span", "pill");
+        pill.textContent = option;
+        const deleteButton = createButton("×", () => {
+          const next = options.slice();
+          next.splice(index, 1);
+          setOptions(attribute.id, next);
+          render();
+        }, "danger small");
+        deleteButton.style.padding = "2px 7px";
+        pill.appendChild(deleteButton);
+        pills.appendChild(pill);
+      });
+      sectionBody.appendChild(pills);
+    }
+    const form = el("div", "form-actions");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "New option";
+    input.style.maxWidth = "240px";
+    input.style.border = "1px solid #cbd5e1";
+    input.style.borderRadius = "8px";
+    input.style.padding = "8px 10px";
+    form.appendChild(input);
+    form.appendChild(createButton("Add Option", () => {
+      const value = input.value.trim();
+      if (!value) {
+        return;
+      }
+      const next = getOptions(attribute.id);
+      next.push(value);
+      setOptions(attribute.id, next);
+      render();
+    }, "secondary"));
+    sectionBody.appendChild(form);
+    section.appendChild(sectionBody);
+    body.appendChild(section);
+  });
+  card.appendChild(body);
+  main.appendChild(card);
+}
+
+function renderProfileManagement(main) {
+  const domain = ensureSelectedDomain();
+  if (!domain) {
+    main.appendChild(createEmptyBlock("No domain available", "Create a domain first to manage profiles and datasets."));
+    return;
+  }
+  const grid = el("section", "layout-grid");
+  const listPanel = el("div", "list-panel");
+  listPanel.appendChild(el("div", "list-panel-head", `Profiles — ${domain.name}`));
+  const listBody = el("div", "list-panel-body");
+  const profiles = getManagedProfilesForDomain(domain.id);
+  profiles.forEach((profile) => {
+    const button = document.createElement("button");
+    button.className = "list-btn" + (profile.id === state.management.selectedProfileId ? " active" : "");
+    button.innerHTML = `<div class="list-title">${esc(profile.name)}</div><div class="list-sub">${esc(profile.id)}</div>`;
+    button.addEventListener("click", () => {
+      state.management.selectedProfileId = profile.id;
+      render();
+    });
+    listBody.appendChild(button);
+  });
+  if (!profiles.length) {
+    listBody.appendChild(el("div", "inline-note", "No managed profiles exist for this domain yet."));
+  }
+  listPanel.appendChild(listBody);
+  grid.appendChild(listPanel);
+
+  const detail = el("div");
+  const selectedProfile = getSelectedManagedProfile();
+
+  const profileCard = el("div", "card");
+  profileCard.appendChild(el("div", "card-head", "Profile Form Engine"));
+  const profileBody = el("div", "card-body");
+  profileBody.appendChild(el("div", "inline-note", "The fields below are generated from the selected domain attribute schema. No domain-specific UI code is hardcoded."));
+  profileBody.appendChild(renderProfileForm(domain.id));
+  profileCard.appendChild(profileBody);
+  detail.appendChild(profileCard);
+
+  if (selectedProfile) {
+    const overview = el("div", "card");
+    overview.appendChild(el("div", "card-head", "Selected Profile"));
+    const overviewBody = el("div", "card-body");
+    overviewBody.appendChild(renderMetadataCard(selectedProfile.name, selectedProfile.description || "Managed profile metadata record.", [selectedProfile.domainId], profileAttributeMetadata(selectedProfile)));
+    const actions = el("div", "form-actions");
+    actions.appendChild(createButton("Edit Profile", () => editProfile(selectedProfile.id), "secondary"));
+    actions.appendChild(createButton("Delete Profile", () => deleteProfile(selectedProfile.id), "danger"));
+    overviewBody.appendChild(actions);
+    overview.appendChild(overviewBody);
+    detail.appendChild(overview);
+
+    const datasetCard = el("div", "card");
+    datasetCard.appendChild(el("div", "card-head", "Dataset Editor"));
+    const datasetBody = el("div", "card-body");
+    datasetBody.appendChild(el("div", "inline-note", "Dataset columns are generated from the selected domain dataset schema. The same editor works for environmental, vibration, shock, and future domains."));
+    datasetBody.appendChild(renderDatasetEditor(selectedProfile));
+    datasetCard.appendChild(datasetBody);
+    detail.appendChild(datasetCard);
+  }
+
+  grid.appendChild(detail);
+  main.appendChild(grid);
+}
+
+function profileAttributeMetadata(profile) {
+  const metadata = {
+    "Profile ID": profile.id,
+    "Domain": profile.domainId,
+    "Description": profile.description || "—"
+  };
+  const schema = getAttributeSchema(profile.domainId);
+  schema.forEach((attribute) => {
+    metadata[attribute.label] = profile.attributes[attribute.id] !== undefined && profile.attributes[attribute.id] !== "" ? profile.attributes[attribute.id] : "—";
+  });
+  metadata["Dataset Rows"] = String((managementData().profileDatasets[profile.id] || []).length);
+  return metadata;
+}
+
+function renderProfileForm(domainId) {
+  const wrapper = el("div");
+  const draft = state.management.profileDraft;
+  if (draft.domainId !== domainId && draft.mode === "create") {
+    resetProfileDraft(domainId);
+  }
+  const grid = el("div", "form-grid");
+  grid.appendChild(createInputField("Profile ID", draft.id, (value) => { draft.id = value; }, "text", "Stable identifier for export/import."));
+  grid.appendChild(createInputField("Name", draft.name, (value) => { draft.name = value; }, "text", "Display name used in the management console."));
+  grid.appendChild(createTextAreaField("Description", draft.description, (value) => { draft.description = value; }, "Human-readable explanation of the profile."));
+
+  getAttributeSchema(domainId).forEach((attribute) => {
+    const value = draft.attributes[attribute.id] !== undefined ? draft.attributes[attribute.id] : "";
+    if (attribute.type === "select") {
+      grid.appendChild(createSelectField(attribute.label, String(value), getOptions(attribute.id), (next) => { draft.attributes[attribute.id] = next; }, attribute.description || ""));
+    } else if (attribute.type === "number") {
+      grid.appendChild(createInputField(attribute.label, value, (next) => { draft.attributes[attribute.id] = next; }, "number", attribute.description || ""));
+    } else {
+      grid.appendChild(createInputField(attribute.label, value, (next) => { draft.attributes[attribute.id] = next; }, "text", attribute.description || ""));
+    }
+  });
+
+  wrapper.appendChild(grid);
+  const actions = el("div", "form-actions");
+  actions.appendChild(createButton(draft.mode === "edit" ? "Save Profile" : "Create Profile", saveProfile));
+  actions.appendChild(createButton("Reset", () => { resetProfileDraft(domainId); render(); }, "secondary"));
+  wrapper.appendChild(actions);
+  return wrapper;
+}
+
+function renderDatasetEditor(profile) {
+  const wrapper = el("div");
+  const schema = getDatasetSchema(profile.domainId);
+  const rows = managementData().profileDatasets[profile.id] || [];
+  if (!schema.length) {
+    wrapper.appendChild(el("div", "inline-note", "No dataset schema is configured for this domain yet."));
+    return wrapper;
+  }
+
+  const actions = el("div", "dataset-actions");
+  const left = el("div", "segmented");
+  left.appendChild(el("span", "status-badge", `${rows.length} row(s)`));
+  actions.appendChild(left);
+  actions.appendChild(createButton("Add Row", addDatasetRow, "secondary"));
+  wrapper.appendChild(actions);
+
+  const inputGrid = el("div", "form-grid");
+  schema.forEach((column) => {
+    if (!Object.prototype.hasOwnProperty.call(state.management.datasetDraftRow, column.id)) {
+      state.management.datasetDraftRow[column.id] = "";
+    }
+    if (column.type === "number") {
+      inputGrid.appendChild(createInputField(`${column.label} (${column.unit || column.type})`, state.management.datasetDraftRow[column.id], (value) => { state.management.datasetDraftRow[column.id] = value; }, "number", column.required ? "Required" : "Optional"));
+    } else {
+      inputGrid.appendChild(createInputField(`${column.label} (${column.unit || column.type})`, state.management.datasetDraftRow[column.id], (value) => { state.management.datasetDraftRow[column.id] = value; }, "text", column.required ? "Required" : "Optional"));
+    }
+  });
+  wrapper.appendChild(inputGrid);
+
+  const tableCard = renderDataTableCard(schema, rows, `Dataset Rows — ${rows.length}`);
+  const body = tableCard.querySelector(".card-body");
+  const table = body.querySelector("table");
+  const tbody = table.querySelector("tbody");
+  tbody.innerHTML = "";
+  rows.forEach((row, rowIndex) => {
+    const tr = document.createElement("tr");
+    schema.forEach((column) => {
+      const td = document.createElement("td");
+      const input = document.createElement("input");
+      input.type = column.type === "number" ? "number" : "text";
+      input.value = row[column.id] !== undefined ? row[column.id] : "";
+      input.style.width = "100%";
+      input.style.border = "0";
+      input.style.padding = "0";
+      input.style.font = "inherit";
+      input.style.background = "transparent";
+      input.addEventListener("change", () => {
+        updateDatasetCell(profile.id, rowIndex, column.id, input.value, column.type);
+      });
+      td.appendChild(input);
+      tr.appendChild(td);
+    });
+    const tdActions = document.createElement("td");
+    const remove = createButton("Remove", () => removeDatasetRow(rowIndex), "danger small");
+    tdActions.appendChild(remove);
+    tr.appendChild(tdActions);
+    tbody.appendChild(tr);
+  });
+  const headRow = table.querySelector("thead tr");
+  const th = document.createElement("th");
+  th.textContent = "Actions";
+  headRow.appendChild(th);
+  wrapper.appendChild(tableCard);
+  return wrapper;
+}
+
+function renderImportExport(main) {
+  const twoCol = el("section", "two-col");
+
+  const exportCard = el("div", "card");
+  exportCard.appendChild(el("div", "card-head", "Export Management JSON"));
+  const exportBody = el("div", "card-body");
+  exportBody.appendChild(el("div", "inline-note", "Export the full profile management collection: domains, attribute schemas, options, dataset schemas, managed profiles, and datasets."));
+  const exportActions = el("div", "form-actions");
+  exportActions.appendChild(createButton("Export JSON", exportManagementJson));
+  exportBody.appendChild(exportActions);
+  exportCard.appendChild(exportBody);
+  twoCol.appendChild(exportCard);
+
+  const importCard = el("div", "card");
+  importCard.appendChild(el("div", "card-head", "Import Management JSON"));
+  const importBody = el("div", "card-body");
+  importBody.appendChild(el("div", "inline-note", "Import a previously exported collection to replace the in-memory configuration for this HTML session."));
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.addEventListener("change", () => {
+    if (input.files && input.files[0]) {
+      importManagementJson(input.files[0]);
+    }
+  });
+  importBody.appendChild(input);
+  if (state.management.importMessage) {
+    const status = el("p", "muted");
+    status.style.marginTop = "10px";
+    status.textContent = state.management.importMessage;
+    importBody.appendChild(status);
+  }
+  importCard.appendChild(importBody);
+  twoCol.appendChild(importCard);
+  main.appendChild(twoCol);
+
+  const schemaCard = el("div", "card");
+  schemaCard.appendChild(el("div", "card-head", "Expected JSON Structure"));
+  const schemaBody = el("div", "card-body");
+  const list = el("ul", "hint-list");
+  [
+    "domains[]: id, name, description",
+    "attributeSchemas[]: domainId + attributes[] with id, label, type, required, description",
+    "attributeOptions[]: attributeId + options[]",
+    "datasetSchemas[]: domainId + columns[] with id, label, type, unit, required",
+    "managedProfiles[]: id, domainId, name, description, attributes object",
+    "profileDatasets: object keyed by profile id"
+  ].forEach((item) => {
+    const li = document.createElement("li");
+    li.textContent = item;
+    list.appendChild(li);
+  });
+  schemaBody.appendChild(list);
+  schemaCard.appendChild(schemaBody);
+  main.appendChild(schemaCard);
+}
+
+function renderDetailGrid(entries) {
+  const grid = el("div", "detail-grid");
+  entries.forEach(([key, value]) => {
+    const item = el("div");
+    item.innerHTML = `<div class="detail-key">${esc(key)}</div><div class="detail-value">${esc(value)}</div>`;
+    grid.appendChild(item);
+  });
+  return grid;
+}
+
+function createEmptyBlock(title, message) {
+  const empty = el("div", "empty");
+  empty.innerHTML = `<p class="empty-title">${esc(title)}</p><p>${esc(message)}</p>`;
+  return empty;
+}
+
+function createButton(label, onClick, variant) {
+  const button = document.createElement("button");
+  let className = "btn";
+  if (variant) {
+    className += " " + variant;
+  }
+  button.className = className;
+  button.textContent = label;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function createInputField(label, value, onInput, type, helpText) {
+  const field = el("div", "field");
+  const title = document.createElement("label");
+  title.textContent = label;
+  field.appendChild(title);
+  const input = document.createElement("input");
+  input.type = type;
+  input.value = value !== undefined && value !== null ? value : "";
+  input.addEventListener("input", () => onInput(input.value));
+  field.appendChild(input);
+  if (helpText) {
+    const help = document.createElement("small");
+    help.textContent = helpText;
+    field.appendChild(help);
+  }
+  return field;
+}
+
+function createTextAreaField(label, value, onInput, helpText, fullWidth) {
+  const field = el("div", "field" + (fullWidth ? " full" : ""));
+  const title = document.createElement("label");
+  title.textContent = label;
+  field.appendChild(title);
+  const textarea = document.createElement("textarea");
+  textarea.value = value !== undefined && value !== null ? value : "";
+  textarea.addEventListener("input", () => onInput(textarea.value));
+  field.appendChild(textarea);
+  if (helpText) {
+    const help = document.createElement("small");
+    help.textContent = helpText;
+    field.appendChild(help);
+  }
+  return field;
+}
+
+function createSelectField(label, value, options, onChange, helpText) {
+  const field = el("div", "field");
+  const title = document.createElement("label");
+  title.textContent = label;
+  field.appendChild(title);
+  const select = document.createElement("select");
+  const normalized = Array.isArray(options) ? options : [];
+  if (!normalized.includes(value)) {
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Select...";
+    select.appendChild(placeholder);
+  }
+  normalized.forEach((option) => {
+    const node = document.createElement("option");
+    node.value = option;
+    node.textContent = option;
+    if (String(option) === String(value)) {
+      node.selected = true;
+    }
+    select.appendChild(node);
+  });
+  select.value = value;
+  select.addEventListener("change", () => onChange(select.value));
+  field.appendChild(select);
+  if (helpText) {
+    const help = document.createElement("small");
+    help.textContent = helpText;
+    field.appendChild(help);
+  }
+  return field;
+}
+
+// -----------------------------------------------------------------------------
+// Root render
+// -----------------------------------------------------------------------------
+
+function render() {
+  const root = document.getElementById("root");
+  root.innerHTML = "";
+
+  const selectedStandard = byId(STANDARDS, state.browser.selectedStandardId);
+  const selectedNode = byId(NODES, state.browser.selectedNodeId);
+  const selectedDomain = getSelectedDomain();
+  const selectedManagedProfile = getSelectedManagedProfile();
+
+  const header = el("header", "hdr");
+  header.innerHTML = `
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="#2563eb" aria-hidden="true"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" /></svg>
+    <span class="hdr-title">MIL Browser</span>
+    <span class="hdr-sub">Schema-driven local prototype without Node.js</span>
+    <span class="hdr-path">${state.route === "browser"
+      ? `${selectedStandard ? esc(selectedStandard.name) : "Standards Browser"}${selectedNode ? " / " + esc(selectedNode.label) : ""}`
+      : `${selectedDomain ? esc(selectedDomain.name) : "Profile Management"}${selectedManagedProfile ? " / " + esc(selectedManagedProfile.name) : ""}`}</span>
+  `;
+
+  const sidebar = el("aside", "sidebar");
+  const main = el("main", "main");
+
+  if (state.route === "browser") {
+    renderBrowserSidebar(sidebar);
+    renderBrowserMain(main);
+  } else {
+    renderManagementSidebar(sidebar);
+    renderManagementMain(main);
+  }
+
+  const body = el("div", "body");
+  body.appendChild(sidebar);
+  body.appendChild(main);
+
+  const app = el("div", "app");
+  app.appendChild(header);
+  app.appendChild(body);
+  root.appendChild(app);
+}
+
+// -----------------------------------------------------------------------------
+// Boot
+// -----------------------------------------------------------------------------
+
+state.browser.selectedStandardId = STANDARDS[0] ? STANDARDS[0].id : null;
+state.management.selectedDomainId = managementData().domains[0] ? managementData().domains[0].id : null;
+resetAttributeDraft(state.management.selectedDomainId || "");
+resetProfileDraft(state.management.selectedDomainId || "");
+render();
+</script>
+</body>
+</html>

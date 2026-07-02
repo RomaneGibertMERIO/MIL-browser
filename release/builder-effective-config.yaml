@@ -1,0 +1,14 @@
+directories:
+  output: release
+  buildResources: build
+appId: mil.browser.app
+productName: MIL Browser
+files:
+  - filter:
+      - dist
+      - electron-dist
+win:
+  target:
+    - portable
+    - nsis
+electronVersion: 31.7.7
