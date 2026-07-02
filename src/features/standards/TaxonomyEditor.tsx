@@ -248,14 +248,46 @@ export function TaxonomyEditor({ standard, onSave, onCancel }: TaxonomyEditorPro
       <div className="flex flex-1 overflow-hidden">
         {/* Panel 1: Taxonomy tree */}
         <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-200 bg-slate-50 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
-            <button
-              onClick={() => addNode(null)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
-            >
-              <span className="text-lg leading-none">+</span>
-              Add Root Node
-            </button>
+          {/* Toolbar — always visible */}
+          <div className="flex-shrink-0 border-b border-gray-200 bg-white">
+            <div className="px-3 py-2.5 flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => addNode(null)}
+                title="Add root node"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+              >
+                + Root
+              </button>
+              <button
+                onClick={() => selectedId !== null && addNode(selectedId)}
+                disabled={selectedId === null}
+                title="Add child to selected node"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                + Child
+              </button>
+              <button
+                onClick={() => selectedId !== null && moveUp(selectedId)}
+                disabled={selectedId === null}
+                title="Move node up"
+                className="px-2 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >↑</button>
+              <button
+                onClick={() => selectedId !== null && moveDown(selectedId)}
+                disabled={selectedId === null}
+                title="Move node down"
+                className="px-2 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >↓</button>
+              <div className="flex-1" />
+              <button
+                onClick={() => selectedId !== null && requestDelete(selectedId)}
+                disabled={selectedId === null}
+                title="Delete selected node"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Delete
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto py-2">
             {tree.length === 0 ? (
@@ -281,14 +313,14 @@ export function TaxonomyEditor({ standard, onSave, onCancel }: TaxonomyEditorPro
         </div>
 
         {/* Panel 2: Node properties */}
-        <div className="w-[480px] flex-shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
+        <div className="w-[480px] flex-shrink-0 border-r border-gray-200 bg-white flex flex-col overflow-hidden">
           {selectedNode !== null ? (
             <NodePropertiesPanel
               node={selectedNode}
               onChange={changes => updateNode(selectedNode.id, changes)}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center px-8">
               <span className="text-5xl text-gray-200">◱</span>
               <p className="text-base font-medium text-gray-400">Select a node to edit its properties</p>
               <p className="text-sm text-gray-300">or add a root node to get started</p>
@@ -487,7 +519,17 @@ function NodePropertiesPanel({ node, onChange }: NodePropertiesPanelProps) {
   const labelCls = "block text-sm font-medium text-gray-700 mb-1.5";
 
   return (
-    <div className="p-6 space-y-6">
+    <>
+      {/* Always-visible node context header */}
+      <div className="flex-shrink-0 px-6 py-3 bg-gray-50 border-b border-gray-200">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Editing Node</p>
+        <p className="text-sm font-semibold text-gray-900 mt-0.5">
+          <span className="font-mono text-blue-600 mr-2">{node.code}</span>
+          {node.label}
+        </p>
+      </div>
+      {/* Scrollable form content */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
       <div>
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-5">Node Properties</p>
         <div className="grid grid-cols-2 gap-4 mb-5">
@@ -540,7 +582,8 @@ function NodePropertiesPanel({ node, onChange }: NodePropertiesPanelProps) {
       <div className="pt-4 border-t border-gray-100">
         <p className="text-xs text-gray-400">Stable ID: <span className="font-mono text-gray-500 select-all">{node.id}</span></p>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

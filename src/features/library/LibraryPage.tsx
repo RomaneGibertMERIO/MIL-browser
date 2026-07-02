@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Library feature page.
  *
  * Provides full CRUD for user-created profiles within a selected standard.
@@ -8,10 +8,10 @@
  * Sub-views: list → create | edit. Delete is confirmed via inline state.
  */
 
-import { useState, useRef } from "react";
+import { useState, useMemo, useRef } from "react";
 import type { Profile, ProfileDraft } from "../../core/domain/profile";
 import { ProfileSchema } from "../../core/domain/profile";
-import type { StandardPlugin } from "../../core/domain/standard";
+import type { StandardPlugin, ProfileDefinition } from "../../core/domain/standard";
 import type { ValidationError } from "../../core/domain/profile";
 import {
   buildProfileFromDraft,
@@ -28,15 +28,8 @@ import {
   type ImportResult,
 } from "../../core/engine/importExportEngine";
 import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
-import { EmptyState } from "../../shared/components/ui/EmptyState";
 import { ProfileForm } from "./ProfileForm";
-import { ProfileDetail } from "../profile/ProfileDetail";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type LibrarySubView = "list" | "create" | "edit" | "detail";
+import { TimeSeriesChart } from "../../shared/components/charts/TimeSeriesChart";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -47,199 +40,324 @@ interface LibraryPageProps {
 }
 
 // ---------------------------------------------------------------------------
-// LibraryPage
+// LibraryPage — 3-pane persistent workspace (list | editor | live preview)
 // ---------------------------------------------------------------------------
 
 export function LibraryPage({ standard }: LibraryPageProps) {
-  const [subView, setSubView] = useState<LibrarySubView>("list");
-  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
-  const [viewingProfile, setViewingProfile] = useState<Profile | null>(null);
-  const [deletingProfileId, setDeletingProfileId] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
-  const [importResult, setImportResult] = useState<ImportResult | null>(null);
-  const [search, setSearch] = useState("");
-  const [pendingImport, setPendingImport] = useState<{ file: File; conflictCount: number } | null>(null);
+  // Selection
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [formKey, setFormKey] = useState(0); // increment to force-remount ProfileForm
 
+  // Live preview (driven by ProfileForm.onChange)
+  const [previewDraft, setPreviewDraft] = useState<ProfileDraft | null>(null);
+  const [previewTab, setPreviewTab] = useState<"chart" | "table" | "fields">("chart");
+
+  // Save / validation
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+
+  // Search / delete / import
+  const [search, setSearch] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [pendingImport, setPendingImport] = useState<{ file: File; conflictCount: number } | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
+  // Data
   const allProfiles = useProfilesByStandard(standard.manifest.id);
-  const userProfiles = (allProfiles ?? []).filter((p) => p.source === "user");
-
-  const filteredProfiles =
-    search.trim() === ""
-      ? userProfiles
-      : userProfiles.filter(
-          (p) =>
-            p.name.toLowerCase().includes(search.toLowerCase()) ||
-            p.description.toLowerCase().includes(search.toLowerCase()),
-        );
-
-  // ── Create ───────────────────────────────────────────────────────────────
-  async function handleCreate(draft: ProfileDraft) {
-    const schema = getEffectiveSchema(standard, draft.nodeId);
-    const profile = buildProfileFromDraft(draft, schema);
-    const result = validateProfile(profile, schema);
-    if (!result.valid) {
-      setValidationErrors(result.errors);
-      return;
-    }
-    setValidationErrors([]);
-    await upsertProfile(profile);
-    setSubView("list");
-  }
-
-  // ── Update ───────────────────────────────────────────────────────────────
-  async function handleUpdate(draft: ProfileDraft) {
-    if (editingProfile === null) return;
-    const schema = getEffectiveSchema(standard, draft.nodeId);
-    const profile = buildProfileFromDraft(
-      draft,
-      schema,
-      editingProfile.id,
-      editingProfile.createdAt,
+  const userProfiles = useMemo(
+    () => (allProfiles ?? []).filter(p => p.source === "user"),
+    [allProfiles]
+  );
+  const filteredProfiles = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (q === "") return userProfiles;
+    return userProfiles.filter(p =>
+      p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
     );
-    const result = validateProfile(profile, schema);
-    if (!result.valid) {
-      setValidationErrors(result.errors);
-      return;
-    }
+  }, [userProfiles, search]);
+
+  const selectedProfile = useMemo(
+    () => selectedProfileId !== null ? (userProfiles.find(p => p.id === selectedProfileId) ?? null) : null,
+    [userProfiles, selectedProfileId]
+  );
+
+  // Live preview computation
+  const previewProfile = useMemo((): Profile | null => {
+    const d = previewDraft;
+    if (d === null) return selectedProfile;
+    try {
+      const schema = getEffectiveSchema(standard, d.nodeId);
+      return buildProfileFromDraft(d, schema, selectedProfile?.id, selectedProfile?.createdAt);
+    } catch { return selectedProfile; }
+  }, [previewDraft, selectedProfile, standard]);
+
+  const previewSchema = useMemo((): ProfileDefinition =>
+    previewDraft ? getEffectiveSchema(standard, previewDraft.nodeId) : standard.profileSchema,
+    [previewDraft, standard]
+  );
+
+  const formInitialDraft = useMemo((): ProfileDraft | null => {
+    if (selectedProfile === null) return null;
+    const schema = getEffectiveSchema(standard, selectedProfile.nodeId);
+    return profileToDraft(selectedProfile, schema.datasetColumns);
+  }, [selectedProfile, standard]);
+
+  // Actions
+  function resetEditorState() {
+    setPreviewDraft(null);
     setValidationErrors([]);
-    await upsertProfile(profile);
-    setEditingProfile(null);
-    setSubView("list");
+    setSaveStatus("idle");
+    setFormKey(k => k + 1);
   }
 
-  // ── Duplicate ─────────────────────────────────────────────────────────────
+  function selectProfile(profile: Profile) {
+    setSelectedProfileId(profile.id);
+    setIsCreating(false);
+    resetEditorState();
+  }
+
+  function startCreate() {
+    setSelectedProfileId(null);
+    setIsCreating(true);
+    resetEditorState();
+  }
+
+  function handleCancel() {
+    if (isCreating) { setSelectedProfileId(null); setIsCreating(false); }
+    resetEditorState();
+  }
+
+  async function handleSave(draft: ProfileDraft) {
+    const schema = getEffectiveSchema(standard, draft.nodeId);
+    const profile = buildProfileFromDraft(draft, schema, selectedProfile?.id, selectedProfile?.createdAt);
+    const result = validateProfile(profile, schema);
+    if (!result.valid) { setValidationErrors(result.errors); return; }
+    setValidationErrors([]);
+    setSaveStatus("saving");
+    await upsertProfile(profile);
+    setSelectedProfileId(profile.id);
+    setIsCreating(false);
+    setSaveStatus("saved");
+    setTimeout(() => setSaveStatus("idle"), 2000);
+  }
+
   async function handleDuplicate(profile: Profile) {
     const copy: Profile = {
-      ...profile,
-      id: crypto.randomUUID(),
-      name: `${profile.name} (copy)`,
-      source: "user",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      ...profile, id: crypto.randomUUID(),
+      name: `${profile.name} (copy)`, source: "user",
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
     await upsertProfile(copy);
+    selectProfile(copy);
   }
 
-  // ── Delete ───────────────────────────────────────────────────────────────
   async function handleDeleteConfirm() {
-    if (deletingProfileId === null) return;
-    await dbDeleteProfile(deletingProfileId);
-    setDeletingProfileId(null);
+    if (deletingId === null) return;
+    await dbDeleteProfile(deletingId);
+    if (selectedProfileId === deletingId) {
+      setSelectedProfileId(null);
+      setIsCreating(false);
+      setPreviewDraft(null);
+    }
+    setDeletingId(null);
   }
 
-  // ── Export ───────────────────────────────────────────────────────────────
   async function handleExport() {
-    await exportProfilesForStandard(
-      standard.manifest.id,
-      userProfiles,
-      standard,
-    );
+    await exportProfilesForStandard(standard.manifest.id, userProfiles, standard);
   }
 
-  // ── Import ───────────────────────────────────────────────────────────────
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file === undefined) return;
     e.target.value = "";
-
-    // Count conflicts before importing
     try {
       const text = await file.text();
       const raw = JSON.parse(text) as Record<string, unknown>;
-      const profilesArray = raw["profiles"];
-      if (Array.isArray(profilesArray)) {
-        const existingIds = new Set(userProfiles.map(p => p.id));
-        let conflicts = 0;
-        for (const item of profilesArray) {
+      const arr = raw["profiles"];
+      if (Array.isArray(arr)) {
+        const ids = new Set(userProfiles.map(p => p.id));
+        let c = 0;
+        for (const item of arr) {
           const parsed = ProfileSchema.safeParse(item);
-          if (parsed.success && existingIds.has(parsed.data.id)) conflicts++;
+          if (parsed.success && ids.has(parsed.data.id)) c++;
         }
-        if (conflicts > 0) {
-          setPendingImport({ file, conflictCount: conflicts });
-          return;
-        }
+        if (c > 0) { setPendingImport({ file, conflictCount: c }); return; }
       }
-    } catch {
-      // Ignore parse errors here; importProfilesForStandard will report them
-    }
-
-    const result = await importProfilesForStandard(file, standard);
-    setImportResult(result);
+    } catch { /* handled by importProfilesForStandard */ }
+    setImportResult(await importProfilesForStandard(file, standard));
   }
 
   async function confirmImport() {
     if (pendingImport === null) return;
-    const result = await importProfilesForStandard(pendingImport.file, standard);
-    setImportResult(result);
+    setImportResult(await importProfilesForStandard(pendingImport.file, standard));
     setPendingImport(null);
   }
 
-  // ── Sub-view: Detail ────────────────────────────────────────────────────
-  if (subView === "detail" && viewingProfile !== null) {
-    return (
-      <ProfileDetail
-        profile={viewingProfile}
-        schema={getEffectiveSchema(standard, viewingProfile.nodeId)}
-        onBack={() => {
-          setViewingProfile(null);
-          setSubView("list");
-        }}
-        backLabel="Back to Library"
-      />
-    );
-  }
+  // Render
+  const showEditor = isCreating || selectedProfile !== null;
+  const editorTitle = previewDraft?.name || selectedProfile?.name || (isCreating ? "New Profile" : "");
 
-  // ── Sub-view: Create ─────────────────────────────────────────────────────
-  if (subView === "create") {
-    return (
-      <div className="max-w-3xl">
-        <SubViewHeader title="New Profile" onBack={() => setSubView("list")} />
-        <ProfileForm
-          standard={standard}
-          initialDraft={null}
-          submitLabel="Create Profile"
-          validationErrors={validationErrors}
-          onSubmit={(draft) => { void handleCreate(draft); }}
-          onCancel={() => { setValidationErrors([]); setSubView("list"); }}
-        />
-      </div>
-    );
-  }
-
-  // ── Sub-view: Edit ───────────────────────────────────────────────────────
-  if (subView === "edit" && editingProfile !== null) {
-    return (
-      <div className="max-w-3xl">
-        <SubViewHeader
-          title="Edit Profile"
-          onBack={() => {
-            setEditingProfile(null);
-            setValidationErrors([]);
-            setSubView("list");
-          }}
-        />
-        <ProfileForm
-          standard={standard}
-          initialDraft={profileToDraft(editingProfile, getEffectiveSchema(standard, editingProfile.nodeId).datasetColumns)}
-          submitLabel="Save Changes"
-          validationErrors={validationErrors}
-          onSubmit={(draft) => { void handleUpdate(draft); }}
-          onCancel={() => {
-            setEditingProfile(null);
-            setValidationErrors([]);
-            setSubView("list");
-          }}
-        />
-      </div>
-    );
-  }
-
-  // ── Sub-view: List ───────────────────────────────────────────────────────
   return (
-    <>
-      {/* Import conflict confirmation overlay */}
+    <div className="flex h-full">
+
+      {/* Panel 1: Profile list */}
+      <div className="w-72 flex-shrink-0 flex flex-col border-r border-gray-200 bg-white overflow-hidden">
+        <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b border-gray-200 space-y-2">
+          <button
+            onClick={startCreate}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/></svg>
+            New Profile
+          </button>
+          <div className="grid grid-cols-4 gap-1">
+            <input ref={importInputRef} type="file" accept=".json" onChange={(e) => { void handleImportFile(e); }} className="hidden" />
+            <button onClick={() => importInputRef.current?.click()} className="px-1 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors">Import</button>
+            <button onClick={() => { void handleExport(); }} className="px-1 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors">Export</button>
+            <button
+              onClick={() => selectedProfile !== null && void handleDuplicate(selectedProfile)}
+              disabled={selectedProfile === null}
+              title="Duplicate selected"
+              className="px-1 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >Dup.</button>
+            <button
+              onClick={() => selectedProfile !== null && setDeletingId(selectedProfile.id)}
+              disabled={selectedProfile === null}
+              title="Delete selected"
+              className="px-1 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded hover:bg-red-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >Del.</button>
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search profiles…"
+            className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {importResult !== null && (
+          <div className="mx-3 mt-2 p-2 rounded border border-blue-200 bg-blue-50 text-xs text-blue-700 flex items-center justify-between flex-shrink-0">
+            <span>Imported {importResult.profilesImported} profile{importResult.profilesImported !== 1 ? "s" : ""}{importResult.errors.length > 0 ? ` · ${importResult.errors.length} error(s)` : ""}.</span>
+            <button onClick={() => setImportResult(null)} className="ml-2">✕</button>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto">
+          {filteredProfiles.length === 0 ? (
+            <div className="py-12 px-4 text-center">
+              <p className="text-sm text-gray-400">
+                {userProfiles.length === 0 ? "No user profiles yet." : "No profiles match your search."}
+              </p>
+            </div>
+          ) : (
+            filteredProfiles.map(profile => (
+              <LibraryListItem
+                key={profile.id}
+                profile={profile}
+                isSelected={selectedProfileId === profile.id}
+                onClick={() => selectProfile(profile)}
+              />
+            ))
+          )}
+        </div>
+
+        <div className="flex-shrink-0 px-4 py-2 border-t border-gray-100">
+          <p className="text-xs text-gray-400">
+            {userProfiles.length} profile{userProfiles.length !== 1 ? "s" : ""} · {standard.manifest.label}
+          </p>
+        </div>
+      </div>
+
+      {/* Panel 2: Editor */}
+      <div className="flex-1 min-w-0 flex flex-col border-r border-gray-200 bg-white overflow-hidden">
+        {showEditor ? (
+          <>
+            <div className="flex-shrink-0 px-6 py-3 bg-white border-b border-gray-200 flex items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">
+                  {isCreating ? "Creating" : "Editing"}
+                </p>
+                <p className="text-base font-semibold text-gray-900 truncate">{editorTitle || "—"}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {validationErrors.length > 0 && (
+                  <span className="text-xs px-2 py-0.5 bg-red-50 border border-red-200 text-red-700 rounded font-medium">
+                    {validationErrors.length} error{validationErrors.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+                {saveStatus === "saved" && (
+                  <span className="text-xs px-2 py-0.5 bg-green-50 border border-green-200 text-green-700 rounded font-medium">Saved ✓</span>
+                )}
+                <button type="button" onClick={handleCancel} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                  {isCreating ? "Cancel" : "Discard"}
+                </button>
+                <button type="submit" form="profile-form" disabled={saveStatus === "saving"} className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors">
+                  {saveStatus === "saving" ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <ProfileForm
+                key={`${selectedProfileId ?? "new"}-${formKey}`}
+                standard={standard}
+                initialDraft={formInitialDraft}
+                submitLabel="Save"
+                validationErrors={validationErrors}
+                onSubmit={(draft) => { void handleSave(draft); }}
+                onCancel={handleCancel}
+                onChange={setPreviewDraft}
+                hideActions
+              />
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-8">
+            <span className="text-6xl text-gray-200">◧</span>
+            <div>
+              <p className="text-base font-semibold text-gray-500">Select a profile to edit</p>
+              <p className="text-sm text-gray-400 mt-1">or click <strong className="text-gray-600">New Profile</strong> to create one</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Panel 3: Live preview */}
+      <div className="w-80 flex-shrink-0 flex flex-col bg-gray-50 overflow-hidden">
+        <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-200 flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Preview</span>
+          {previewProfile !== null && (
+            <div className="flex gap-0.5">
+              {(["chart", "table", "fields"] as const).map(t => (
+                <button key={t} onClick={() => setPreviewTab(t)}
+                  className={`px-2 py-0.5 text-xs rounded capitalize transition-colors ${
+                    previewTab === t ? "bg-gray-200 text-gray-900 font-medium" : "text-gray-400 hover:text-gray-700"
+                  }`}>{t}</button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {previewProfile !== null ? (
+            <PreviewPanel profile={previewProfile} schema={previewSchema} tab={previewTab} />
+          ) : (
+            <div className="flex items-center justify-center h-full text-sm text-gray-400 px-4 text-center leading-relaxed">
+              Select or create a profile to see a live preview
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modals */}
+      {deletingId !== null && (
+        <DeleteConfirmDialog
+          profileName={userProfiles.find(p => p.id === deletingId)?.name ?? ""}
+          onConfirm={() => { void handleDeleteConfirm(); }}
+          onCancel={() => setDeletingId(null)}
+        />
+      )}
       {pendingImport !== null && (
         <ImportOverwriteDialog
           conflictCount={pendingImport.conflictCount}
@@ -247,187 +365,114 @@ export function LibraryPage({ standard }: LibraryPageProps) {
           onCancel={() => setPendingImport(null)}
         />
       )}
-
-      {/* Delete confirmation overlay */}
-      {deletingProfileId !== null && (
-        <DeleteConfirmDialog
-          profileName={
-            userProfiles.find((p) => p.id === deletingProfileId)?.name ?? ""
-          }
-          onConfirm={() => { void handleDeleteConfirm(); }}
-          onCancel={() => setDeletingProfileId(null)}
-        />
-      )}
-
-      {/* Import result banner */}
-      {importResult !== null && (
-        <div className="mb-4 p-3 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-700">
-          Imported {importResult.profilesImported} profiles.
-          {importResult.errors.length > 0 && (
-            <span className="text-amber-700">
-              {" "}
-              {importResult.errors.length} error(s).
-            </span>
-          )}
-          <button
-            onClick={() => setImportResult(null)}
-            className="ml-2 text-blue-500 hover:text-blue-700"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Profile Library</h2>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {userProfiles.length} user profile{userProfiles.length !== 1 ? "s" : ""}
-            {" · "}
-            {standard.manifest.label}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".json"
-            onChange={(e) => { void handleImportFile(e); }}
-            className="hidden"
-          />
-          <button
-            onClick={() => importInputRef.current?.click()}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-          >
-            Import
-          </button>
-          <button
-            onClick={() => { void handleExport(); }}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-          >
-            Export
-          </button>
-          <button
-            onClick={() => setSubView("create")}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-          >
-            + New Profile
-          </button>
-        </div>
-      </div>
-
-      <div className="relative mb-4">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name or description…"
-          className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      {filteredProfiles.length === 0 ? (
-        <EmptyState
-          title="No user profiles"
-          message='Create your first profile using the "New Profile" button above.'
-        />
-      ) : (
-        <div className="space-y-3">
-          {filteredProfiles.map((profile) => (
-            <ProfileListRow
-              key={profile.id}
-              profile={profile}
-              isActive={
-                (subView === "detail" && viewingProfile?.id === profile.id) ||
-                (subView === "edit" && editingProfile?.id === profile.id)
-              }
-              onView={() => { setViewingProfile(profile); setSubView("detail"); }}
-              onEdit={() => { setEditingProfile(profile); setSubView("edit"); }}
-              onDuplicate={() => { void handleDuplicate(profile); }}
-              onDelete={() => setDeletingProfileId(profile.id)}
-            />
-          ))}
-        </div>
-      )}
-    </>
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// LibraryListItem — compact clickable profile row
 // ---------------------------------------------------------------------------
 
-function SubViewHeader({
-  title,
-  onBack,
-}: {
-  title: string;
-  onBack: () => void;
+function LibraryListItem({ profile, isSelected, onClick }: {
+  profile: Profile;
+  isSelected: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 mb-6">
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
-      >
-        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z" />
-        </svg>
-        Back
-      </button>
-      <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-    </div>
-  );
-}
-
-interface ProfileListRowProps {
-  profile: Profile;
-  isActive: boolean;
-  onView: () => void;
-  onEdit: () => void;
-  onDuplicate: () => void;
-  onDelete: () => void;
-}
-
-function ProfileListRow({ profile, isActive, onView, onEdit, onDuplicate, onDelete }: ProfileListRowProps) {
-  return (
-    <div
-      className={`rounded-lg border transition-colors cursor-pointer ${
-        isActive
-          ? "bg-blue-50 border-blue-300"
-          : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+    <button
+      onClick={onClick}
+      className={`w-full text-left px-4 py-3 border-b border-gray-50 transition-colors ${
+        isSelected
+          ? "bg-blue-50 border-l-2 border-l-blue-500 pl-3.5"
+          : "hover:bg-gray-50"
       }`}
-      onClick={onView}
     >
-      <div className="px-3 py-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <p className={`text-sm font-semibold truncate ${
-              isActive ? "text-blue-700" : "text-gray-900"
-            }`}>
-              {profile.name}
-            </p>
-            {profile.description !== "" && (
-              <p className="text-xs text-gray-400 truncate mt-0.5">{profile.description}</p>
-            )}
-            <p className="text-xs text-gray-300 mt-1">{profile.dataset.length} data points</p>
-          </div>
-          <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-            <button onClick={onEdit} title="Edit" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
-              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"/></svg>
-            </button>
-            <button onClick={onDuplicate} title="Duplicate" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors">
-              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1H2z"/></svg>
-            </button>
-            <button onClick={onDelete} title="Delete" className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
-              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
-            </button>
-          </div>
-        </div>
+      <p className={`text-sm font-semibold truncate ${isSelected ? "text-blue-700" : "text-gray-900"}`}>
+        {profile.name}
+      </p>
+      {profile.description !== "" && (
+        <p className="text-xs text-gray-400 truncate mt-0.5">{profile.description}</p>
+      )}
+      <p className="text-xs text-gray-300 mt-0.5">{profile.dataset.length} data points</p>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PreviewPanel — chart / table / fields live preview
+// ---------------------------------------------------------------------------
+
+function PreviewPanel({ profile, schema, tab }: {
+  profile: Profile;
+  schema: ProfileDefinition;
+  tab: "chart" | "table" | "fields";
+}) {
+  if (tab === "chart") {
+    return (
+      <div className="p-4">
+        {profile.dataset.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-8">Dataset is empty — add rows to see the chart.</p>
+        ) : (
+          <TimeSeriesChart columns={schema.datasetColumns} data={profile.dataset} />
+        )}
       </div>
+    );
+  }
+
+  if (tab === "table") {
+    const cols = schema.datasetColumns.filter(c => c.axis !== "none");
+    if (profile.dataset.length === 0) {
+      return <p className="text-xs text-gray-400 text-center py-8 px-4">No dataset rows.</p>;
+    }
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-white border-b border-gray-200 sticky top-0">
+            <tr>
+              {cols.map(col => (
+                <th key={col.key} className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                  {col.label}
+                  <span className="font-normal ml-1 text-gray-300 normal-case">({col.unit})</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {profile.dataset.map((row, i) => (
+              <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                {cols.map(col => (
+                  <td key={col.key} className="px-3 py-1.5 font-mono text-gray-700 whitespace-nowrap">
+                    {String(row[col.key] ?? "")}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // fields tab
+  const fieldsWithValues = schema.fields.filter(f => {
+    const v = profile.fields[f.key];
+    return v !== null && v !== undefined && v !== "";
+  });
+  if (fieldsWithValues.length === 0) {
+    return <p className="text-xs text-gray-400 text-center py-8 px-4">No metadata fields filled in.</p>;
+  }
+  return (
+    <div className="p-4 space-y-3">
+      {fieldsWithValues.map(f => (
+        <div key={f.key}>
+          <p className="text-xs text-gray-400">{f.label}{f.unit ? ` (${f.unit})` : ""}</p>
+          <p className="text-sm text-gray-800">{String(profile.fields[f.key] ?? "")}</p>
+        </div>
+      ))}
     </div>
   );
 }
+
 interface DeleteConfirmDialogProps {
   profileName: string;
   onConfirm: () => void;

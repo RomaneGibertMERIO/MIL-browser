@@ -30,6 +30,10 @@ interface ProfileFormProps {
   validationErrors: ValidationError[];
   onSubmit: (draft: ProfileDraft) => void;
   onCancel: () => void;
+  /** Called on every draft change — used for live preview in the parent. */
+  onChange?: (draft: ProfileDraft) => void;
+  /** Hide the bottom Cancel/Save buttons (parent owns them). */
+  hideActions?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,6 +47,8 @@ export function ProfileForm({
   validationErrors,
   onSubmit,
   onCancel,
+  onChange,
+  hideActions = false,
 }: ProfileFormProps) {
   const [draft, setDraft] = useState<ProfileDraft>(() =>
     initialDraft ?? buildEmptyDraft(standard),
@@ -51,25 +57,26 @@ export function ProfileForm({
   const tree = buildTree(standard.nodes, []);
 
   function handleFieldChange(key: string, value: unknown) {
-    setDraft((prev) => ({
-      ...prev,
-      fields: { ...prev.fields, [key]: value },
-    }));
+    const next = { ...draft, fields: { ...draft.fields, [key]: value } };
+    setDraft(next);
+    onChange?.(next);
   }
 
   function handleDatasetChange(rows: DatasetRow[]) {
-    setDraft((prev) => ({ ...prev, datasetRows: rows }));
+    const next = { ...draft, datasetRows: rows };
+    setDraft(next);
+    onChange?.(next);
   }
 
   function handleNodeSelect(nodeId: string) {
     const newSchema = getEffectiveSchema(standard, nodeId);
-    setDraft(prev => {
-      const fields: Record<string, unknown> = { ...prev.fields };
-      for (const f of newSchema.fields) {
-        if (!(f.key in fields)) fields[f.key] = f.defaultValue ?? null;
-      }
-      return { ...prev, nodeId, fields };
-    });
+    const fields: Record<string, unknown> = { ...draft.fields };
+    for (const f of newSchema.fields) {
+      if (!(f.key in fields)) fields[f.key] = f.defaultValue ?? null;
+    }
+    const next = { ...draft, nodeId, fields };
+    setDraft(next);
+    onChange?.(next);
   }
 
   function getError(key: string): string | undefined {
@@ -85,7 +92,7 @@ export function ProfileForm({
   const effectiveSchema = getEffectiveSchema(standard, draft.nodeId);
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-5">
+    <form id="profile-form" onSubmit={handleSubmit} noValidate className="space-y-5">
       {/* ── Profile Information ─────────────────────────────────────── */}
       <Card title="Profile Information">
         <div className="space-y-4">
@@ -96,7 +103,7 @@ export function ProfileForm({
             <input
               type="text"
               value={draft.name}
-              onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
+              onChange={(e) => { const next = { ...draft, name: e.target.value }; setDraft(next); onChange?.(next); }}
               placeholder="Profile name"
               className={`w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
                 getError("name") !== undefined ? "border-red-400" : "border-gray-300"
@@ -113,9 +120,7 @@ export function ProfileForm({
             </label>
             <textarea
               value={draft.description}
-              onChange={(e) =>
-                setDraft((prev) => ({ ...prev, description: e.target.value }))
-              }
+              onChange={(e) => { const next = { ...draft, description: e.target.value }; setDraft(next); onChange?.(next); }}
               rows={2}
               placeholder="Optional description"
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
@@ -157,22 +162,23 @@ export function ProfileForm({
         )}
       </Card>
 
-      {/* ── Actions ─────────────────────────────────────────────────── */}
-      <div className="flex justify-end gap-3 pt-1 pb-4">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 transition-colors"
-        >
-          {submitLabel}
-        </button>
-      </div>
+      {!hideActions && (
+        <div className="flex justify-end gap-3 pt-1 pb-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 transition-colors"
+          >
+            {submitLabel}
+          </button>
+        </div>
+      )}
     </form>
   );
 }
