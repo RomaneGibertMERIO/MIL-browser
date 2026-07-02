@@ -16,7 +16,7 @@
  * Typing in the search box replaces columns with a flat results list.
  */
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import type { Profile } from "../../core/domain/profile";
 import type { TaxonomyNodeItem } from "../../core/domain/tree";
 import { buildTree, getProfilesForNode } from "../../core/engine/treeBuilder";
@@ -110,6 +110,7 @@ export function AssistantPage() {
   const [selectedPath, setSelectedPath]     = useState<string[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [searchQuery, setSearchQuery]       = useState("");
+  const [colWidths, setColWidths]           = useState<Record<number, number>>({});
 
   const standard = useMemo(
     () => standards?.find(s => s.manifest.id === activeStdId) ?? null,
@@ -136,6 +137,7 @@ export function AssistantPage() {
   }, [tree, searchQuery]);
 
   const columnsRef = useRef<HTMLDivElement>(null);
+  const resizingRef = useRef<{ colIdx: number; startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
     if (columnsRef.current) {
@@ -146,7 +148,34 @@ export function AssistantPage() {
   useEffect(() => {
     setSelectedPath([]);
     setSelectedProfile(null);
+    setColWidths({});
   }, [activeStdId]);
+
+  function getColWidth(idx: number, defaultWidth = 208): number {
+    return colWidths[idx] ?? defaultWidth;
+  }
+
+  function handleResizeStart(e: React.MouseEvent, colIdx: number) {
+    e.preventDefault();
+    const startWidth = getColWidth(colIdx);
+    resizingRef.current = { colIdx, startX: e.clientX, startWidth };
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const { colIdx: idx, startX, startWidth: sw } = resizingRef.current;
+      const newWidth = Math.max(120, sw + ev.clientX - startX);
+      setColWidths(prev => ({ ...prev, [idx]: newWidth }));
+    };
+
+    const onMouseUp = () => {
+      resizingRef.current = null;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }
 
   function handleStandardChange(id: string) {
     setActiveStd(id);
@@ -199,7 +228,8 @@ export function AssistantPage() {
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       {/* ── Header ───────────────────────────────────────────────────── */}
-      <header className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-3 flex-wrap">
+      <header className="flex-shrink-0 bg-white border-b border-gray-200">
+        <div className="px-4 py-2.5 flex items-center gap-3 flex-wrap">
         <span className="text-xs font-bold text-gray-600 tracking-widest uppercase mr-1">MIL Browser</span>
         <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-semibold uppercase tracking-wide flex-shrink-0">
           Read-Only
@@ -232,17 +262,6 @@ export function AssistantPage() {
           )}
         </div>
 
-        {selectedPath.length > 0 && selectedNode != null && searchQuery.length === 0 && (
-          <div className="hidden xl:flex items-center gap-1 text-xs text-gray-500 flex-1 min-w-0 overflow-hidden">
-            {selectedNode.path.map((label, i) => (
-              <span key={i} className="flex items-center gap-1 min-w-0">
-                {i > 0 && <span className="text-gray-300 flex-shrink-0">›</span>}
-                <span className={`truncate flex-shrink-0 max-w-[120px] ${i === selectedNode.path.length - 1 ? "font-medium text-gray-700" : "text-gray-400"}`} title={label}>{label}</span>
-              </span>
-            ))}
-          </div>
-        )}
-
         <button
           onClick={() => setMode("admin")}
           className="ml-auto flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
@@ -253,6 +272,19 @@ export function AssistantPage() {
           </svg>
           Manage
         </button>
+        </div>
+        {selectedPath.length > 0 && selectedNode != null && searchQuery.length === 0 && (
+          <div className="px-4 py-1.5 border-t border-gray-100 bg-gray-50 flex flex-wrap items-center gap-1 text-xs text-gray-500">
+            {selectedNode.path.map((label, i) => (
+              <span key={i} className="flex items-center gap-1">
+                {i > 0 && <span className="text-gray-300 select-none">›</span>}
+                <span className={i === selectedNode.path.length - 1 ? "font-medium text-gray-700" : "text-gray-400"}>
+                  {label}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
       </header>
 
       {/* ── Body ─────────────────────────────────────────────────────── */}
@@ -297,28 +329,29 @@ export function AssistantPage() {
             </div>
           </div>
         ) : (
-          <>
-            {/* Miller columns */}
-            <div ref={columnsRef} className="flex flex-1 overflow-x-auto overflow-y-hidden" style={{ scrollBehavior: "smooth" }}>
-              {columns.map((colNodes, colIdx) => (
-                <BrowserColumn
-                  key={colIdx}
-                  heading={columnHeading(colNodes)}
-                  nodes={colNodes}
-                  selectedNodeId={selectedPath[colIdx] ?? null}
-                  onSelect={nodeId => handleNodeSelect(colIdx, nodeId)}
-                />
-              ))}
-              <div className="flex-shrink-0 w-4" />
-            </div>
-
-            {/* Detail panel */}
-            <NodeDetailPanel
-              node={selectedNode}
-              profiles={nodeProfiles}
-              onSelectProfile={setSelectedProfile}
-            />
-          </>
+          <div ref={columnsRef} className="flex flex-1 overflow-x-auto overflow-y-hidden" style={{ scrollBehavior: "smooth" }}>
+            {columns.map((colNodes, colIdx) => (
+              <BrowserColumn
+                key={colIdx}
+                heading={columnHeading(colNodes)}
+                nodes={colNodes}
+                selectedNodeId={selectedPath[colIdx] ?? null}
+                onSelect={nodeId => handleNodeSelect(colIdx, nodeId)}
+                width={getColWidth(colIdx)}
+                onResizeStart={e => handleResizeStart(e, colIdx)}
+              />
+            ))}
+            {selectedNode != null && (
+              <ProfilesColumn
+                node={selectedNode}
+                profiles={nodeProfiles}
+                onSelectProfile={setSelectedProfile}
+                width={getColWidth(columns.length, 280)}
+                onResizeStart={e => handleResizeStart(e, columns.length)}
+              />
+            )}
+            <div className="flex-shrink-0 w-4" />
+          </div>
         )}
       </div>
     </div>
@@ -334,11 +367,13 @@ interface BrowserColumnProps {
   nodes: TaxonomyNodeItem[];
   selectedNodeId: string | null;
   onSelect: (nodeId: string) => void;
+  width: number;
+  onResizeStart: (e: React.MouseEvent) => void;
 }
 
-function BrowserColumn({ heading, nodes, selectedNodeId, onSelect }: BrowserColumnProps) {
+function BrowserColumn({ heading, nodes, selectedNodeId, onSelect, width, onResizeStart }: BrowserColumnProps) {
   return (
-    <div className="flex-shrink-0 w-52 flex flex-col border-r border-gray-200 bg-white overflow-hidden">
+    <div className="flex-shrink-0 flex flex-col border-r border-gray-200 bg-white relative" style={{ width }}>
       <div className="flex-shrink-0 px-3 py-2 border-b border-gray-100">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{heading}</p>
       </div>
@@ -353,19 +388,19 @@ function BrowserColumn({ heading, nodes, selectedNodeId, onSelect }: BrowserColu
                 key={node.id}
                 onClick={() => onSelect(node.id)}
                 title={node.label}
-                className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
+                className={`w-full text-left px-3 py-2 flex items-start gap-2 transition-colors ${
                   selected ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                <span className={`flex-shrink-0 w-1.5 h-1.5 rounded-full ${
+                <span className={`flex-shrink-0 w-1.5 h-1.5 rounded-full mt-1.5 ${
                   node.hasProfiles ? (selected ? "bg-blue-200" : "bg-blue-400") : "bg-transparent"
                 }`} />
                 <span className="flex-1 min-w-0">
                   <span className={`block text-xs font-mono leading-tight ${selected ? "text-blue-200" : "text-gray-400"}`}>{node.code}</span>
-                  <span className="block text-sm leading-snug truncate">{node.label}</span>
+                  <span className="block text-sm leading-snug">{node.label}</span>
                 </span>
                 {node.children.length > 0 && (
-                  <svg className={`flex-shrink-0 w-3 h-3 ${selected ? "text-blue-200" : "text-gray-300"}`} viewBox="0 0 16 16" fill="currentColor">
+                  <svg className={`flex-shrink-0 w-3 h-3 mt-1 ${selected ? "text-blue-200" : "text-gray-300"}`} viewBox="0 0 16 16" fill="currentColor">
                     <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
                   </svg>
                 )}
@@ -374,90 +409,91 @@ function BrowserColumn({ heading, nodes, selectedNodeId, onSelect }: BrowserColu
           })
         )}
       </div>
+      <div
+        onMouseDown={onResizeStart}
+        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-400 transition-colors z-10"
+      />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// NodeDetailPanel
+// ProfilesColumn
 // ---------------------------------------------------------------------------
 
-interface NodeDetailPanelProps {
-  node: TaxonomyNodeItem | null;
+interface ProfilesColumnProps {
+  node: TaxonomyNodeItem;
   profiles: Profile[];
   onSelectProfile: (profile: Profile) => void;
+  width: number;
+  onResizeStart: (e: React.MouseEvent) => void;
 }
 
-function NodeDetailPanel({ node, profiles, onSelectProfile }: NodeDetailPanelProps) {
-  if (node === null) {
-    return (
-      <div className="w-72 flex-shrink-0 border-l border-gray-200 bg-white flex items-center justify-center">
-        <p className="text-sm text-gray-400 text-center px-6 leading-relaxed">
-          Select a node to view its details and attached profiles.
+function ProfilesColumn({ node, profiles, onSelectProfile, width, onResizeStart }: ProfilesColumnProps) {
+  return (
+    <div className="flex-shrink-0 flex flex-col border-r border-gray-200 bg-white relative" style={{ width }}>
+      {/* Column heading */}
+      <div className="flex-shrink-0 px-3 py-2 border-b border-gray-100">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+          {profiles.length === 0 ? "Profiles" : `Profiles (${profiles.length})`}
         </p>
       </div>
-    );
-  }
 
-  return (
-    <div className="w-72 flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto flex flex-col">
-      {/* Node header */}
-      <div className="px-4 pt-4 pb-3 border-b border-gray-100 flex-shrink-0">
-        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+      {/* Node info */}
+      <div className="flex-shrink-0 px-3 py-2 border-b border-gray-100 bg-gray-50">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <span className="text-xs font-mono text-gray-400">{node.code}</span>
           <Badge variant="gray">{node.type}</Badge>
         </div>
-        <h2 className="text-sm font-semibold text-gray-900 leading-snug">{node.label}</h2>
+        <p className="text-sm font-medium text-gray-900">{node.label}</p>
       </div>
 
       {node.imageData !== undefined && (
-        <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
-          <img src={node.imageData} alt={node.label} className="w-full rounded-md object-contain max-h-48 bg-gray-50" />
+        <div className="flex-shrink-0 px-3 py-3 border-b border-gray-100">
+          <img src={node.imageData} alt={node.label} className="w-full rounded-md object-contain max-h-40 bg-gray-50" />
         </div>
       )}
 
       {node.description !== undefined && (
-        <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Description</p>
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{node.description}</p>
+        <div className="flex-shrink-0 px-3 py-3 border-b border-gray-100">
+          <p className="text-sm text-gray-600 leading-relaxed">{node.description}</p>
         </div>
       )}
 
-      <div className="px-4 py-3 flex-1">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-          {profiles.length === 0 ? "No profiles" : `${profiles.length} profile${profiles.length !== 1 ? "s" : ""}`}
-        </p>
-        {profiles.length > 0 ? (
-          <div className="space-y-1.5">
-            {profiles.map(profile => (
-              <button
-                key={profile.id}
-                onClick={() => onSelectProfile(profile)}
-                className="w-full text-left px-3 py-2.5 rounded-lg border border-gray-100 hover:border-blue-300 hover:bg-blue-50 transition-all group"
-              >
-                <div className="flex items-start gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-900 group-hover:text-blue-700 truncate">{profile.name}</p>
-                    {profile.description !== "" && (
-                      <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{profile.description}</p>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <Badge variant={profile.source === "builtin" ? "blue" : "gray"}>
-                      {profile.source === "builtin" ? "built-in" : "user"}
-                    </Badge>
-                    <span className="text-xs text-gray-400">{profile.dataset.length}pts</span>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
+      {/* Profiles list */}
+      <div className="flex-1 overflow-y-auto py-1">
+        {profiles.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center px-3 py-6 italic">No profiles attached to this node.</p>
         ) : (
-          node.description === undefined && node.imageData === undefined && (
-            <p className="text-xs text-gray-400 italic">No content attached to this node.</p>
-          )
+          profiles.map(profile => (
+            <button
+              key={profile.id}
+              onClick={() => onSelectProfile(profile)}
+              className="w-full text-left px-3 py-2.5 border-b border-gray-50 hover:bg-blue-50 transition-colors group"
+            >
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 group-hover:text-blue-700">{profile.name}</p>
+                  {profile.description !== "" && (
+                    <p className="text-xs text-gray-400 mt-0.5">{profile.description}</p>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <Badge variant={profile.source === "builtin" ? "blue" : "gray"}>
+                    {profile.source === "builtin" ? "built-in" : "user"}
+                  </Badge>
+                  <span className="text-xs text-gray-400">{profile.dataset.length}pts</span>
+                </div>
+              </div>
+            </button>
+          ))
         )}
       </div>
+
+      <div
+        onMouseDown={onResizeStart}
+        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-400 transition-colors z-10"
+      />
     </div>
   );
 }
