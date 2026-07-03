@@ -258,3 +258,4 @@ function triggerDownload(content: string, filename: string): void {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
