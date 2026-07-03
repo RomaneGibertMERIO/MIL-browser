@@ -76,14 +76,22 @@ export function SettingsPage() {
     await exportDatabase();
   }
 
-  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file === undefined) return;
     setImporting(true);
+    
     const result = await importDatabase(file);
     setImportResult(result);
     setImporting(false);
     e.target.value = "";
+
+    // Si des profils ont été importés avec succès, on recharge l'application pour synchroniser l'UI
+    if (result.profilesImported > 0) {
+      setTimeout(() => {
+        window.location.reload();
+      }, 500); // Un léger délai pour laisser l'utilisateur voir le badge de succès
+    }
   }
 
   const lastSyncLabel =
