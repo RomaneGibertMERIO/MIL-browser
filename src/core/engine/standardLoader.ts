@@ -147,7 +147,11 @@ async function loadOneStandard(url: string, filename: string): Promise<StandardL
   // Seed builtin profiles for this standard if a companion file exists.
   const profileFile = BUILTIN_PROFILE_FILES[filename];
   if (profileFile !== undefined) {
-    await seedBuiltinProfiles(`/standards/${profileFile}`);
+    const profileUrl = isElectron
+  ? `./standards/${profileFile}`
+  : `/standards/${profileFile}`;
+
+await seedBuiltinProfiles(profileUrl);
   }
 
   // Migrate any existing profiles that reference this standard.
