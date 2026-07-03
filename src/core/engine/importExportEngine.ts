@@ -20,20 +20,17 @@
  */
 
 import { ProfileSchema } from "../domain/profile";
-import { StandardPluginSchema } from "../domain/standard";
 import type { Profile } from "../domain/profile";
 import type { StandardPlugin } from "../domain/standard";
 import type { ExportEnvelope } from "../domain/tree";
-import { upsertProfile } from "../db/repositories/profiles.repo";
+import { upsertProfile, getAllProfiles } from "../db/repositories/profiles.repo";
 import { upsertStandard, getAllStandards } from "../db/repositories/standards.repo";
-import { getAllProfiles } from "../db/repositories/profiles.repo";
 import { migrateProfiles } from "./migrationEngine";
 
 // ---------------------------------------------------------------------------
 // Application version constant
 // ---------------------------------------------------------------------------
 
-/** Monotonically increasing integer. Increment when the ExportEnvelope shape changes. */
 const CURRENT_DB_VERSION = 1;
 const APP_VERSION = "2.0.0";
 
@@ -41,10 +38,6 @@ const APP_VERSION = "2.0.0";
 // exportDatabase
 // ---------------------------------------------------------------------------
 
-/**
- * Exports all profiles and user-imported standards to an ExportEnvelope JSON
- * string. Triggers a file download in the browser.
- */
 export async function exportDatabase(): Promise<void> {
   const [profiles, standards] = await Promise.all([
     getAllProfiles(),
@@ -73,28 +66,11 @@ export async function exportDatabase(): Promise<void> {
 // importDatabase
 // ---------------------------------------------------------------------------
 
-/** Summary of an import operation. */
 export interface ImportResult {
   profilesImported: number;
   standardsImported: number;
   errors: string[];
 }
-
-/**
- * Parses an import file, validates all records, runs migrations, and upserts
- * valid records into the database. Returns a summary of what was imported
- * and any errors encountered.
- *
- * This function never throws — all errors are captured in ImportResult.errors.
- */
-
-//import { upsertStandard } from "../db/repositories/standards.repo";
-//import { upsertProfile } from "../db/repositories/profiles.repo";
-//import { ProfileSchema } from "../domain/profile"; // Ajuste le chemin si nécessaire
-
-import { upsertStandard } from "../db/repositories/standards.repo";
-import { upsertProfile } from "../db/repositories/profiles.repo";
-import { ProfileSchema } from "../domain/profile"; // Ajuste le chemin si nécessaire
 
 export async function importDatabase(file: File): Promise<ImportResult> {
   const result: ImportResult = {
@@ -130,15 +106,20 @@ export async function importDatabase(file: File): Promise<ImportResult> {
           id: std.id,
           manifest: {
             id: std.id,
-            label: std.id.toUpperCase(), // ex: "NEX" dans le menu
-            version: "1.0.0"
+            label: std.id.toUpperCase(),
+            description: `Imported standard ${std.id.toUpperCase()}`,
+            version: "1.0.0",
+            schemaVersion: std.schemaVersion ?? 1,
+            organization: "User",
+            isBuiltin: false
           },
           profileSchema: {
+            version: std.schemaVersion ?? 1,
             fields: [],
             datasetColumns: [
-              { key: "time", label: "Time", unit: "", axis: "x" },
-              { key: "temp_c", label: "Temperature", unit: "°C", axis: "y" },
-              { key: "rh_percent", label: "Humidity", unit: "%", axis: "y" }
+              { key: "time", label: "Time", unit: "", axis: "x", type: "string", required: true, color: null },
+              { key: "temp_c", label: "Temperature", unit: "°C", axis: "none", type: "number", required: true, color: null },
+              { key: "rh_percent", label: "Humidity", unit: "%", axis: "none", type: "number", required: true, color: null }
             ]
           }
         });
@@ -180,13 +161,9 @@ export async function importDatabase(file: File): Promise<ImportResult> {
 }
 
 // ---------------------------------------------------------------------------
-// exportProfiles (profiles-only convenience export)
+// exportProfilesForStandard
 // ---------------------------------------------------------------------------
 
-/**
- * Exports only the user-created profiles for a given standard to a JSON file.
- * Used by the Library view's per-standard export button.
- */
 export async function exportProfilesForStandard(
   standardId: string,
   profiles: Profile[],
@@ -213,10 +190,6 @@ export async function exportProfilesForStandard(
 // importProfilesForStandard
 // ---------------------------------------------------------------------------
 
-/**
- * Imports profiles from a file for a specific standard.
- * Runs schema migrations before upserting.
- */
 export async function importProfilesForStandard(
   file: File,
   standard: StandardPlugin,
@@ -256,7 +229,6 @@ export async function importProfilesForStandard(
     validProfiles.push(parsed.data);
   }
 
-  // Run schema migrations before persisting.
   const migrated = migrateProfiles(validProfiles, standard);
 
   for (const profile of migrated) {
