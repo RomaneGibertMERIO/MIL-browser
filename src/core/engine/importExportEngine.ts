@@ -92,6 +92,10 @@ export interface ImportResult {
 //import { upsertProfile } from "../db/repositories/profiles.repo";
 //import { ProfileSchema } from "../domain/profile"; // Ajuste le chemin si nécessaire
 
+import { upsertStandard } from "../db/repositories/standards.repo";
+import { upsertProfile } from "../db/repositories/profiles.repo";
+import { ProfileSchema } from "../domain/profile"; // Ajuste le chemin si nécessaire
+
 export async function importDatabase(file: File): Promise<ImportResult> {
   const result: ImportResult = {
     profilesImported: 0,
@@ -117,7 +121,6 @@ export async function importDatabase(file: File): Promise<ImportResult> {
   }
 
   // 1️⃣ ─── IMPORT DES NORMES (STANDARDS) ───
-  // On cherche les normes cachées dans exportMeta.standards
   if (envelope.exportMeta && Array.isArray(envelope.exportMeta.standards)) {
     console.log(`📊 [Import Engine] Nombre de normes détectées : ${envelope.exportMeta.standards.length}`);
     
@@ -136,7 +139,7 @@ export async function importDatabase(file: File): Promise<ImportResult> {
               { key: "time", label: "Time", unit: "", axis: "x" },
               { key: "temp_c", label: "Temperature", unit: "°C", axis: "y" },
               { key: "rh_percent", label: "Humidity", unit: "%", axis: "y" }
-            ] // On met des colonnes par défaut pour que l'UI puisse afficher le tableau/graphe
+            ]
           }
         });
         result.standardsImported++;
@@ -148,22 +151,21 @@ export async function importDatabase(file: File): Promise<ImportResult> {
   }
 
   // 2️⃣ ─── IMPORT DES PROFILS ───
-  const profilesArray = envelope.profiles;
+  const profilesArray = envelope.profiles ?? [];
   if (Array.isArray(profilesArray)) {
     console.log(`📊 [Import Engine] Nombre de profils détectés : ${profilesArray.length}`);
 
     for (const item of profilesArray) {
-      // Validation Zod assouplie (si nodeId est vide, ça passe !)
       const parsed = ProfileSchema.safeParse(item);
 
       if (!parsed.success) {
-        result.errors.push(`Profile ${item.name || 'Unknown'} failed validation.`);
+        const errorMsg = `Profile validation failed (ID: ${item?.id ?? "Inconnu"}): ${parsed.error.issues[0]?.message ?? "unknown error"}`;
+        result.errors.push(errorMsg);
         console.error("❌ [Import Engine] Échec de validation Zod sur le profil :", parsed.error.format(), "Objet brut :", item);
-        continue; // Passe au profil suivant au lieu de tout bloquer
+        continue;
       }
 
       try {
-        // Enregistrement dans IndexedDB
         await upsertProfile(parsed.data);
         result.profilesImported++;
       } catch (err: any) {
@@ -174,36 +176,6 @@ export async function importDatabase(file: File): Promise<ImportResult> {
   }
 
   console.log(`✅ [Import Engine] Fin de l'opération. Normes: ${result.standardsImported}, Profils: ${result.profilesImported}, Erreurs: ${result.errors.length}`);
-  return result;
-}
-  // ── Import des profils ───────────────────────────────────────────────────
-  // Correction de la récupération : on cible directement la clé "profiles"
-  const profilesArray = envelope["profiles"] ?? [];
-  console.log(`📊 [Import Engine] Nombre de profils détectés dans le JSON : ${profilesArray.length}`);
-  
-  if (Array.isArray(profilesArray)) {
-    for (const raw of profilesArray) {
-      const parsed = ProfileSchema.safeParse(raw);
-      
-      if (!parsed.success) {
-        const errorMsg = `Profile validation failed (ID: ${raw?.id ?? "Inconnu"}): ${parsed.error.issues[0]?.message ?? "unknown error"}`;
-        result.errors.push(errorMsg);
-        // Ce log va te donner la cause exacte du rejet Zod dans la console Electron :
-        console.error("❌ [Import Engine] Échec de validation Zod sur le profil :", parsed.error.format(), "Objet brut :", raw);
-        continue;
-      }
-      
-      try {
-        await upsertProfile(parsed.data);
-        result.profilesImported++;
-      } catch (err) {
-        result.errors.push(`Failed to save profile: ${String(err)}`);
-        console.error("❌ [Import Engine] Erreur Dexie à l'insertion du profil :", err);
-      }
-    }
-  }
-
-  console.log(`✅ [Import Engine] Fin de l'opération. Total importé : ${result.profilesImported}. Total erreurs : ${result.errors.length}`);
   return result;
 }
 
