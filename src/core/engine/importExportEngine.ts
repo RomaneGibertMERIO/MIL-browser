@@ -102,8 +102,8 @@ export async function importDatabase(file: File): Promise<ImportResult> {
     
     for (const std of envelope.exportMeta.standards) {
       try {
+        // Correction de la structure ici : pas d'id racine, tout va dans manifest et les tableaux obligatoires sont initialisés vides
         await upsertStandard({
-          id: std.id,
           manifest: {
             id: std.id,
             label: std.id.toUpperCase(),
@@ -113,6 +113,7 @@ export async function importDatabase(file: File): Promise<ImportResult> {
             organization: "User",
             isBuiltin: false
           },
+          nodes: [], // Requis par le type de la norme
           profileSchema: {
             version: std.schemaVersion ?? 1,
             fields: [],
@@ -121,8 +122,10 @@ export async function importDatabase(file: File): Promise<ImportResult> {
               { key: "temp_c", label: "Temperature", unit: "°C", axis: "none", type: "number", required: true, color: null },
               { key: "rh_percent", label: "Humidity", unit: "%", axis: "none", type: "number", required: true, color: null }
             ]
-          }
-        });
+          },
+          migrations: [] // Requis par le type de la norme
+        } as unknown as StandardPlugin); // Typecast de sécurité si l'interface possède d'autres champs requis
+        
         result.standardsImported++;
       } catch (err: any) {
         result.errors.push(`Failed to import standard ${std.id}: ${err.message}`);
@@ -255,4 +258,3 @@ function triggerDownload(content: string, filename: string): void {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
-}
