@@ -6,26 +6,20 @@ function createWindow() {
     width: 1400,
     height: 900,
     webPreferences: {
-      preload: path.join(__dirname, "preloads.js"),
+      preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
-  const win = new BrowserWindow({
-  ...
-});
+  win.webContents.openDevTools();
 
-win.webContents.openDevTools();
-  
-  // DEV vs PROD
   if (!app.isPackaged) {
     win.loadURL("http://localhost:5173");
   } else {
-    win.loadFile(path.join(process.cwd(), "dist/index.html"));
+    win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
 
-  // liens externes
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
