@@ -12,6 +12,12 @@ function createWindow() {
     },
   });
 
+  const win = new BrowserWindow({
+  ...
+});
+
+win.webContents.openDevTools();
+  
   // DEV vs PROD
   if (!app.isPackaged) {
     win.loadURL("http://localhost:5173");
