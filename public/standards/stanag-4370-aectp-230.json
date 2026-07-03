@@ -1,0 +1,297 @@
+{
+  "manifest": {
+    "id": "stanag-4370-aectp-230",
+    "version": "Edition 5",
+    "schemaVersion": 1,
+    "organization": "NATO",
+    "label": "AECTP-230",
+    "description": "Climatic Environmental Tests (STANAG 4370)",
+    "isBuiltin": true
+  },
+  "profileSchema": {
+    "version": 1,
+    "fields": [
+      {
+        "key": "cycles",
+        "label": "Number of Cycles",
+        "group": "conditions",
+        "type": "number",
+        "required": true,
+        "unit": "cycles",
+        "defaultValue": null,
+        "validation": [
+          { "type": "min", "value": 1, "message": "Number of cycles must be at least 1." }
+        ]
+      },
+      {
+        "key": "cycleDuration",
+        "label": "Cycle Duration",
+        "group": "conditions",
+        "type": "duration",
+        "required": true,
+        "unit": "h",
+        "defaultValue": null,
+        "validation": []
+      },
+      {
+        "key": "tempMin",
+        "label": "Min Temperature",
+        "group": "conditions",
+        "type": "number",
+        "required": true,
+        "unit": "°C",
+        "defaultValue": null,
+        "validation": []
+      },
+      {
+        "key": "tempMax",
+        "label": "Max Temperature",
+        "group": "conditions",
+        "type": "number",
+        "required": true,
+        "unit": "°C",
+        "defaultValue": null,
+        "validation": []
+      },
+      {
+        "key": "rhMin",
+        "label": "Min Relative Humidity",
+        "group": "conditions",
+        "type": "number",
+        "required": false,
+        "unit": "%RH",
+        "defaultValue": null,
+        "validation": [
+          { "type": "min", "value": 0,   "message": "Relative humidity cannot be negative." },
+          { "type": "max", "value": 100, "message": "Relative humidity cannot exceed 100%." }
+        ]
+      },
+      {
+        "key": "rhMax",
+        "label": "Max Relative Humidity",
+        "group": "conditions",
+        "type": "number",
+        "required": false,
+        "unit": "%RH",
+        "defaultValue": null,
+        "validation": [
+          { "type": "min", "value": 0,   "message": "Relative humidity cannot be negative." },
+          { "type": "max", "value": 100, "message": "Relative humidity cannot exceed 100%." }
+        ]
+      },
+      {
+        "key": "acceptance",
+        "label": "Acceptance Criteria",
+        "group": "acceptance",
+        "type": "multiline",
+        "required": false,
+        "defaultValue": "",
+        "validation": []
+      },
+      {
+        "key": "aectpTableRef",
+        "label": "AECTP Table Reference",
+        "group": "references",
+        "type": "text",
+        "required": false,
+        "defaultValue": "",
+        "validation": []
+      },
+      {
+        "key": "notes",
+        "label": "Notes",
+        "group": "notes",
+        "type": "multiline",
+        "required": false,
+        "defaultValue": "",
+        "validation": []
+      }
+    ],
+    "datasetColumns": [
+      {
+        "key": "time",
+        "label": "Time",
+        "unit": "hhmm",
+        "type": "string",
+        "axis": "x",
+        "color": null,
+        "required": true
+      },
+      {
+        "key": "temp_c",
+        "label": "Temperature",
+        "unit": "°C",
+        "type": "number",
+        "axis": "left",
+        "color": "#ef4444",
+        "required": true
+      },
+      {
+        "key": "rh_percent",
+        "label": "Relative Humidity",
+        "unit": "%RH",
+        "type": "number",
+        "axis": "right",
+        "color": "#3b82f6",
+        "required": false
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "aectp230_method3",
+      "parentId": null,
+      "standardId": "stanag-4370-aectp-230",
+      "type": "method",
+      "code": "Method 3",
+      "label": "Method 3 — Humidity",
+      "order": 10,
+      "tags": ["humid"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_m3_natural",
+      "parentId": "aectp230_method3",
+      "standardId": "stanag-4370-aectp-230",
+      "type": "procedure",
+      "code": "Natural",
+      "label": "Natural Conditions",
+      "order": 10,
+      "tags": ["natural"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_m3_nat_b1",
+      "parentId": "aectp230_m3_natural",
+      "standardId": "stanag-4370-aectp-230",
+      "type": "zone",
+      "code": "B1",
+      "label": "Zone B1 — Basic Hot Humid",
+      "order": 10,
+      "tags": ["b1"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_m3_nat_b2",
+      "parentId": "aectp230_m3_natural",
+      "standardId": "stanag-4370-aectp-230",
+      "type": "zone",
+      "code": "B2",
+      "label": "Zone B2 — Cyclic High Relative Humidity",
+      "order": 20,
+      "tags": ["b2"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_m3_nat_b3",
+      "parentId": "aectp230_m3_natural",
+      "standardId": "stanag-4370-aectp-230",
+      "type": "zone",
+      "code": "B3",
+      "label": "Zone B3 — Hot Humid",
+      "order": 30,
+      "tags": ["b3"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_m3_nat_b4",
+      "parentId": "aectp230_m3_natural",
+      "standardId": "stanag-4370-aectp-230",
+      "type": "zone",
+      "code": "B4",
+      "label": "Zone B4 — Warm Humid",
+      "order": 40,
+      "tags": ["b4"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_m3_induced",
+      "parentId": "aectp230_method3",
+      "standardId": "stanag-4370-aectp-230",
+      "type": "procedure",
+      "code": "Induced",
+      "label": "Induced Conditions",
+      "order": 20,
+      "tags": ["induced"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_m3_ind_b3",
+      "parentId": "aectp230_m3_induced",
+      "standardId": "stanag-4370-aectp-230",
+      "type": "zone",
+      "code": "B3",
+      "label": "Zone B3 — Hot Humid Induced",
+      "order": 10,
+      "tags": ["b3", "induced"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_method2",
+      "parentId": null,
+      "standardId": "stanag-4370-aectp-230",
+      "type": "method",
+      "code": "Method 2",
+      "label": "Method 2 — High Temperature",
+      "order": 20,
+      "tags": ["high-temperature"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_m2_a1",
+      "parentId": "aectp230_method2",
+      "standardId": "stanag-4370-aectp-230",
+      "type": "category",
+      "code": "A1",
+      "label": "A1 — Worldwide Extreme Hot Dry",
+      "order": 10,
+      "tags": ["a1", "hot"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_m2_a2",
+      "parentId": "aectp230_method2",
+      "standardId": "stanag-4370-aectp-230",
+      "type": "category",
+      "code": "A2",
+      "label": "A2 — Worldwide Severe Hot",
+      "order": 20,
+      "tags": ["a2", "hot"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_method1",
+      "parentId": null,
+      "standardId": "stanag-4370-aectp-230",
+      "type": "method",
+      "code": "Method 1",
+      "label": "Method 1 — Low Temperature",
+      "order": 30,
+      "tags": ["low-temperature"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_m1_c1",
+      "parentId": "aectp230_method1",
+      "standardId": "stanag-4370-aectp-230",
+      "type": "category",
+      "code": "C1",
+      "label": "C1 — Basic Cold",
+      "order": 10,
+      "tags": ["c1", "cold"],
+      "metadata": {}
+    },
+    {
+      "id": "aectp230_m1_c2",
+      "parentId": "aectp230_method1",
+      "standardId": "stanag-4370-aectp-230",
+      "type": "category",
+      "code": "C2",
+      "label": "C2 — Worldwide Severe Cold",
+      "order": 20,
+      "tags": ["c2", "cold"],
+      "metadata": {}
+    }
+  ],
+  "migrations": []
+}
