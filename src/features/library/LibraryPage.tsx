@@ -190,11 +190,12 @@ async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const result = await importProfilesForStandard(file, standard);
     setImportResult(result);
     
-    // 🚨 LE POP-UP DE DEBUG QUI COINCE LA PAGE SANS CASSER LE CODE
     if (result.errors && result.errors.length > 0) {
-      alert("⚠️ ERREURS D'IMPORTATION DETECTÉES :\n\n" + JSON.stringify(result.errors, null, 2));
+      alert("⚠️ ERREURS :\n\n" + JSON.stringify(result.errors, null, 2));
     } else {
-      alert("Résultat de l'import : " + result.profilesImported + " profils importés.");
+      // S'il n'y a pas d'erreur, on avertit l'utilisateur et on recharge pour rafraîchir l'UI !
+      alert("🎉 Importation réussie : " + result.profilesImported + " profils ajoutés !");
+      window.location.reload();
     }
   }
 
