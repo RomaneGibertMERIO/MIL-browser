@@ -7,4 +7,5 @@ export default defineConfig({
     allowedHosts: true,
   },
   base: "./",
+  publicDir: "public"
 });
