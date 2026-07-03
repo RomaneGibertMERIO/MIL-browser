@@ -88,6 +88,10 @@ export interface ImportResult {
  * This function never throws — all errors are captured in ImportResult.errors.
  */
 
+//import { upsertStandard } from "../db/repositories/standards.repo";
+//import { upsertProfile } from "../db/repositories/profiles.repo";
+//import { ProfileSchema } from "../domain/profile"; // Ajuste le chemin si nécessaire
+
 export async function importDatabase(file: File): Promise<ImportResult> {
   const result: ImportResult = {
     profilesImported: 0,
@@ -112,6 +116,66 @@ export async function importDatabase(file: File): Promise<ImportResult> {
     return result;
   }
 
+  // 1️⃣ ─── IMPORT DES NORMES (STANDARDS) ───
+  // On cherche les normes cachées dans exportMeta.standards
+  if (envelope.exportMeta && Array.isArray(envelope.exportMeta.standards)) {
+    console.log(`📊 [Import Engine] Nombre de normes détectées : ${envelope.exportMeta.standards.length}`);
+    
+    for (const std of envelope.exportMeta.standards) {
+      try {
+        await upsertStandard({
+          id: std.id,
+          manifest: {
+            id: std.id,
+            label: std.id.toUpperCase(), // ex: "NEX" dans le menu
+            version: "1.0.0"
+          },
+          profileSchema: {
+            fields: [],
+            datasetColumns: [
+              { key: "time", label: "Time", unit: "", axis: "x" },
+              { key: "temp_c", label: "Temperature", unit: "°C", axis: "y" },
+              { key: "rh_percent", label: "Humidity", unit: "%", axis: "y" }
+            ] // On met des colonnes par défaut pour que l'UI puisse afficher le tableau/graphe
+          }
+        });
+        result.standardsImported++;
+      } catch (err: any) {
+        result.errors.push(`Failed to import standard ${std.id}: ${err.message}`);
+        console.error(`❌ [Import Engine] Erreur sur la norme ${std.id}:`, err);
+      }
+    }
+  }
+
+  // 2️⃣ ─── IMPORT DES PROFILS ───
+  const profilesArray = envelope.profiles;
+  if (Array.isArray(profilesArray)) {
+    console.log(`📊 [Import Engine] Nombre de profils détectés : ${profilesArray.length}`);
+
+    for (const item of profilesArray) {
+      // Validation Zod assouplie (si nodeId est vide, ça passe !)
+      const parsed = ProfileSchema.safeParse(item);
+
+      if (!parsed.success) {
+        result.errors.push(`Profile ${item.name || 'Unknown'} failed validation.`);
+        console.error("❌ [Import Engine] Échec de validation Zod sur le profil :", parsed.error.format(), "Objet brut :", item);
+        continue; // Passe au profil suivant au lieu de tout bloquer
+      }
+
+      try {
+        // Enregistrement dans IndexedDB
+        await upsertProfile(parsed.data);
+        result.profilesImported++;
+      } catch (err: any) {
+        result.errors.push(`Database write failed for profile ${item.name}: ${err.message}`);
+        console.error(`❌ [Import Engine] Impossible d'écrire le profil ${item.name} en BDD:`, err);
+      }
+    }
+  }
+
+  console.log(`✅ [Import Engine] Fin de l'opération. Normes: ${result.standardsImported}, Profils: ${result.profilesImported}, Erreurs: ${result.errors.length}`);
+  return result;
+}
   // ── Import des profils ───────────────────────────────────────────────────
   // Correction de la récupération : on cible directement la clé "profiles"
   const profilesArray = envelope["profiles"] ?? [];
