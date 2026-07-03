@@ -20,12 +20,12 @@
  */
 
 import { ProfileSchema } from "../domain/profile";
-import { StandardPluginSchema } from "../domain/standard";
+//import { StandardPluginSchema } from "../domain/standard";
 import type { Profile } from "../domain/profile";
 import type { StandardPlugin } from "../domain/standard";
 import type { ExportEnvelope } from "../domain/tree";
 import { upsertProfile } from "../db/repositories/profiles.repo";
-import { upsertStandard, getAllStandards } from "../db/repositories/standards.repo";
+import { getAllStandards } from "../db/repositories/standards.repo";
 import { getAllProfiles } from "../db/repositories/profiles.repo";
 import { migrateProfiles } from "./migrationEngine";
 
