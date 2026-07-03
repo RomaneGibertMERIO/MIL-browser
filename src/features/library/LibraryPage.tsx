@@ -205,19 +205,6 @@ async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     setPendingImport(null);
   }
 
-async function confirmImport() {
-    if (pendingImport === null) return;
-    const result = await importProfilesForStandard(pendingImport.file, standard);
-    setImportResult(result);
-    setPendingImport(null);
-
-console.log("📥 [Debug Import Overwrite] Résultat brut :", result);
-  
-    if (result.profilesImported > 0) {
-      // setTimeout(() => { window.location.reload(); }, 500);
-      
-    }
-  }
 
   // Render
   const showEditor = isCreating || selectedProfile !== null;
