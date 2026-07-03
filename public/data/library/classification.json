@@ -1,0 +1,30 @@
+{
+  "standards": [
+    "MIL-STD-810H",
+    "AECTP-230",
+    "AECTP-300"
+  ],
+  "testTypes": [
+    "High Temperature",
+    "Low Temperature",
+    "Temperature Shock",
+    "Humidity",
+    "Solar Radiation",
+    "Rain",
+    "Sand and Dust",
+    "Salt Fog"
+  ],
+  "zones": [
+    "B1",
+    "B2",
+    "B3"
+  ],
+  "exposureModes": [
+    "Operational",
+    "Storage"
+  ],
+  "profileShapes": [
+    "Steady",
+    "Cyclic"
+  ]
+}

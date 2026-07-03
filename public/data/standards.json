@@ -1,0 +1,35 @@
+[
+  {
+    "id": "mil810h",
+    "label": "MIL-STD-810H",
+    "version": "H",
+    "organization": "US DoD",
+    "description": "Environmental Engineering Considerations and Laboratory Tests",
+    "conditionLabels": {
+      "operational": "Operational",
+      "storage": "Storage"
+    }
+  },
+  {
+    "id": "aectp230",
+    "label": "AECTP-230",
+    "version": "5th Edition",
+    "organization": "NATO",
+    "description": "Climatic Environmental Tests",
+    "conditionLabels": {
+      "operational": "Natural",
+      "storage": "Induced"
+    }
+  },
+  {
+    "id": "aectp300",
+    "label": "AECTP-300",
+    "version": "4th Edition",
+    "organization": "NATO",
+    "description": "Mechanical Environmental Tests",
+    "conditionLabels": {
+      "operational": "Operational",
+      "storage": "Storage"
+    }
+  }
+]
