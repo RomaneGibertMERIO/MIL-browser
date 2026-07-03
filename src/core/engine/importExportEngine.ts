@@ -87,6 +87,7 @@ export interface ImportResult {
  *
  * This function never throws — all errors are captured in ImportResult.errors.
  */
+
 export async function importDatabase(file: File): Promise<ImportResult> {
   const result: ImportResult = {
     profilesImported: 0,
@@ -94,68 +95,51 @@ export async function importDatabase(file: File): Promise<ImportResult> {
     errors: [],
   };
 
-  let envelope: unknown;
+  let envelope: any;
   try {
     const text = await file.text();
-    envelope = JSON.parse(text) as unknown;
+    envelope = JSON.parse(text);
+    console.log("📥 [Import Engine] Fichier JSON décodé :", envelope);
   } catch {
     result.errors.push("File is not valid JSON.");
+    console.error("❌ [Import Engine] Le fichier n'est pas un JSON valide.");
     return result;
   }
 
   if (typeof envelope !== "object" || envelope === null) {
     result.errors.push("Import file has invalid structure.");
+    console.error("❌ [Import Engine] Structure de l'enveloppe JSON invalide.");
     return result;
   }
 
-  const { profiles: rawProfiles = [], profiles: rawStandards = [] } =
-    envelope as Record<string, unknown[]>;
-
-  // ── Import standards ───────────────────────────────────────────────────
-  const standardsArray =
-    (envelope as Record<string, unknown>)["standards"] ?? [];
-  if (Array.isArray(standardsArray)) {
-    for (const raw of standardsArray) {
-      const parsed = StandardPluginSchema.safeParse(raw);
-      if (!parsed.success) {
-        result.errors.push(
-          `Standard validation failed: ${parsed.error.issues[0]?.message ?? "unknown error"}`,
-        );
-        continue;
-      }
-      try {
-        await upsertStandard(parsed.data);
-        result.standardsImported++;
-      } catch (err) {
-        result.errors.push(`Failed to save standard: ${String(err)}`);
-      }
-    }
-  }
-
-  // ── Import profiles ────────────────────────────────────────────────────
-  const profilesArray =
-    (envelope as Record<string, unknown>)["profiles"] ?? [];
+  // ── Import des profils ───────────────────────────────────────────────────
+  // Correction de la récupération : on cible directement la clé "profiles"
+  const profilesArray = envelope["profiles"] ?? [];
+  console.log(`📊 [Import Engine] Nombre de profils détectés dans le JSON : ${profilesArray.length}`);
+  
   if (Array.isArray(profilesArray)) {
     for (const raw of profilesArray) {
       const parsed = ProfileSchema.safeParse(raw);
+      
       if (!parsed.success) {
-        result.errors.push(
-          `Profile validation failed: ${parsed.error.issues[0]?.message ?? "unknown error"}`,
-        );
+        const errorMsg = `Profile validation failed (ID: ${raw?.id ?? "Inconnu"}): ${parsed.error.issues[0]?.message ?? "unknown error"}`;
+        result.errors.push(errorMsg);
+        // Ce log va te donner la cause exacte du rejet Zod dans la console Electron :
+        console.error("❌ [Import Engine] Échec de validation Zod sur le profil :", parsed.error.format(), "Objet brut :", raw);
         continue;
       }
+      
       try {
         await upsertProfile(parsed.data);
         result.profilesImported++;
       } catch (err) {
         result.errors.push(`Failed to save profile: ${String(err)}`);
+        console.error("❌ [Import Engine] Erreur Dexie à l'insertion du profil :", err);
       }
     }
   }
 
-  void rawProfiles;
-  void rawStandards;
-
+  console.log(`✅ [Import Engine] Fin de l'opération. Total importé : ${result.profilesImported}. Total erreurs : ${result.errors.length}`);
   return result;
 }
 
