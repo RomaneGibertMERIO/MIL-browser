@@ -186,13 +186,24 @@ export function LibraryPage({ standard }: LibraryPageProps) {
         if (c > 0) { setPendingImport({ file, conflictCount: c }); return; }
       }
     } catch { /* handled by importProfilesForStandard */ }
-    setImportResult(await importProfilesForStandard(file, standard));
+    
+    const result = await importProfilesForStandard(file, standard);
+    setImportResult(result);
+    
+    if (result.profilesImported > 0) {
+      setTimeout(() => { window.location.reload(); }, 500);
+    }
   }
 
-  async function confirmImport() {
+async function confirmImport() {
     if (pendingImport === null) return;
-    setImportResult(await importProfilesForStandard(pendingImport.file, standard));
+    const result = await importProfilesForStandard(pendingImport.file, standard);
+    setImportResult(result);
     setPendingImport(null);
+    
+    if (result.profilesImported > 0) {
+      setTimeout(() => { window.location.reload(); }, 500);
+    }
   }
 
   // Render
