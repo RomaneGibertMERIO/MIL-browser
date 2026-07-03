@@ -52,7 +52,7 @@ export const ProfileSchema = z.object({
   /** Client-generated UUID. Never changes after creation. */
   id: z.string().min(1),
   /** References StandardNode.id. Stable across renames. */
-  nodeId: z.string().min(1),
+  nodeId: z.string(),
   /** References StandardManifest.id. Redundant but required for efficient queries. */
   standardId: z.string().min(1),
   /**
