@@ -190,9 +190,12 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     const result = await importProfilesForStandard(file, standard);
     setImportResult(result);
     
+    // Sort le console.log du "if" pour TOUJOURS voir le résultat !
+    console.log("📥 [Debug Import] Résultat brut du moteur :", result);
+    
     if (result.profilesImported > 0) {
       // setTimeout(() => { window.location.reload(); }, 500);
-      console.log("Résultat de l'import :", result);
+      // console.log("Résultat de l'import :", result);
     }
   }
 
@@ -201,7 +204,9 @@ async function confirmImport() {
     const result = await importProfilesForStandard(pendingImport.file, standard);
     setImportResult(result);
     setPendingImport(null);
-    
+
+console.log("📥 [Debug Import Overwrite] Résultat brut :", result);
+  
     if (result.profilesImported > 0) {
       // setTimeout(() => { window.location.reload(); }, 500);
       
