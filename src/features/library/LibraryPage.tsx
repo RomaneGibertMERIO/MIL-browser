@@ -168,7 +168,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     await exportProfilesForStandard(standard.manifest.id, userProfiles, standard);
   }
 
- /* async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file === undefined) return;
     e.target.value = "";
@@ -185,34 +185,24 @@ export function LibraryPage({ standard }: LibraryPageProps) {
         }
         if (c > 0) { setPendingImport({ file, conflictCount: c }); return; }
       }
-    } catch { /* handled by importProfilesForStandard */ }*/
-    /*
+    } catch { /* ignoré pour laisser le moteur gérer */ }
+    
     const result = await importProfilesForStandard(file, standard);
     setImportResult(result);
     
-    // Sort le console.log du "if" pour TOUJOURS voir le résultat !
-    console.log("📥 [Debug Import] Résultat brut du moteur :", result);
-    
-    if (result.profilesImported > 0) {
-      // setTimeout(() => { window.location.reload(); }, 500);
-      // console.log("Résultat de l'import :", result);
-    }
-  }*/
-
-  const result = await importProfilesForStandard(file, standard);
-    setImportResult(result);
-    
-    // 🚨 ON FORCE UN BLOCAGE DU NAVIGATEUR ICI :
+    // 🚨 LE POP-UP DE DEBUG QUI COINCE LA PAGE SANS CASSER LE CODE
     if (result.errors && result.errors.length > 0) {
-      alert("⚠️ ERREURS DETECTÉES COMPTE RENDU :\n\n" + JSON.stringify(result.errors.slice(0, 3), null, 2));
+      alert("⚠️ ERREURS D'IMPORTATION DETECTÉES :\n\n" + JSON.stringify(result.errors, null, 2));
     } else {
       alert("Résultat de l'import : " + result.profilesImported + " profils importés.");
     }
-    
-    if (result.profilesImported > 0) {
-      // setTimeout(() => { window.location.reload(); }, 500);
-      console.log("Résultat de l'import :", result);
-    }
+  }
+
+  async function confirmImport() {
+    if (pendingImport === null) return;
+    const result = await importProfilesForStandard(pendingImport.file, standard);
+    setImportResult(result);
+    setPendingImport(null);
   }
 
 async function confirmImport() {
