@@ -191,7 +191,8 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     setImportResult(result);
     
     if (result.profilesImported > 0) {
-      setTimeout(() => { window.location.reload(); }, 500);
+      // setTimeout(() => { window.location.reload(); }, 500);
+      console.log("Résultat de l'import :", result);
     }
   }
 
@@ -202,7 +203,8 @@ async function confirmImport() {
     setPendingImport(null);
     
     if (result.profilesImported > 0) {
-      setTimeout(() => { window.location.reload(); }, 500);
+      // setTimeout(() => { window.location.reload(); }, 500);
+      
     }
   }
 
