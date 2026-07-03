@@ -168,7 +168,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     await exportProfilesForStandard(standard.manifest.id, userProfiles, standard);
   }
 
-  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+ /* async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file === undefined) return;
     e.target.value = "";
@@ -185,8 +185,8 @@ export function LibraryPage({ standard }: LibraryPageProps) {
         }
         if (c > 0) { setPendingImport({ file, conflictCount: c }); return; }
       }
-    } catch { /* handled by importProfilesForStandard */ }
-    
+    } catch { /* handled by importProfilesForStandard */ }*/
+    /*
     const result = await importProfilesForStandard(file, standard);
     setImportResult(result);
     
@@ -196,6 +196,22 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     if (result.profilesImported > 0) {
       // setTimeout(() => { window.location.reload(); }, 500);
       // console.log("Résultat de l'import :", result);
+    }
+  }*/
+
+  const result = await importProfilesForStandard(file, standard);
+    setImportResult(result);
+    
+    // 🚨 ON FORCE UN BLOCAGE DU NAVIGATEUR ICI :
+    if (result.errors && result.errors.length > 0) {
+      alert("⚠️ ERREURS DETECTÉES COMPTE RENDU :\n\n" + JSON.stringify(result.errors.slice(0, 3), null, 2));
+    } else {
+      alert("Résultat de l'import : " + result.profilesImported + " profils importés.");
+    }
+    
+    if (result.profilesImported > 0) {
+      // setTimeout(() => { window.location.reload(); }, 500);
+      console.log("Résultat de l'import :", result);
     }
   }
 
