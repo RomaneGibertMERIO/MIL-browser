@@ -107,7 +107,7 @@ async function loadOneStandard(url: string, filename: string): Promise<StandardL
   let raw: unknown;
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(`./standards/${filename}`);
     if (!response.ok) {
       return {
         id: url,
