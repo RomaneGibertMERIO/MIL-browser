@@ -26,6 +26,7 @@ import type { ExportEnvelope } from "../domain/tree";
 import { upsertProfile, getAllProfiles } from "../db/repositories/profiles.repo";
 import { upsertStandard, getAllStandards } from "../db/repositories/standards.repo";
 import { migrateProfiles } from "./migrationEngine";
+import { StandardPluginSchema } from "../domain/standard";
 
 // ---------------------------------------------------------------------------
 // Application version constant
@@ -44,19 +45,25 @@ export async function exportDatabase(): Promise<void> {
     getAllStandards(),
   ]);
 
-  const envelope: ExportEnvelope = {
-    exportMeta: {
-      appVersion: APP_VERSION,
-      dbVersion: CURRENT_DB_VERSION,
-      exportedAt: new Date().toISOString(),
-      standards: standards.map((s) => ({
-        id: s.manifest.id,
-        schemaVersion: s.profileSchema.version,
-      })),
-    },
-    profiles,
-    customFieldExtensions: [],
-  };
+const envelope: ExportEnvelope = {
+  exportMeta: {
+    appVersion: APP_VERSION,
+    dbVersion: CURRENT_DB_VERSION,
+    exportedAt: new Date().toISOString(),
+    standards: StandardPlugin[];
+
+    standards: standards.map((s) => ({
+      id: s.manifest.id,
+      schemaVersion: s.profileSchema.version,
+    })),
+  },
+
+  standards,
+
+  profiles,
+
+  customFieldExtensions: [],
+};
 
   const json = JSON.stringify(envelope, null, 2);
   triggerDownload(json, "mil-browser-export.json");
@@ -97,51 +104,32 @@ export async function importDatabase(file: File): Promise<ImportResult> {
   }
 
   // 1️⃣ ─── IMPORT DES NORMES (STANDARDS) ───
-  if (envelope.exportMeta && Array.isArray(envelope.exportMeta.standards)) {
-    console.log(`📊 [Import Engine] Nombre de normes détectées : ${envelope.exportMeta.standards.length}`);
-    
-    for (const std of envelope.exportMeta.standards) {
-      try {
-            await upsertStandard({
-              manifest: {
-                id: std.id,
-                label: std.id.toUpperCase(),
-                description: `Imported standard ${std.id.toUpperCase()}`,
-                version: "1.0.0",
-                schemaVersion: std.schemaVersion ?? 1,
-                organization: "User",
-                isBuiltin: false
-              },
-              // Un seul tableau nodes avec ton nœud fictif
-              nodes: [
-                {
-                  id: `${std.id}-profiles-root`, // 👈 AJOUT DE L'ID UNIQUE ICI
-                  code: "", // Conserve le code vide si tes profils matchent avec ""
-                  label: "Profiles",
-                  type: "custom",
-                  children: []
-                }
-              ],
-              profileSchema: {
-                version: std.schemaVersion ?? 1,
-                fields: [],
-                datasetColumns: [
-                  { key: "time", label: "Time", unit: "", axis: "x", type: "string", required: true, color: null },
-                  { key: "temp_c", label: "Temperature", unit: "°C", axis: "none", type: "number", required: true, color: null },
-                  { key: "rh_percent", label: "Humidity", unit: "%", axis: "none", type: "number", required: true, color: null }
-                ]
-              },
-              // Une seule clé migrations
-              migrations: []
-            } as unknown as StandardPlugin);
-        
-        result.standardsImported++;
-      } catch (err: any) {
-        result.errors.push(`Failed to import standard ${std.id}: ${err.message}`);
-        console.error(`❌ [Import Engine] Erreur sur la norme ${std.id}:`, err);
-      }
+  if (Array.isArray(envelope.standards)) {
+    console.log(
+        `📊 [Import] ${envelope.standards.length} standards trouvés`
+    );
+    for (const item of envelope.standards) {
+        const parsed = StandardPluginSchema.safeParse(item);
+        if (!parsed.success) {
+            result.errors.push(
+                `Invalid standard ${
+                    item?.manifest?.id ?? "unknown"
+                }`
+            );
+            continue;
+        }
+        try {
+            await upsertStandard(parsed.data);
+            result.standardsImported++;
+        } catch (err) {
+            result.errors.push(
+                `Failed importing standard ${
+                    parsed.data.manifest.id
+                }`
+            );
+        }
     }
-  }
+}
 
   // 2️⃣ ─── IMPORT DES PROFILS ───
   const profilesArray = envelope.profiles ?? [];
