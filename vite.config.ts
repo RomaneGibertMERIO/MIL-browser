@@ -7,5 +7,9 @@ export default defineConfig({
     allowedHosts: true,
   },
   base: "./",
-  publicDir: "public"
+  publicDir: "public",
+  // 🛠️ Ajoute ce bloc ici :
+  build: {
+    sourcemap: true,
+  },
 });
