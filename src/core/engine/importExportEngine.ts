@@ -115,11 +115,13 @@ export async function importDatabase(file: File): Promise<ImportResult> {
               // Un seul tableau nodes avec ton nœud fictif
               nodes: [
                 {
-                  code: "", // Match avec le nodeId "" de tes profils !
+                  id: `${std.id}-profiles-root`, // 👈 AJOUT DE L'ID UNIQUE ICI
+                  code: "", // Conserve le code vide si tes profils matchent avec ""
                   label: "Profiles",
                   type: "custom",
                   children: []
                 }
+              ],
               ], 
               profileSchema: {
                 version: std.schemaVersion ?? 1,
