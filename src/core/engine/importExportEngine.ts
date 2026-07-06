@@ -102,36 +102,37 @@ export async function importDatabase(file: File): Promise<ImportResult> {
     
     for (const std of envelope.exportMeta.standards) {
       try {
-        await upsertStandard({
-          manifest: {
-            id: std.id,
-            label: std.id.toUpperCase(),
-            description: `Imported standard ${std.id.toUpperCase()}`,
-            version: "1.0.0",
-            schemaVersion: std.schemaVersion ?? 1,
-            organization: "User",
-            isBuiltin: false
-          },
-          // 📂 On crée un nœud racine fictif pour accueillir les profils
-          nodes: [
-            {
-              code: "", // Match avec le nodeId "" de tes profils !
-              label: "Profiles",
-              type: "custom",
-              children: []
-            }
-          ], 
-          profileSchema: {
-            version: std.schemaVersion ?? 1,
-            fields: [],
-            datasetColumns: [
-              { key: "time", label: "Time", unit: "", axis: "x", type: "string", required: true, color: null },
-              { key: "temp_c", label: "Temperature", unit: "°C", axis: "none", type: "number", required: true, color: null },
-              { key: "rh_percent", label: "Humidity", unit: "%", axis: "none", type: "number", required: true, color: null }
-            ]
-          },
-          migrations: []
-        } as unknown as StandardPlugin);
+            await upsertStandard({
+              manifest: {
+                id: std.id,
+                label: std.id.toUpperCase(),
+                description: `Imported standard ${std.id.toUpperCase()}`,
+                version: "1.0.0",
+                schemaVersion: std.schemaVersion ?? 1,
+                organization: "User",
+                isBuiltin: false
+              },
+              // Un seul tableau nodes avec ton nœud fictif
+              nodes: [
+                {
+                  code: "", // Match avec le nodeId "" de tes profils !
+                  label: "Profiles",
+                  type: "custom",
+                  children: []
+                }
+              ], 
+              profileSchema: {
+                version: std.schemaVersion ?? 1,
+                fields: [],
+                datasetColumns: [
+                  { key: "time", label: "Time", unit: "", axis: "x", type: "string", required: true, color: null },
+                  { key: "temp_c", label: "Temperature", unit: "°C", axis: "none", type: "number", required: true, color: null },
+                  { key: "rh_percent", label: "Humidity", unit: "%", axis: "none", type: "number", required: true, color: null }
+                ]
+              },
+              // Une seule clé migrations
+              migrations: []
+            } as unknown as StandardPlugin);
         
         result.standardsImported++;
       } catch (err: any) {
