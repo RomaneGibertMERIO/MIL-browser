@@ -50,7 +50,7 @@ const envelope: ExportEnvelope = {
     appVersion: APP_VERSION,
     dbVersion: CURRENT_DB_VERSION,
     exportedAt: new Date().toISOString(),
-    standards: StandardPlugin[];
+    
 
     standards: standards.map((s) => ({
       id: s.manifest.id,
