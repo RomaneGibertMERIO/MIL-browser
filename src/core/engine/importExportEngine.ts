@@ -178,6 +178,7 @@ export async function exportProfilesForStandard(
         { id: standardId, schemaVersion: standard.profileSchema.version },
       ],
     },
+    standards: [standard], // 👈 AJOUT ICI : Rempli l'obligation du type ExportEnvelope
     profiles,
     customFieldExtensions: [],
   };
