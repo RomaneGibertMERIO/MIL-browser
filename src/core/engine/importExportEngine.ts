@@ -122,7 +122,6 @@ export async function importDatabase(file: File): Promise<ImportResult> {
                   children: []
                 }
               ],
-              ], 
               profileSchema: {
                 version: std.schemaVersion ?? 1,
                 fields: [],
