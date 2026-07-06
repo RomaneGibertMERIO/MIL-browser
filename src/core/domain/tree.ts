@@ -48,9 +48,14 @@ export interface ExportEnvelopeMeta {
   standards: Array<{ id: string; schemaVersion: number }>;
 }
 
+import type { StandardPlugin } from "./standard";
+
 export interface ExportEnvelope {
   exportMeta: ExportEnvelopeMeta;
+
+  standards: StandardPlugin[];
+
   profiles: unknown[];
-  /** Custom field extensions added by the user on top of standard schemas. */
+
   customFieldExtensions: unknown[];
 }
