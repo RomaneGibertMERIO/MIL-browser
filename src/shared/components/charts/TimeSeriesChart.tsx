@@ -45,6 +45,8 @@ interface TimeSeriesChartProps {
   columns: ColumnDefinition[];
   /** Dataset rows — Record<column.key, value>. */
   data: DataPoint[];
+  /** Optional fields dictionary to detect log settings */
+  fields?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,12 +54,9 @@ interface TimeSeriesChartProps {
 // ---------------------------------------------------------------------------
 
 /**
- * Renders a schema-driven time-series chart.
- * Columns with axis === "x" are used as the X axis.
- * Columns with axis === "none" are excluded from the chart.
- * All other columns become Line series on the appropriate Y axis.
+ * Renders a schema-driven time-series chart with optional logarithmic scales.
  */
-export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
+export function TimeSeriesChart({ columns, data, fields }: TimeSeriesChartProps) {
   if (data.length === 0) {
     return (
       <p className="text-sm text-gray-400 text-center py-8">
@@ -65,6 +64,10 @@ export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
       </p>
     );
   }
+
+  // Détection dynamique des échelles logarithmiques via les fields du profil
+  const xIsLog = !!fields?.xIsLog;
+  const yIsLog = !!fields?.yIsLog;
 
   const xColumn = columns.find((c) => c.axis === "x");
   const xKey = xColumn?.key ?? "time";
@@ -76,37 +79,32 @@ export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
   const hasLeftAxis = seriesColumns.some((c) => c.axis === "left");
   const hasRightAxis = seriesColumns.some((c) => c.axis === "right");
 
-  // -------------------------------------------------------------------------
-  // ÉTAPE A : Préparation et conversion numérique des données pour Recharts
-  // -------------------------------------------------------------------------
+  // Préparation et nettoyage des données pour Recharts
   const chartData = data
     .map((row) => {
       const newRow: Record<string, unknown> = {};
       
-      // 1. Conversion impérative de l'axe X en nombre
       const xRaw = row[xKey];
       const xValue = xRaw !== undefined && xRaw !== null && xRaw !== "" ? Number(xRaw) : NaN;
       
-      if (isNaN(xValue)) return null; // Ligne invalide ignorée
+      if (isNaN(xValue)) return null;
+      if (xIsLog && xValue <= 0) return null; // Sécurité Log
       newRow[xKey] = xValue;
 
-      // 2. Conversion des autres axes (Y) en nombres (ou conservation du undefined si vide)
       seriesColumns.forEach((col) => {
         const yRaw = row[col.key];
         if (yRaw !== undefined && yRaw !== null && yRaw !== "") {
           const yValue = Number(yRaw);
           if (!isNaN(yValue)) {
+            if (yIsLog && yValue <= 0) return; // Sécurité Log
             newRow[col.key] = yValue;
           }
         }
-        // Si la case est vide, on ne l'ajoute pas à newRow.
-        // Recharts détectera l'absence de clé et appliquera le connectNulls.
       });
 
       return newRow;
     })
     .filter((row): row is Record<string, unknown> => row !== null)
-    // Tri indispensable par ordre croissant de X pour éviter les lignes de graphique qui s'emmêlent
     .sort((a, b) => (a[xKey] as number) - (b[xKey] as number));
 
   return (
@@ -118,17 +116,16 @@ export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
         <CartesianGrid
           strokeDasharray="3 3"
           stroke="#f3f4f6"
-          vertical={false}
+          vertical={xIsLog}
         />
 
-        {/* ----------------------------------------------------------------- */}
-        {/* ÉTAPE B : Configuration de l'axe X en mode Numérique             */}
-        {/* ----------------------------------------------------------------- */}
         <XAxis
           dataKey={xKey}
           type="number"
-          domain={["dataMin", "dataMax"]}
+          scale={xIsLog ? "log" : "linear"}
+          domain={xIsLog ? ["auto", "auto"] : ["dataMin", "dataMax"]}
           tick={{ fontSize: 11, fill: "#6b7280" }}
+          tickFormatter={(v) => (xIsLog ? Number(v).toFixed(0) : v)}
           tickLine={{ stroke: "#e5e7eb" }}
           axisLine={{ stroke: "#e5e7eb" }}
           label={{
@@ -143,6 +140,8 @@ export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
           <YAxis
             yAxisId="left"
             orientation="left"
+            scale={yIsLog ? "log" : "linear"}
+            domain={yIsLog ? ["auto", "auto"] : ["auto", "auto"]}
             tick={{ fontSize: 11, fill: "#6b7280" }}
             tickLine={{ stroke: "#e5e7eb" }}
             axisLine={{ stroke: "#e5e7eb" }}
@@ -160,6 +159,8 @@ export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
           <YAxis
             yAxisId="right"
             orientation="right"
+            scale={yIsLog ? "log" : "linear"}
+            domain={yIsLog ? ["auto", "auto"] : ["auto", "auto"]}
             tick={{ fontSize: 11, fill: "#6b7280" }}
             tickLine={{ stroke: "#e5e7eb" }}
             axisLine={{ stroke: "#e5e7eb" }}
@@ -190,9 +191,9 @@ export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
           <Line
             key={col.key}
             yAxisId={col.axis as "left" | "right"}
-            type="linear" // "linear" est plus rigoureux pour les pentes brutes MIL-STD que "monotone"
+            type="linear"
             dataKey={col.key}
-            connectNulls={true} // <-- RACCORDE NATIVEMENT LES TROUX DANS LA GRILLE
+            connectNulls={true}
             stroke={col.color ?? AUTO_COLORS[idx % AUTO_COLORS.length] ?? "#6b7280"}
             strokeWidth={2}
             dot={{ r: 2.5, strokeWidth: 0 }}
@@ -204,10 +205,6 @@ export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
     </ResponsiveContainer>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function buildAxisLabel(
   columns: ColumnDefinition[],
