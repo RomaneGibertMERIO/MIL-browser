@@ -67,6 +67,8 @@ export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
   }
 
   const xColumn = columns.find((c) => c.axis === "x");
+  const xKey = xColumn?.key ?? "time";
+
   const seriesColumns = columns.filter(
     (c) => c.axis === "left" || c.axis === "right",
   );
@@ -74,10 +76,43 @@ export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
   const hasLeftAxis = seriesColumns.some((c) => c.axis === "left");
   const hasRightAxis = seriesColumns.some((c) => c.axis === "right");
 
+  // -------------------------------------------------------------------------
+  // ÉTAPE A : Préparation et conversion numérique des données pour Recharts
+  // -------------------------------------------------------------------------
+  const chartData = data
+    .map((row) => {
+      const newRow: Record<string, unknown> = {};
+      
+      // 1. Conversion impérative de l'axe X en nombre
+      const xRaw = row[xKey];
+      const xValue = xRaw !== undefined && xRaw !== null && xRaw !== "" ? Number(xRaw) : NaN;
+      
+      if (isNaN(xValue)) return null; // Ligne invalide ignorée
+      newRow[xKey] = xValue;
+
+      // 2. Conversion des autres axes (Y) en nombres (ou conservation du undefined si vide)
+      seriesColumns.forEach((col) => {
+        const yRaw = row[col.key];
+        if (yRaw !== undefined && yRaw !== null && yRaw !== "") {
+          const yValue = Number(yRaw);
+          if (!isNaN(yValue)) {
+            newRow[col.key] = yValue;
+          }
+        }
+        // Si la case est vide, on ne l'ajoute pas à newRow.
+        // Recharts détectera l'absence de clé et appliquera le connectNulls.
+      });
+
+      return newRow;
+    })
+    .filter((row): row is Record<string, unknown> => row !== null)
+    // Tri indispensable par ordre croissant de X pour éviter les lignes de graphique qui s'emmêlent
+    .sort((a, b) => (a[xKey] as number) - (b[xKey] as number));
+
   return (
     <ResponsiveContainer width="100%" height={320}>
       <ComposedChart
-        data={data as unknown as Record<string, unknown>[]}
+        data={chartData}
         margin={{ top: 8, right: hasRightAxis ? 64 : 24, left: 24, bottom: 36 }}
       >
         <CartesianGrid
@@ -86,8 +121,13 @@ export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
           vertical={false}
         />
 
+        {/* ----------------------------------------------------------------- */}
+        {/* ÉTAPE B : Configuration de l'axe X en mode Numérique             */}
+        {/* ----------------------------------------------------------------- */}
         <XAxis
-          dataKey={xColumn?.key ?? "time"}
+          dataKey={xKey}
+          type="number"
+          domain={["dataMin", "dataMax"]}
           tick={{ fontSize: 11, fill: "#6b7280" }}
           tickLine={{ stroke: "#e5e7eb" }}
           axisLine={{ stroke: "#e5e7eb" }}
@@ -150,8 +190,9 @@ export function TimeSeriesChart({ columns, data }: TimeSeriesChartProps) {
           <Line
             key={col.key}
             yAxisId={col.axis as "left" | "right"}
-            type="monotone"
+            type="linear" // "linear" est plus rigoureux pour les pentes brutes MIL-STD que "monotone"
             dataKey={col.key}
+            connectNulls={true} // <-- RACCORDE NATIVEMENT LES TROUX DANS LA GRILLE
             stroke={col.color ?? AUTO_COLORS[idx % AUTO_COLORS.length] ?? "#6b7280"}
             strokeWidth={2}
             dot={{ r: 2.5, strokeWidth: 0 }}
