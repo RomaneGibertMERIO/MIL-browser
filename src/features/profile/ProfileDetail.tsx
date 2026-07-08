@@ -117,10 +117,11 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: P
       {/* ── Chart ───────────────────────────────────────────────────── */}
       {dataView !== "table" && (
       <Card title="Chart">
-        <TimeSeriesChart
-          columns={schema.datasetColumns}
-          data={profile.dataset}
-        />
+      <TimeSeriesChart
+        columns={schema.datasetColumns}
+        data={profile.dataset}
+        fields={profile.fields} // <-- ON COUPLERA LES OPTIONS LOG ICI
+      />
       </Card>
       )}
 
