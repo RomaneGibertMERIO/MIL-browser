@@ -152,6 +152,33 @@ export function ProfileForm({
 
       {/* ── Dataset ─────────────────────────────────────────────────── */}
       <Card title="Dataset">
+        {/* Options d'affichage des axes Logarithmiques */}
+        <div className="flex items-center gap-6 p-3 bg-gray-50 border border-gray-200 rounded-lg mb-4">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Chart Scale:
+          </span>
+          
+          <label className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={!!draft.fields["xIsLog"]}
+              onChange={(e) => handleFieldChange("xIsLog", e.target.checked)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+            Logarithmic X-Axis (Frequency)
+          </label>
+      
+          <label className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={!!draft.fields["yIsLog"]}
+              onChange={(e) => handleFieldChange("yIsLog", e.target.checked)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+            Logarithmic Y-Axis (Amplitude)
+          </label>
+        </div>
+      
         <DatasetEditor
           columns={effectiveSchema.datasetColumns}
           rows={draft.datasetRows}
