@@ -425,7 +425,11 @@ function PreviewPanel({ profile, schema, tab }: {
         {profile.dataset.length === 0 ? (
           <p className="text-xs text-gray-400 text-center py-8">Dataset is empty — add rows to see the chart.</p>
         ) : (
-          <TimeSeriesChart columns={schema.datasetColumns} data={profile.dataset} />
+          <TimeSeriesChart 
+              columns={schema.datasetColumns} 
+              data={profile.dataset} 
+              fields={profile.fields} // <-- TRANSFÈRE LES OPTIONS LOG À L'APERÇU EN DIRECT
+            />
         )}
       </div>
     );
