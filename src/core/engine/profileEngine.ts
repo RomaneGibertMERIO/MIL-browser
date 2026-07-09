@@ -160,6 +160,8 @@ export function buildProfileFromDraft(
     name: draft.name.trim(),
     description: draft.description.trim(),
     source: "user",
+    status: "local",      
+    author: "User",
     createdAt: existingCreatedAt ?? now,
     updatedAt: now,
     fields: { ...draft.fields },
