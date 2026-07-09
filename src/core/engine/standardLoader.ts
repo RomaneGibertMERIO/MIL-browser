@@ -168,7 +168,6 @@ async function migrateExistingProfiles(
 // ---------------------------------------------------------------------------
 // Seed profiles
 // ---------------------------------------------------------------------------
-
 async function seedBuiltinProfiles(url: string): Promise<void> {
   let raw: unknown;
 
@@ -183,11 +182,23 @@ async function seedBuiltinProfiles(url: string): Promise<void> {
   if (!Array.isArray(raw)) return;
 
   for (const item of raw) {
-    const parsed = ProfileSchema.safeParse(item);
-    if (!parsed.success) continue;
+    // 1. On force les attributs par défaut de l'injecteur "builtin" officiel
+    const patchedItem = {
+      ...item,
+      source: "builtin",
+      status: item.status ?? "approved", // Approuvé par défaut car c'est ta saisie admin
+      author: item.author ?? "Admin",
+    };
+
+    const parsed = ProfileSchema.safeParse(patchedItem);
+    if (!parsed.success) {
+      console.error(`Validation error seeding profile from ${url}:`, parsed.error);
+      continue;
+    }
 
     const existing = await getProfileById(parsed.data.id);
 
+    // Si le profil n'existe pas encore localement, on l'insère
     if (existing === undefined) {
       await upsertProfile(parsed.data);
     }
