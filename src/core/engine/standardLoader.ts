@@ -109,9 +109,9 @@ async function seedStandards(standardsRaw: unknown[]): Promise<StandardLoadResul
 
 async function seedBuiltinProfiles(profilesRaw: unknown[]): Promise<void> {
   for (const item of profilesRaw) {
-    // On injecte les métadonnées "builtin" indispensables
+    // On force le cast en (item as any) pour permettre le spread d'un objet inconnu
     const patchedItem = {
-      ...item,
+      ...(item as any),
       source: "builtin",
       status: (item as any).status ?? "approved",
       author: (item as any).author ?? "Admin",
