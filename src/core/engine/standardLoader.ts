@@ -13,12 +13,11 @@ import { migrateProfiles } from "./migrationEngine";
 import type { StandardPlugin } from "../domain/standard";
 
 // ---------------------------------------------------------------------------
-// Runtime environment detection
+// Importation directe et statique de la base de données
 // ---------------------------------------------------------------------------
-
-const isElectron =
-  typeof navigator !== "undefined" &&
-  navigator.userAgent.toLowerCase().includes("electron");
+// Vite va lire le fichier lors de la compilation et injecter l'objet en mémoire.
+// Le chemin recule de 3 niveaux depuis src/core/engine/ pour atteindre public/
+import globalDatabase from "../../../public/database.json";
 
 export interface StandardLoadResult {
   id: string;
@@ -34,41 +33,14 @@ export interface StandardLoadResult {
  * Loads everything from the unique global database.json asset.
  */
 export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
-  let globalData: any = null;
+  // Bye bye fetch ! On utilise directement la variable importée
+  const globalData = globalDatabase as any;
 
-  if (isElectron) {
-    try {
-      // 1. On essaie de demander à Electron via l'IpcRenderer ou l'API safe si elle existe
-      // Mais le plus simple avec Vite + Electron packagé est d'utiliser le require('fs') / require('path') 
-      // si l'intégration Node est activée, OU de passer par l'URL relative classique du build.
-      
-      // Tentative A : fetch classique sur le chemin absolu du fichier par rapport à l'index.html
-      // Si l'index.html est dans dist/, et database.json est aussi dans dist/ (comportement par défaut de Vite)
-      const response = await fetch("./database.json");
-      if (response.ok) {
-        globalData = await response.json();
-      } else {
-        // Tentative B : Si Vite a mis database.json à la racine de l'Asar (hors de dist)
-        const responseAsar = await fetch("../database.json");
-        if (responseAsar.ok) {
-          globalData = await responseAsar.json();
-        }
-      }
-    } catch (e) {
-      console.error("Electron fetch failed, attempting backup...", e);
-    }
-  } else {
-    // Mode Web standard
-    const response = await fetch("/database.json");
-    if (response.ok) globalData = await response.json();
-  }
-
-  // Si on n'a toujours rien trouvé, on renvoie une erreur explicite
   if (!globalData) {
     return [{ 
       id: "global-seed", 
       status: "error", 
-      message: `database.json introuvable. Vérifie qu'il est bien copié dans le dossier de build (dist/) ou à la racine de l'app.` 
+      message: `database.json vide ou introuvable au moment de la compilation.` 
     }];
   }
 
