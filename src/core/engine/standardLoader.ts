@@ -34,13 +34,34 @@ export interface StandardLoadResult {
  * Loads everything from the unique global database.json asset.
  */
 export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
-  // Le fichier est maintenant directement à la racine de /public
-  const basePath = isElectron ? "./" : "/";
-  const url = `${basePath}database.json`;
+  let url = "";
+
+  if (isElectron) {
+    // En Electron packagé, le dossier 'public' se retrouve souvent un niveau au-dessus de 'dist'
+    // ou accessible via le chemin relatif de l'application. 
+    // Si 'database.json' a été mis à la racine de public, il est à côté de 'dist' (donc '../database.json')
+    // Si ton build Vite met tout dans 'dist', alors './database.json' fonctionne.
+    // Pour être ultra-robuste avec le protocole file://, on teste le chemin relatif correct :
+    url = window.location.pathname.includes('/dist/') 
+      ? "../database.json" 
+      : "./database.json";
+  } else {
+    url = "/database.json";
+  }
 
   try {
     const response = await fetch(url);
     if (!response.ok) {
+      // Sécurité : si le premier chemin échoue en Electron, on tente le chemin alternatif direct au cas où
+      if (isElectron && url === "../database.json") {
+        const fallbackResponse = await fetch("./database.json");
+        if (fallbackResponse.ok) {
+          const globalData = await fallbackResponse.json();
+          const standardResults = await seedStandards(globalData.standards ?? []);
+          await seedBuiltinProfiles(globalData.profiles ?? []);
+          return standardResults;
+        }
+      }
       return [{ id: "global-seed", status: "error", message: `HTTP ${response.status} fetching ${url}` }];
     }
 
