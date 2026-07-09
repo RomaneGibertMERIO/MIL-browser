@@ -1,42 +1,24 @@
 /**
  * Standard plugin loader.
  *
- * Responsible for seeding builtin standard plugins into IndexedDB on
- * application startup. It is called once from the application bootstrap
- * sequence before any UI is rendered.
+ * Single-file database seeder. Processes the global `database.json` asset
+ * on startup, seeding both standards/taxonomies and built-in profiles.
  */
 
 import { StandardPluginSchema } from "../domain/standard";
 import { ProfileSchema } from "../domain/profile";
-import type { StandardPlugin } from "../domain/standard";
 import { getStandardById, upsertStandard } from "../db/repositories/standards.repo";
 import { getProfilesByStandard, getProfileById, upsertProfile } from "../db/repositories/profiles.repo";
 import { migrateProfiles } from "./migrationEngine";
+import type { StandardPlugin } from "../domain/standard";
 
 // ---------------------------------------------------------------------------
-// Runtime environment detection
+// Importation directe du fichier JSON
 // ---------------------------------------------------------------------------
-
-const isElectron =
-  typeof navigator !== "undefined" &&
-  navigator.userAgent.toLowerCase().includes("electron");
-
-// ---------------------------------------------------------------------------
-// Builtin standard file list
-// ---------------------------------------------------------------------------
-
-const BUILTIN_STANDARD_FILES: string[] = [
-  "mil-std-810h.json",
-  "stanag-4370-aectp-230.json",
-];
-
-const BUILTIN_PROFILE_FILES: Partial<Record<string, string>> = {
-  "mil-std-810h.json": "mil-std-810h-profiles.json",
-};
-
-// ---------------------------------------------------------------------------
-// LoadResult
-// ---------------------------------------------------------------------------
+// On importe directement le fichier. Si ton fichier est dans le dossier 'public',
+// tu peux utiliser un chemin relatif (ex: "../../../public/database.json").
+// Adapte le chemin relatif ci-dessous selon la position réelle de ton fichier :
+import globalDatabase from "../../../public/database.json";
 
 export interface StandardLoadResult {
   id: string;
@@ -45,20 +27,36 @@ export interface StandardLoadResult {
 }
 
 // ---------------------------------------------------------------------------
-// loadBuiltinStandards
+// Main Entry Point
 // ---------------------------------------------------------------------------
 
+/**
+ * Loads everything from the unique global database.json asset.
+ */
 export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
-  const results: StandardLoadResult[] = [];
+  // Plus besoin de fetch ! On utilise directement l'objet importé statiquement.
+  const globalData = globalDatabase as any;
 
-  for (const filename of BUILTIN_STANDARD_FILES) {
-    const result = await loadOneStandard(filename);
-    results.push(result);
+  if (!globalData) {
+    return [{ 
+      id: "global-seed", 
+      status: "error", 
+      message: `database.json introuvable au moment de la compilation.` 
+    }];
   }
 
-  return results;
-}
+  try {
+    // 1. Traiter les Standards / Taxonomies
+    const standardResults = await seedStandards(globalData.standards ?? []);
 
+    // 2. Traiter les Profils globaux
+    await seedBuiltinProfiles(globalData.profiles ?? []);
+
+    return standardResults;
+  } catch (err) {
+    return [{ id: "global-seed", status: "error", message: `Failed to execute global seed: ${String(err)}` }];
+  }
+}
 // ---------------------------------------------------------------------------
 // loadStandardFromFile
 // ---------------------------------------------------------------------------
