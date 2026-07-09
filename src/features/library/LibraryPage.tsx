@@ -382,7 +382,7 @@ async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
 }
 
 // ---------------------------------------------------------------------------
-// LibraryListItem — compact clickable profile row
+// LibraryListItem — compact clickable profile row with status badges
 // ---------------------------------------------------------------------------
 
 function LibraryListItem({ profile, isSelected, onClick }: {
@@ -390,6 +390,30 @@ function LibraryListItem({ profile, isSelected, onClick }: {
   isSelected: boolean;
   onClick: () => void;
 }) {
+  // On récupère le statut ou on met "local" par défaut pour les anciens profils
+  const status = profile.status ?? "local";
+
+  // Configuration visuelle selon le statut
+  const statusConfig = {
+    local: {
+      dotColor: "bg-blue-500",
+      textColor: "text-blue-600",
+      label: "Local",
+    },
+    pending: {
+      dotColor: "bg-amber-500",
+      textColor: "text-amber-600",
+      label: "Pending",
+    },
+    approved: {
+      dotColor: "bg-green-500",
+      textColor: "text-green-600",
+      label: "Official",
+    },
+  };
+
+  const currentStatus = statusConfig[status] ?? statusConfig.local;
+
   return (
     <button
       onClick={onClick}
@@ -399,13 +423,28 @@ function LibraryListItem({ profile, isSelected, onClick }: {
           : "hover:bg-gray-50"
       }`}
     >
-      <p className={`text-sm font-semibold truncate ${isSelected ? "text-blue-700" : "text-gray-900"}`}>
-        {profile.name}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className={`text-sm font-semibold truncate ${isSelected ? "text-blue-700" : "text-gray-900"}`}>
+          {profile.name}
+        </p>
+        
+        {/* Pastille de Statut */}
+        <span className={`flex items-center gap-1.5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-gray-50 border border-gray-100 ${currentStatus.textColor}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${currentStatus.dotColor}`} />
+          {currentStatus.label}
+        </span>
+      </div>
+
       {profile.description !== "" && (
         <p className="text-xs text-gray-400 truncate mt-0.5">{profile.description}</p>
       )}
-      <p className="text-xs text-gray-300 mt-0.5">{profile.dataset.length} data points</p>
+
+      <div className="flex items-center justify-between mt-1 text-[11px] text-gray-400">
+        <span>{profile.dataset.length} data points</span>
+        {profile.author && profile.author !== "unknown" && (
+          <span className="italic">by {profile.author}</span>
+        )}
+      </div>
     </button>
   );
 }
@@ -570,10 +609,6 @@ function ImportOverwriteDialog({ conflictCount, onConfirm, onCancel }: ImportOve
   );
 }
 
-// ---------------------------------------------------------------------------
-// profileToDraft — converts a stored Profile back into a draft for editing
-// ---------------------------------------------------------------------------
-
 function profileToDraft(
   profile: Profile,
   columns: StandardPlugin["profileSchema"]["datasetColumns"],
@@ -591,6 +626,7 @@ function profileToDraft(
     description: profile.description,
     nodeId: profile.nodeId,
     standardId: profile.standardId,
+    author: profile.author ?? "unknown", // <-- Ajoute cette ligne ici !
     fields: { ...profile.fields },
     datasetRows,
   };
