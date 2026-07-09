@@ -66,8 +66,8 @@ export function LibraryPage({ standard }: LibraryPageProps) {
 
   // Data
   // Appel du hook de récupération des profils associés à cette norme
-  const { data: rawProfiles } = useProfilesByStandard(standard.manifest.id);
-
+  const rawProfiles = useProfilesByStandard(standard.manifest.id);
+  
   // Contient tous les profils (builtin + user) renvoyés par la bdd
   const availableProfiles = useMemo(
     () => rawProfiles ?? [],
