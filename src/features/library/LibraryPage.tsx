@@ -65,22 +65,23 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   const importInputRef = useRef<HTMLInputElement>(null);
 
   // Data
-  const allProfiles = useProfilesByStandard(standard.manifest.id);
-  const userProfiles = useMemo(
-    () => (allProfiles ?? []).filter(p => p.source === "user"),
+  // On renomme la variable pour refléter qu'elle contient tous les profils disponibles
+  const availableProfiles = useMemo(
+    () => allProfiles ?? [],
     [allProfiles]
   );
+  
   const filteredProfiles = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (q === "") return userProfiles;
-    return userProfiles.filter(p =>
+    if (q === "") return availableProfiles;
+    return availableProfiles.filter(p =>
       p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
     );
-  }, [userProfiles, search]);
-
+  }, [availableProfiles, search]);
+  
   const selectedProfile = useMemo(
-    () => selectedProfileId !== null ? (userProfiles.find(p => p.id === selectedProfileId) ?? null) : null,
-    [userProfiles, selectedProfileId]
+    () => selectedProfileId !== null ? (availableProfiles.find(p => p.id === selectedProfileId) ?? null) : null,
+    [availableProfiles, selectedProfileId]
   );
 
   // Live preview computation
@@ -129,19 +130,37 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     resetEditorState();
   }
 
-  async function handleSave(draft: ProfileDraft) {
-    const schema = getEffectiveSchema(standard, draft.nodeId);
-    const profile = buildProfileFromDraft(draft, schema, selectedProfile?.id, selectedProfile?.createdAt);
-    const result = validateProfile(profile, schema);
-    if (!result.valid) { setValidationErrors(result.errors); return; }
-    setValidationErrors([]);
-    setSaveStatus("saving");
-    await upsertProfile(profile);
-    setSelectedProfileId(profile.id);
-    setIsCreating(false);
-    setSaveStatus("saved");
-    setTimeout(() => setSaveStatus("idle"), 2000);
+async function handleSave(draft: ProfileDraft) {
+  const schema = getEffectiveSchema(standard, draft.nodeId);
+  
+  // Déterminer si on édite un profil builtin existant
+  const isEditingBuiltin = selectedProfile?.source === "builtin";
+  
+  // Si c'est un builtin qu'on a modifié, on force un nouvel ID (Copie), sinon on garde l'id existant
+  const targetId = isEditingBuiltin ? crypto.randomUUID() : selectedProfile?.id;
+  const targetCreatedAt = isEditingBuiltin ? new Date().toISOString() : selectedProfile?.createdAt;
+
+  const profile = buildProfileFromDraft(draft, schema, targetId, targetCreatedAt);
+  
+  // On s'assure que l'enregistrement devient un profil utilisateur local modifiable
+  if (isEditingBuiltin) {
+    profile.source = "user";
+    profile.status = "local"; // Repasse en local/brouillon pour validation
   }
+
+  const result = validateProfile(profile, schema);
+  if (!result.valid) { setValidationErrors(result.errors); return; }
+  
+  setValidationErrors([]);
+  setSaveStatus("saving");
+  
+  await upsertProfile(profile);
+  
+  setSelectedProfileId(profile.id);
+  setIsCreating(false);
+  setSaveStatus("saved");
+  setTimeout(() => setSaveStatus("idle"), 2000);
+}
 
   async function handleDuplicate(profile: Profile) {
     const copy: Profile = {
@@ -236,8 +255,8 @@ async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
             >Dup.</button>
             <button
               onClick={() => selectedProfile !== null && setDeletingId(selectedProfile.id)}
-              disabled={selectedProfile === null}
-              title="Delete selected"
+              disabled={selectedProfile === null || selectedProfile.source === "builtin"} // <-- Ajoute la condition ici
+              title={selectedProfile?.source === "builtin" ? "Builtin profiles cannot be deleted" : "Delete selected"}
               className="px-1 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded hover:bg-red-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >Del.</button>
           </div>
