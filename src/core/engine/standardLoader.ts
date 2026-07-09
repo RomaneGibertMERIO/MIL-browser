@@ -85,20 +85,6 @@ export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
   }
 }
 
-    const globalData = await response.json();
-
-    // 1. Traiter les Standards / Taxonomies
-    const standardResults = await seedStandards(globalData.standards ?? []);
-
-    // 2. Traiter les Profils globaux
-    await seedBuiltinProfiles(globalData.profiles ?? []);
-
-    return standardResults;
-  } catch (err) {
-    return [{ id: "global-seed", status: "error", message: `Failed to execute global seed: ${String(err)}` }];
-  }
-}
-
 /**
  * Manual file upload fallback (e.g., admin interface import).
  */
