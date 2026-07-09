@@ -1,10 +1,3 @@
-/**
- * Standard plugin loader.
- *
- * Single-file database seeder. Processes the global `database.json` asset
- * on startup, seeding both standards/taxonomies and built-in profiles.
- */
-
 import { StandardPluginSchema } from "../domain/standard";
 import { ProfileSchema } from "../domain/profile";
 import { getStandardById, upsertStandard } from "../db/repositories/standards.repo";
@@ -13,11 +6,9 @@ import { migrateProfiles } from "./migrationEngine";
 import type { StandardPlugin } from "../domain/standard";
 
 // ---------------------------------------------------------------------------
-// Importation directe et statique de la base de données
+// IMPORTATION RECTIFIÉE (On vire la string, on fait un vrai import)
 // ---------------------------------------------------------------------------
-// Vite va lire le fichier lors de la compilation et injecter l'objet en mémoire.
-// Le chemin recule de 3 niveaux depuis src/core/engine/ pour atteindre public/
-const globalDatabase = "./database.json";
+import globalDatabase from "../../../public/database.json";
 
 export interface StandardLoadResult {
   id: string;
@@ -33,8 +24,12 @@ export interface StandardLoadResult {
  * Loads everything from the unique global database.json asset.
  */
 export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
-  // Bye bye fetch ! On utilise directement la variable importée
   const globalData = globalDatabase as any;
+
+  // LE CODE DE DEBUG EST JUSTE ICI (Avant de lancer le seeding)
+  const debugProfilesCount = globalData?.profiles?.length ?? "INDÉFINI (Clé absente)";
+  const debugStandardsCount = globalData?.standards?.length ?? "INDÉFINI";
+  throw new Error(`[DEBUG BDD] Standards: ${debugStandardsCount} | Profils: ${debugProfilesCount}`);
 
   if (!globalData) {
     return [{ 
@@ -56,16 +51,6 @@ export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
     return [{ id: "global-seed", status: "error", message: `Failed to execute global seed: ${String(err)}` }];
   }
 }
-
-/**
- * Manual file upload fallback (e.g., admin interface import).
- */
-export async function loadStandardFromFile(file: File): Promise<StandardPlugin> {
-  const text = await file.text();
-  const raw: unknown = JSON.parse(text);
-  return StandardPluginSchema.parse(raw);
-}
-
 // ---------------------------------------------------------------------------
 // Internal Seeders
 // ---------------------------------------------------------------------------
