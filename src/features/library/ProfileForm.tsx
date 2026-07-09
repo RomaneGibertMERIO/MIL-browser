@@ -343,6 +343,7 @@ function buildEmptyDraft(standard: StandardPlugin): ProfileDraft {
     description: "",
     nodeId: "",
     standardId: standard.manifest.id,
+    author: "unknown",
     fields,
     datasetRows: [],
   };
