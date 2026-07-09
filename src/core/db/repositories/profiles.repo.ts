@@ -92,11 +92,18 @@ export async function getProfileById(id: string): Promise<Profile | undefined> {
 
 /**
  * Inserts or replaces a profile in the database and logs a sync event.
- * The caller is responsible for setting updatedAt to the current timestamp
- * before calling this function.
+ * Guards against overwriting a stable builtin seed profile.
  */
 export async function upsertProfile(profile: Profile): Promise<void> {
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
+    const existing = await db.profiles.get(profile.id);
+    
+    // SÉCURITÉ CRITIQUE : Si le profil existant en base est un "builtin",
+    // on refuse de l'écraser directement (l'UI doit passer par une copie "user").
+    if (existing && existing.source === "builtin" && profile.source === "builtin") {
+      throw new Error(`Cannot overwrite deployment asset profile: ${profile.id}`);
+    }
+
     await db.profiles.put(profile);
     await logProfileEvent("upsert", profile);
   });
