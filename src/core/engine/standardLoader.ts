@@ -17,7 +17,7 @@ import type { StandardPlugin } from "../domain/standard";
 // ---------------------------------------------------------------------------
 // Vite va lire le fichier lors de la compilation et injecter l'objet en mémoire.
 // Le chemin recule de 3 niveaux depuis src/core/engine/ pour atteindre public/
-const globalDatabase = require("../../../public/database.json");
+const globalDatabase = "../../../public/database.json";
 
 export interface StandardLoadResult {
   id: string;
