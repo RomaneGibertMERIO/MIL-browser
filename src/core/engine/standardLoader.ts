@@ -34,36 +34,56 @@ export interface StandardLoadResult {
  * Loads everything from the unique global database.json asset.
  */
 export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
-  let url = "";
+  let globalData: any = null;
 
   if (isElectron) {
-    // En Electron packagé, le dossier 'public' se retrouve souvent un niveau au-dessus de 'dist'
-    // ou accessible via le chemin relatif de l'application. 
-    // Si 'database.json' a été mis à la racine de public, il est à côté de 'dist' (donc '../database.json')
-    // Si ton build Vite met tout dans 'dist', alors './database.json' fonctionne.
-    // Pour être ultra-robuste avec le protocole file://, on teste le chemin relatif correct :
-    url = window.location.pathname.includes('/dist/') 
-      ? "../database.json" 
-      : "./database.json";
+    try {
+      // 1. On essaie de demander à Electron via l'IpcRenderer ou l'API safe si elle existe
+      // Mais le plus simple avec Vite + Electron packagé est d'utiliser le require('fs') / require('path') 
+      // si l'intégration Node est activée, OU de passer par l'URL relative classique du build.
+      
+      // Tentative A : fetch classique sur le chemin absolu du fichier par rapport à l'index.html
+      // Si l'index.html est dans dist/, et database.json est aussi dans dist/ (comportement par défaut de Vite)
+      const response = await fetch("./database.json");
+      if (response.ok) {
+        globalData = await response.json();
+      } else {
+        // Tentative B : Si Vite a mis database.json à la racine de l'Asar (hors de dist)
+        const responseAsar = await fetch("../database.json");
+        if (responseAsar.ok) {
+          globalData = await responseAsar.json();
+        }
+      }
+    } catch (e) {
+      console.error("Electron fetch failed, attempting backup...", e);
+    }
   } else {
-    url = "/database.json";
+    // Mode Web standard
+    const response = await fetch("/database.json");
+    if (response.ok) globalData = await response.json();
+  }
+
+  // Si on n'a toujours rien trouvé, on renvoie une erreur explicite
+  if (!globalData) {
+    return [{ 
+      id: "global-seed", 
+      status: "error", 
+      message: `database.json introuvable. Vérifie qu'il est bien copié dans le dossier de build (dist/) ou à la racine de l'app.` 
+    }];
   }
 
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      // Sécurité : si le premier chemin échoue en Electron, on tente le chemin alternatif direct au cas où
-      if (isElectron && url === "../database.json") {
-        const fallbackResponse = await fetch("./database.json");
-        if (fallbackResponse.ok) {
-          const globalData = await fallbackResponse.json();
-          const standardResults = await seedStandards(globalData.standards ?? []);
-          await seedBuiltinProfiles(globalData.profiles ?? []);
-          return standardResults;
-        }
-      }
-      return [{ id: "global-seed", status: "error", message: `HTTP ${response.status} fetching ${url}` }];
-    }
+    // 1. Traiter les Standards / Taxonomies
+    const standardResults = await seedStandards(globalData.standards ?? []);
+
+    // 2. Traiter les Profils globaux
+    await seedBuiltinProfiles(globalData.profiles ?? []);
+
+    return standardResults;
+  } catch (err) {
+    return [{ id: "global-seed", status: "error", message: `Failed to execute global seed: ${String(err)}` }];
+  }
+}
 
     const globalData = await response.json();
 
