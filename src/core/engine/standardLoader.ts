@@ -8,7 +8,7 @@ import type { StandardPlugin } from "../domain/standard";
 // ---------------------------------------------------------------------------
 // IMPORTATION RECTIFIÉE (On vire la string, on fait un vrai import)
 // ---------------------------------------------------------------------------
-import globalDatabase from "../../../public/database.json";
+import globalDatabase from "./database.json";
 
 export interface StandardLoadResult {
   id: string;
