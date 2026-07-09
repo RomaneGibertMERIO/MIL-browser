@@ -40,40 +40,32 @@ export const DataPointSchema = z.record(z.union([z.string(), z.number()]));
 export type DataPoint = z.infer<typeof DataPointSchema>;
 
 // ---------------------------------------------------------------------------
+// Profile status (Pour la synchronisation collective)
+// ---------------------------------------------------------------------------
+
+export const ProfileStatusSchema = z.enum(["local", "pending", "approved"]);
+export type ProfileStatus = z.infer<typeof ProfileStatusSchema>;
+
+// ---------------------------------------------------------------------------
 // Profile
 // ---------------------------------------------------------------------------
 
-/**
- * A complete test profile record.
- * nodeId and standardId form the stable taxonomy reference — neither is a
- * display label, so renaming nodes never orphans profiles.
- */
 export const ProfileSchema = z.object({
-  /** Client-generated UUID. Never changes after creation. */
   id: z.string().min(1),
-  /** References StandardNode.id. Stable across renames. */
   nodeId: z.string(),
-  /** References StandardManifest.id. Redundant but required for efficient queries. */
   standardId: z.string().min(1),
-  /**
-   * The ProfileSchema.version at the time this profile was created or last
-   * migrated. Used by the migration engine to detect stale records.
-   */
   schemaVersion: z.number().int().positive(),
   name: z.string().min(1),
   description: z.string(),
   source: ProfileSourceSchema,
+  
+  // Nouveaux champs pour le suivi réseau
+  status: ProfileStatusSchema.default("local"),
+  author: z.string().default("unknown"),
+  
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
-  /**
-   * Metadata fields whose shape is defined by the owning standard's ProfileSchema.
-   * Validated by profileEngine.validateProfile before any write.
-   */
   fields: z.record(z.unknown()),
-  /**
-   * Time-series dataset. Each row is a Record<ColumnDefinition.key, value>.
-   * The column schema is stored in the standard plugin, not here.
-   */
   dataset: z.array(DataPointSchema),
 });
 
@@ -93,9 +85,8 @@ export interface ProfileDraft {
   description: string;
   nodeId: string;
   standardId: string;
-  /** Field values as entered by the user. May be incomplete. */
+  author: string; // <-- Ajouté ici
   fields: Record<string, unknown>;
-  /** Dataset rows with all values as raw strings from the input elements. */
   datasetRows: Array<Record<string, string>>;
 }
 
