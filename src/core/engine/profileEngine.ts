@@ -47,6 +47,8 @@ export function buildEmptyProfile(
     name: "",
     description: "",
     source: "user",
+    status: "local",      
+    author: "User",      
     createdAt: now,
     updatedAt: now,
     fields,
