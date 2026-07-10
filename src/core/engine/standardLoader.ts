@@ -5,7 +5,7 @@
  * on startup, seeding both standards/taxonomies and built-in profiles.
  */
 import { getAllStandards } from "../db/repositories/standards.repo";
-
+import { z } from "zod";
 
 
 import { StandardPluginSchema } from "../domain/standard";
@@ -127,6 +127,9 @@ async function seedStandards(standardsRaw: unknown[]): Promise<StandardLoadResul
         err
       );
       
+        if (err instanceof z.ZodError) {
+        console.table(err.issues);
+         }
       results.push({
         id: (item as any)?.manifest?.id ?? "unknown-standard",
         status: "error",
