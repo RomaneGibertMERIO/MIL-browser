@@ -111,13 +111,22 @@ export async function importDatabase(file: File): Promise<ImportResult> {
     for (const item of envelope.standards) {
         const parsed = StandardPluginSchema.safeParse(item);
         if (!parsed.success) {
-            result.errors.push(
-                `Invalid standard ${
-                    item?.manifest?.id ?? "unknown"
-                }`
-            );
-            continue;
-        }
+        const errorMsg = `Profile validation failed (ID: ${item?.id ?? "Inconnu"}): ${parsed.error.issues[0]?.message ?? "unknown error"}`;
+        result.errors.push(errorMsg);
+        
+        console.error(`❌ [Import Engine] Échec de validation Zod sur le profil : ${item?.name ?? "Sans nom"}`);
+        // Affichage ultra-précis sous forme de tableau dans la console d'Electron
+        console.table(
+          parsed.error.issues.map(i => ({
+            path: i.path.join("."),
+            code: i.code,
+            message: i.message,
+            received: (i as any).received ?? "unknown"
+          }))
+        );
+        console.log("Objet brut en cause :", item);
+        continue;
+      }
         try {
             await upsertStandard(parsed.data);
             result.standardsImported++;
