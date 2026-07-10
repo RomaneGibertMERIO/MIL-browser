@@ -87,7 +87,9 @@ async function seedStandards(standardsRaw: unknown[]): Promise<StandardLoadResul
   for (const item of standardsRaw) {
     try {
       const plugin = StandardPluginSchema.parse(item);
+      console.log("Parsed standard:", plugin.manifest.id);
       assertValidStandard(plugin);
+      console.log("Validated standard:", plugin.manifest.id);
       const id = plugin.manifest.id;
       const existing = await getStandardById(id);
       if (existing !== undefined && !existing.manifest.isBuiltin) {
@@ -104,6 +106,7 @@ async function seedStandards(standardsRaw: unknown[]): Promise<StandardLoadResul
         // Refresh the canonical deployment definition. This prevents local
         // taxonomy edits from orphaning profiles shipped with the application.
         await seedBuiltinStandard(plugin);
+        console.log("Saved standard:", id);
         results.push({ id, status: "unchanged" });
         continue;
       }
@@ -118,6 +121,12 @@ async function seedStandards(standardsRaw: unknown[]): Promise<StandardLoadResul
         results.push({ id, status: "seeded" });
       }
     } catch (err) {
+      console.error(
+        "FAILED STANDARD:",
+        (item as any)?.manifest?.id,
+        err
+      );
+      
       results.push({
         id: (item as any)?.manifest?.id ?? "unknown-standard",
         status: "error",
