@@ -144,3 +144,5 @@ async function migrateExistingProfiles(standard: StandardPlugin): Promise<void> 
     }
   }
 }
+
+export { loadBuiltinStandards as loadStandardFromFile };
