@@ -86,7 +86,6 @@ export async function seedBuiltinStandard(standard: StandardPlugin): Promise<voi
 /**
  * Replaces the nodes array of an existing standard without touching the
  * rest of the plugin (schema, migrations, manifest). Used by the taxonomy
- * editor so saves are targeted and never overwrite profileSchema changes.
  */
 export async function updateStandardNodes(
   standardId: string,
@@ -96,10 +95,19 @@ export async function updateStandardNodes(
   if (standard === undefined) {
     throw new Error(`Standard "${standardId}" not found.`);
   }
-  if (standard.manifest.isBuiltin) {
-    throw new Error(`Cannot edit builtin standard "${standardId}". Create a custom standard instead.`);
-  }
-  await upsertStandard({ ...standard, nodes });
+
+  // PLUG DE SURCHARGE : Si elle était builtin, on la transforme en version "user" 
+  // pour protéger les modifications locales de l'utilisateur.
+  const updatedStandard: StandardPlugin = {
+    ...standard,
+    manifest: {
+      ...standard.manifest,
+      isBuiltin: false // Devient une extension utilisateur !
+    },
+    nodes,
+  };
+
+  await upsertStandard(updatedStandard);
 }
 
 /**
