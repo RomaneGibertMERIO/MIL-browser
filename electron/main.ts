@@ -6,13 +6,13 @@ function createWindow() {
     width: 1400,
     height: 900,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preloads.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
-  win.webContents.openDevTools();
+  if (!app.isPackaged) win.webContents.openDevTools();
 
   if (!app.isPackaged) {
     win.loadURL("http://localhost:5173");
