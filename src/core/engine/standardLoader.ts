@@ -39,9 +39,9 @@ export interface StandardLoadResult {
 export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
   let globalData: any = null;
 
-  // Récupération des données via le tunnel sécurisé preloads.js -> main.js
-  if (window.electronAPI && typeof window.electronAPI.getBuiltinDatabase === "function") {
-    globalData = await window.electronAPI.getBuiltinDatabase();
+  // REMPLACE electronAPI PAR milBrowserAPI ICI :
+  if (window.milBrowserAPI && typeof window.milBrowserAPI.getBuiltinDatabase === "function") {
+    globalData = await window.milBrowserAPI.getBuiltinDatabase();
   }
 
   if (!globalData) {
