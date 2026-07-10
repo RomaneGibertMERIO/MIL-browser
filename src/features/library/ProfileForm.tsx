@@ -83,11 +83,30 @@ export function ProfileForm({
     return validationErrors.find((e) => e.field === key)?.message;
   }
 
-  function handleSubmit(e: FormEvent) {
+function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    onSubmit(draft);
-  }
 
+    // Nettoyage des cellules du tableau de saisie avant validation
+    const cleanedRows = draft.datasetRows.map((row) => {
+      const cleanedRow: DatasetRow = {};
+      effectiveSchema.datasetColumns.forEach((col) => {
+        const rawValue = row[col.key];
+        // Si la case contient des espaces ou est vide, on la standardise en chaîne vide ""
+        if (rawValue === undefined || rawValue === null || rawValue.trim() === "") {
+          cleanedRow[col.key] = "";
+        } else {
+          cleanedRow[col.key] = rawValue.trim();
+        }
+      });
+      return cleanedRow;
+    });
+
+    onSubmit({
+      ...draft,
+      datasetRows: cleanedRows,
+    });
+  }
+  
   const selectedNode = findNodeById(tree, draft.nodeId);
   const effectiveSchema = getEffectiveSchema(standard, draft.nodeId);
 
