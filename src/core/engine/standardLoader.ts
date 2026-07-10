@@ -5,10 +5,16 @@ import { getProfilesByStandard, getProfileById, upsertProfile } from "../db/repo
 import { migrateProfiles } from "./migrationEngine";
 import type { StandardPlugin } from "../domain/standard";
 
-// AJOUT DES MODULES NODE.JS POUR LIRE LE FICHIER EXTERNE
-import path from "path";
-import fs from "fs";
-import { app } from "electron";
+// ---------------------------------------------------------------------------
+// DÉCLARATION POUR TYPESCRIPT (Évite les erreurs de compilation sur window)
+// ---------------------------------------------------------------------------
+declare global {
+  interface Window {
+    electronAPI?: {
+      getBuiltinDatabase: () => Promise<any>;
+    };
+  }
+}
 
 export interface StandardLoadResult {
   id: string;
@@ -16,31 +22,47 @@ export interface StandardLoadResult {
   message?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Main Entry Point
+// ---------------------------------------------------------------------------
+
+/**
+ * Loads everything from the unique global database via the Electron bridge.
+ */
 export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
   let globalData: any = null;
 
-  try {
-    // Détermination du chemin selon si l'app est packagée ou en dev
-    const isDev = !app.isPackaged;
-    const jsonPath = isDev
-      ? path.join(__dirname, "../src/core/engine/database.json") // Ajuste selon l'arborescence de sortie
-      : path.join(process.resourcesPath, "database.json");
-
-    if (fs.existsSync(jsonPath)) {
-      const rawData = fs.readFileSync(jsonPath, "utf-8");
-      globalData = JSON.parse(rawData);
-    }
-  } catch (fileErr) {
-    return [{ id: "global-seed", status: "error", message: `Erreur lecture fichier: ${String(fileErr)}` }];
+  // Récupération des données via le tunnel sécurisé preloads.js -> main.js
+  if (window.electronAPI && typeof window.electronAPI.getBuiltinDatabase === "function") {
+    globalData = await window.electronAPI.getBuiltinDatabase();
   }
 
-  // TON CODE DE DEBUG ICI
+  // LE CODE DE DEBUG (Déclenchera une erreur visible dans la console de l'app si les données arrivent)
   const debugProfilesCount = globalData?.profiles?.length ?? "INDÉFINI (Clé absente)";
   const debugStandardsCount = globalData?.standards?.length ?? "INDÉFINI";
   throw new Error(`[DEBUG BDD] Standards: ${debugStandardsCount} | Profils: ${debugProfilesCount}`);
 
-  // ... (le reste de ton code de validation et de seeding reste identique)
+  if (!globalData) {
+    return [{ 
+      id: "global-seed", 
+      status: "error", 
+      message: `database.json vide, introuvable ou inaccessible depuis le Main Process.` 
+    }];
+  }
+
+  try {
+    // 1. Traiter les Standards / Taxonomies
+    const standardResults = await seedStandards(globalData.standards ?? []);
+
+    // 2. Traiter les Profils globaux
+    await seedBuiltinProfiles(globalData.profiles ?? []);
+
+    return standardResults;
+  } catch (err) {
+    return [{ id: "global-seed", status: "error", message: `Failed to execute global seed: ${String(err)}` }];
+  }
 }
+
 // ---------------------------------------------------------------------------
 // Internal Seeders
 // ---------------------------------------------------------------------------
@@ -83,7 +105,6 @@ async function seedStandards(standardsRaw: unknown[]): Promise<StandardLoadResul
 
 async function seedBuiltinProfiles(profilesRaw: unknown[]): Promise<void> {
   for (const item of profilesRaw) {
-    // On force le cast en (item as any) pour permettre le spread d'un objet inconnu
     const patchedItem = {
       ...(item as any),
       source: "builtin",
