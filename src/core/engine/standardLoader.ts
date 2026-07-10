@@ -92,8 +92,12 @@ async function seedStandards(standardsRaw: unknown[]): Promise<StandardLoadResul
       console.log("Validated standard:", plugin.manifest.id);
       const id = plugin.manifest.id;
       const existing = await getStandardById(id);
+      
+      // Si le standard existe déjà et que l'utilisateur l'a personnalisé (isBuiltin === false)
+      // on ne l'écrase pas avec la version d'usine.
       if (existing !== undefined && !existing.manifest.isBuiltin) {
-        throw new Error(`Builtin standard id conflicts with user standard: ${id}`);
+        results.push({ id, status: "unchanged", message: "User customized version preserved." });
+        continue;
       }
 
       // Si le standard existe déjà et possède une version égale ou supérieure, on ne touche à rien
@@ -103,10 +107,9 @@ async function seedStandards(standardsRaw: unknown[]): Promise<StandardLoadResul
       }
 
       if (existing !== undefined && existing.manifest.schemaVersion === plugin.manifest.schemaVersion) {
-        // Refresh the canonical deployment definition. This prevents local
-        // taxonomy edits from orphaning profiles shipped with the application.
+        // Refresh de sécurité uniquement si le standard en base est resté purement "builtin"
         await seedBuiltinStandard(plugin);
-        console.log("Saved standard:", id);
+        console.log("Refreshed builtin standard:", id);
         results.push({ id, status: "unchanged" });
         continue;
       }
