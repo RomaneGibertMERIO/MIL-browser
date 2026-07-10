@@ -44,6 +44,11 @@ export function useBootstrap(): void {
       if (seedErrors.length > 0) {
         console.warn("[bootstrap] Standard seed warnings:", seedErrors);
       }
+      if (seedResults.length === 0 || seedResults.every((result) => result.status === "error")) {
+        throw new Error(
+          `Built-in standards could not be loaded: ${seedErrors.join("; ") || "no bundled standards found"}`,
+        );
+      }
 
       // Restore navigation state from settings.
       const settings = await getSettings();
