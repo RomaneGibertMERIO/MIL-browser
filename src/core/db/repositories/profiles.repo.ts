@@ -100,12 +100,30 @@ export async function upsertProfile(profile: Profile): Promise<void> {
     
     // SÉCURITÉ CRITIQUE : Si le profil existant en base est un "builtin",
     // on refuse de l'écraser directement (l'UI doit passer par une copie "user").
-    if (existing && existing.source === "builtin" && profile.source === "builtin") {
+    if (existing?.source === "builtin") {
       throw new Error(`Cannot overwrite deployment asset profile: ${profile.id}`);
     }
 
     await db.profiles.put(profile);
     await logProfileEvent("upsert", profile);
+  });
+}
+
+/**
+ * Installs or refreshes a profile shipped with the application.
+ * Deployment assets are not user changes, so this creates no sync event.
+ */
+export async function seedBuiltinProfile(profile: Profile): Promise<void> {
+  if (profile.source !== "builtin") {
+    throw new Error(`Profile "${profile.id}" is not a builtin profile.`);
+  }
+
+  await db.transaction("rw", db.profiles, async () => {
+    const existing = await db.profiles.get(profile.id);
+    if (existing !== undefined && existing.source !== "builtin") {
+      throw new Error(`Builtin profile id conflicts with user profile: ${profile.id}`);
+    }
+    await db.profiles.put(profile);
   });
 }
 
