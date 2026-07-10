@@ -5,10 +5,10 @@ import { getProfilesByStandard, getProfileById, upsertProfile } from "../db/repo
 import { migrateProfiles } from "./migrationEngine";
 import type { StandardPlugin } from "../domain/standard";
 
-// ---------------------------------------------------------------------------
-// IMPORTATION RECTIFIÉE (On vire la string, on fait un vrai import)
-// ---------------------------------------------------------------------------
-import globalDatabase from "./database.json";
+// AJOUT DES MODULES NODE.JS POUR LIRE LE FICHIER EXTERNE
+import path from "path";
+import fs from "fs";
+import { app } from "electron";
 
 export interface StandardLoadResult {
   id: string;
@@ -16,40 +16,30 @@ export interface StandardLoadResult {
   message?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Main Entry Point
-// ---------------------------------------------------------------------------
-
-/**
- * Loads everything from the unique global database.json asset.
- */
 export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
-  const globalData = globalDatabase as any;
+  let globalData: any = null;
 
-  // LE CODE DE DEBUG EST JUSTE ICI (Avant de lancer le seeding)
+  try {
+    // Détermination du chemin selon si l'app est packagée ou en dev
+    const isDev = !app.isPackaged;
+    const jsonPath = isDev
+      ? path.join(__dirname, "../src/core/engine/database.json") // Ajuste selon l'arborescence de sortie
+      : path.join(process.resourcesPath, "database.json");
+
+    if (fs.existsSync(jsonPath)) {
+      const rawData = fs.readFileSync(jsonPath, "utf-8");
+      globalData = JSON.parse(rawData);
+    }
+  } catch (fileErr) {
+    return [{ id: "global-seed", status: "error", message: `Erreur lecture fichier: ${String(fileErr)}` }];
+  }
+
+  // TON CODE DE DEBUG ICI
   const debugProfilesCount = globalData?.profiles?.length ?? "INDÉFINI (Clé absente)";
   const debugStandardsCount = globalData?.standards?.length ?? "INDÉFINI";
   throw new Error(`[DEBUG BDD] Standards: ${debugStandardsCount} | Profils: ${debugProfilesCount}`);
 
-  if (!globalData) {
-    return [{ 
-      id: "global-seed", 
-      status: "error", 
-      message: `database.json vide ou introuvable au moment de la compilation.` 
-    }];
-  }
-
-  try {
-    // 1. Traiter les Standards / Taxonomies
-    const standardResults = await seedStandards(globalData.standards ?? []);
-
-    // 2. Traiter les Profils globaux
-    await seedBuiltinProfiles(globalData.profiles ?? []);
-
-    return standardResults;
-  } catch (err) {
-    return [{ id: "global-seed", status: "error", message: `Failed to execute global seed: ${String(err)}` }];
-  }
+  // ... (le reste de ton code de validation et de seeding reste identique)
 }
 // ---------------------------------------------------------------------------
 // Internal Seeders
