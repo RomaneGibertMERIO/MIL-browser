@@ -17,7 +17,7 @@ import type { StandardPlugin } from "../domain/standard";
 // ---------------------------------------------------------------------------
 declare global {
   interface Window {
-    electronAPI?: {
+    milBrowserAPI?: {
       getBuiltinDatabase: () => Promise<any>;
     };
   }
