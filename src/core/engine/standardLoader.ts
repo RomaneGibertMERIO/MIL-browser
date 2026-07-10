@@ -4,6 +4,9 @@
  * Single-file database seeder. Processes the global `database.json` asset
  * on startup, seeding both standards/taxonomies and built-in profiles.
  */
+import { getAllStandards } from "../db/repositories/standards.repo";
+
+
 
 import { StandardPluginSchema } from "../domain/standard";
 import { ProfileSchema } from "../domain/profile";
@@ -127,6 +130,18 @@ async function seedStandards(standardsRaw: unknown[]): Promise<StandardLoadResul
 }
 
 async function seedBuiltinProfiles(profilesRaw: unknown[]): Promise<void> {
+  console.log("Profiles start");
+
+console.log(
+  "Standards in DB:",
+  (await getAllStandards()).map(s => s.manifest.id)
+);
+
+console.log(
+  "Lookup:",
+  await getStandardById("mil-std-810h")
+);
+  
   for (const item of profilesRaw) {
     const patchedItem = {
       ...(item as any),
