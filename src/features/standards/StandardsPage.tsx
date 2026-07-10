@@ -225,12 +225,14 @@ function StandardCard({ standard, onDelete, onEditTaxonomy }: StandardCardProps)
           </div>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button
-            onClick={onEditTaxonomy}
-            className="px-3 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
-          >
-            Edit Taxonomy
-          </button>
+          {!m.isBuiltin && (
+            <button
+              onClick={onEditTaxonomy}
+              className="px-3 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+            >
+              Edit Taxonomy
+            </button>
+          )}
           {!m.isBuiltin && (
             <button
               onClick={onDelete}
