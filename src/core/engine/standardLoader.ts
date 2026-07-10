@@ -13,12 +13,15 @@ import { migrateProfiles } from "./migrationEngine";
 import type { StandardPlugin } from "../domain/standard";
 
 // ---------------------------------------------------------------------------
-// Importation directe du fichier JSON
+// DÉCLARATION POUR TYPESCRIPT (Évite les erreurs de compilation sur window)
 // ---------------------------------------------------------------------------
-// On importe directement le fichier. Si ton fichier est dans le dossier 'public',
-// tu peux utiliser un chemin relatif (ex: "../../../public/database.json").
-// Adapte le chemin relatif ci-dessous selon la position réelle de ton fichier :
-import globalDatabase from "../../../public/database.json";
+declare global {
+  interface Window {
+    electronAPI?: {
+      getBuiltinDatabase: () => Promise<any>;
+    };
+  }
+}
 
 export interface StandardLoadResult {
   id: string;
@@ -27,21 +30,25 @@ export interface StandardLoadResult {
 }
 
 // ---------------------------------------------------------------------------
-// Main Entry Point
+// Main Entry Point (Built-in Seed)
 // ---------------------------------------------------------------------------
 
 /**
- * Loads everything from the unique global database.json asset.
+ * Loads everything from the unique global database via the Electron bridge.
  */
 export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
-  // Plus besoin de fetch ! On utilise directement l'objet importé statiquement.
-  const globalData = globalDatabase as any;
+  let globalData: any = null;
+
+  // Récupération des données via le tunnel sécurisé preloads.js -> main.js
+  if (window.electronAPI && typeof window.electronAPI.getBuiltinDatabase === "function") {
+    globalData = await window.electronAPI.getBuiltinDatabase();
+  }
 
   if (!globalData) {
     return [{ 
       id: "global-seed", 
       status: "error", 
-      message: `database.json introuvable au moment de la compilation.` 
+      message: `database.json vide, introuvable ou inaccessible depuis le Main Process.` 
     }];
   }
 
@@ -57,95 +64,96 @@ export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
     return [{ id: "global-seed", status: "error", message: `Failed to execute global seed: ${String(err)}` }];
   }
 }
+
 // ---------------------------------------------------------------------------
-// loadStandardFromFile
+// loadStandardFromFile (Utilisé par StandardsPage.tsx pour l'import manuel)
 // ---------------------------------------------------------------------------
 
+/**
+ * Parses a manually uploaded JSON file, validates it, and saves it in the DB.
+ */
 export async function loadStandardFromFile(file: File): Promise<StandardPlugin> {
   const text = await file.text();
   const raw: unknown = JSON.parse(text);
-  return StandardPluginSchema.parse(raw);
+  
+  // Validation Zod du fichier importé
+  const plugin = StandardPluginSchema.parse(raw);
+  
+  // Sauvegarde dans le repository Dexie
+  await upsertStandard(plugin);
+  
+  return plugin;
 }
 
 // ---------------------------------------------------------------------------
-// Internal
+// Internal Seeders
 // ---------------------------------------------------------------------------
 
-async function loadOneStandard(filename: string): Promise<StandardLoadResult> {
-  const basePath = isElectron ? "./standards/" : "/standards/";
-  const url = basePath + filename;
+async function seedStandards(standardsRaw: unknown[]): Promise<StandardLoadResult[]> {
+  const results: StandardLoadResult[] = [];
 
-  let raw: unknown;
+  for (const item of standardsRaw) {
+    try {
+      const plugin = StandardPluginSchema.parse(item);
+      const id = plugin.manifest.id;
+      const existing = await getStandardById(id);
 
-  try {
-    const response = await fetch(url);
+      // Si le standard existe déjà et possède une version égale ou supérieure, on ne touche à rien
+      if (existing !== undefined && existing.manifest.schemaVersion >= plugin.manifest.schemaVersion) {
+        results.push({ id, status: "unchanged" });
+        continue;
+      }
 
-    if (!response.ok) {
-      return {
-        id: filename,
+      await upsertStandard(plugin);
+
+      if (existing !== undefined) {
+        // Exécuter les migrations si la structure change
+        await migrateExistingProfiles(plugin);
+        results.push({ id, status: "updated" });
+      } else {
+        results.push({ id, status: "seeded" });
+      }
+    } catch (err) {
+      results.push({
+        id: (item as any)?.manifest?.id ?? "unknown-standard",
         status: "error",
-        message: `HTTP ${response.status} when fetching ${url}`,
-      };
+        message: `Validation failed for standard: ${String(err)}`,
+      });
+    }
+  }
+
+  return results;
+}
+
+async function seedBuiltinProfiles(profilesRaw: unknown[]): Promise<void> {
+  for (const item of profilesRaw) {
+    const patchedItem = {
+      ...(item as any),
+      source: "builtin",
+      status: (item as any).status ?? "approved",
+      author: (item as any).author ?? "Admin",
+    };
+
+    const parsed = ProfileSchema.safeParse(patchedItem);
+    if (!parsed.success) {
+      console.error("Validation error seeding profile:", parsed.error);
+      continue;
     }
 
-    raw = await response.json();
-  } catch (err) {
-    return {
-      id: filename,
-      status: "error",
-      message: `Network error fetching ${url}: ${String(err)}`,
-    };
+    const existing = await getProfileById(parsed.data.id);
+
+    // On n'insère le profil que s'il n'existe pas déjà pour protéger l'espace utilisateur
+    if (existing === undefined) {
+      await upsertProfile(parsed.data);
+    }
   }
-
-  let plugin: StandardPlugin;
-
-  try {
-    plugin = StandardPluginSchema.parse(raw);
-  } catch (err) {
-    return {
-      id: filename,
-      status: "error",
-      message: `Validation failed for ${url}: ${String(err)}`,
-    };
-  }
-
-  const id = plugin.manifest.id;
-  const existing = await getStandardById(id);
-
-  if (
-    existing !== undefined &&
-    existing.manifest.schemaVersion >= plugin.manifest.schemaVersion
-  ) {
-    return { id, status: "unchanged" };
-  }
-
-  await upsertStandard(plugin);
-
-  const profileFile = BUILTIN_PROFILE_FILES[filename];
-
-  if (profileFile !== undefined) {
-    const profileUrl = isElectron
-      ? "./standards/" + profileFile
-      : "/standards/" + profileFile;
-
-    await seedBuiltinProfiles(profileUrl);
-  }
-
-  if (existing !== undefined) {
-    await migrateExistingProfiles(plugin);
-    return { id, status: "updated" };
-  }
-
-  return { id, status: "seeded" };
 }
 
 // ---------------------------------------------------------------------------
-// Migration
+// Migration Engine
 // ---------------------------------------------------------------------------
 
-async function migrateExistingProfiles(
-  standard: StandardPlugin
-): Promise<void> {
+async function migrateExistingProfiles(standard: StandardPlugin): Promise<void> {
   const profiles = await getProfilesByStandard(standard.manifest.id);
   const migrated = migrateProfiles(profiles, standard);
 
@@ -153,41 +161,8 @@ async function migrateExistingProfiles(
     const before = profiles[i];
     const after = migrated[i];
 
-    if (
-      before !== undefined &&
-      after !== undefined &&
-      before.schemaVersion !== after.schemaVersion
-    ) {
+    if (before !== undefined && after !== undefined && before.schemaVersion !== after.schemaVersion) {
       await upsertProfile(after);
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Seed profiles
-// ---------------------------------------------------------------------------
-
-async function seedBuiltinProfiles(url: string): Promise<void> {
-  let raw: unknown;
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) return;
-    raw = await response.json();
-  } catch {
-    return;
-  }
-
-  if (!Array.isArray(raw)) return;
-
-  for (const item of raw) {
-    const parsed = ProfileSchema.safeParse(item);
-    if (!parsed.success) continue;
-
-    const existing = await getProfileById(parsed.data.id);
-
-    if (existing === undefined) {
-      await upsertProfile(parsed.data);
     }
   }
 }
