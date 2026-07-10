@@ -1,3 +1,10 @@
+/**
+ * Standard plugin loader.
+ *
+ * Single-file database seeder. Processes the global `database.json` asset
+ * on startup, seeding both standards/taxonomies and built-in profiles.
+ */
+
 import { StandardPluginSchema } from "../domain/standard";
 import { ProfileSchema } from "../domain/profile";
 import { getStandardById, upsertStandard } from "../db/repositories/standards.repo";
@@ -23,7 +30,7 @@ export interface StandardLoadResult {
 }
 
 // ---------------------------------------------------------------------------
-// Main Entry Point
+// Main Entry Point (Built-in Seed)
 // ---------------------------------------------------------------------------
 
 /**
@@ -36,11 +43,6 @@ export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
   if (window.electronAPI && typeof window.electronAPI.getBuiltinDatabase === "function") {
     globalData = await window.electronAPI.getBuiltinDatabase();
   }
-
-  // LE CODE DE DEBUG (Déclenchera une erreur visible dans la console de l'app si les données arrivent)
-  const debugProfilesCount = globalData?.profiles?.length ?? "INDÉFINI (Clé absente)";
-  const debugStandardsCount = globalData?.standards?.length ?? "INDÉFINI";
-  throw new Error(`[DEBUG BDD] Standards: ${debugStandardsCount} | Profils: ${debugProfilesCount}`);
 
   if (!globalData) {
     return [{ 
@@ -61,6 +63,26 @@ export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
   } catch (err) {
     return [{ id: "global-seed", status: "error", message: `Failed to execute global seed: ${String(err)}` }];
   }
+}
+
+// ---------------------------------------------------------------------------
+// loadStandardFromFile (Utilisé par StandardsPage.tsx pour l'import manuel)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parses a manually uploaded JSON file, validates it, and saves it in the DB.
+ */
+export async function loadStandardFromFile(file: File): Promise<StandardPlugin> {
+  const text = await file.text();
+  const raw: unknown = JSON.parse(text);
+  
+  // Validation Zod du fichier importé
+  const plugin = StandardPluginSchema.parse(raw);
+  
+  // Sauvegarde dans le repository Dexie
+  await upsertStandard(plugin);
+  
+  return plugin;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,7 +142,7 @@ async function seedBuiltinProfiles(profilesRaw: unknown[]): Promise<void> {
 
     const existing = await getProfileById(parsed.data.id);
 
-    // On n'insert le profil que s'il n'existe pas déjà pour protéger l'user-space
+    // On n'insère le profil que s'il n'existe pas déjà pour protéger l'espace utilisateur
     if (existing === undefined) {
       await upsertProfile(parsed.data);
     }
@@ -144,5 +166,3 @@ async function migrateExistingProfiles(standard: StandardPlugin): Promise<void> 
     }
   }
 }
-
-export { loadBuiltinStandards as loadStandardFromFile };
