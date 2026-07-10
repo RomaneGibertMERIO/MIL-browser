@@ -71,6 +71,18 @@ export async function upsertStandard(standard: StandardPlugin): Promise<void> {
   });
 }
 
+/** Installs a bundled standard without recording it as a user sync event. */
+export async function seedBuiltinStandard(standard: StandardPlugin): Promise<void> {
+  if (!standard.manifest.isBuiltin) {
+    throw new Error(`Standard "${standard.manifest.id}" is not builtin.`);
+  }
+  const existing = await db.standards.get(standard.manifest.id);
+  if (existing !== undefined && !existing.manifest.isBuiltin) {
+    throw new Error(`Builtin standard id conflicts with user standard: ${standard.manifest.id}`);
+  }
+  await db.standards.put(standard);
+}
+
 /**
  * Replaces the nodes array of an existing standard without touching the
  * rest of the plugin (schema, migrations, manifest). Used by the taxonomy
@@ -83,6 +95,9 @@ export async function updateStandardNodes(
   const standard = await getStandardById(standardId);
   if (standard === undefined) {
     throw new Error(`Standard "${standardId}" not found.`);
+  }
+  if (standard.manifest.isBuiltin) {
+    throw new Error(`Cannot edit builtin standard "${standardId}". Create a custom standard instead.`);
   }
   await upsertStandard({ ...standard, nodes });
 }
