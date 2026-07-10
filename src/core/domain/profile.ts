@@ -34,8 +34,9 @@ export type ProfileSource = z.infer<typeof ProfileSourceSchema>;
 /**
  * A single row in the dataset of a profile.
  * Keys correspond to ColumnDefinition.key values of the owning standard's schema.
+ * Updated: Accepts null values to support empty fields without triggering NaN errors.
  */
-export const DataPointSchema = z.record(z.union([z.string(), z.number()]));
+export const DataPointSchema = z.record(z.union([z.string(), z.number(), z.null()]));
 
 export type DataPoint = z.infer<typeof DataPointSchema>;
 
