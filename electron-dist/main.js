@@ -5,14 +5,40 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs")); // <-- AJOUT DE FS
+const fs_1 = __importDefault(require("fs"));
 
+// ---------------------------------------------------------------------------
+// 1. ENREGISTRER LE HANDLER DÈS LE DÉPART (Hors de createWindow)
+// ---------------------------------------------------------------------------
+electron_1.ipcMain.handle('get-builtin-database', async () => {
+    try {
+        const isDev = !electron_1.app.isPackaged;
+        
+        const jsonPath = isDev
+            ? path_1.default.join(electron_1.app.getAppPath(), "src/core/engine/database.json")
+            : path_1.default.join(process.resourcesPath, "database.json");
+
+        if (fs_1.default.existsSync(jsonPath)) {
+            const rawData = fs_1.default.readFileSync(jsonPath, "utf-8");
+            return JSON.parse(rawData);
+        }
+        console.warn("Fichier JSON introuvable sur le chemin :", jsonPath);
+        return null;
+    } catch (error) {
+        console.error("Erreur lors de la lecture du JSON builtin:", error);
+        return null;
+    }
+});
+
+// ---------------------------------------------------------------------------
+// 2. CRÉATION DE LA FENÊTRE
+// ---------------------------------------------------------------------------
 function createWindow() {
     const win = new electron_1.BrowserWindow({
         width: 1400,
         height: 900,
         webPreferences: {
-            preload: path_1.default.join(__dirname, "preloads.js"),
+            preload: path_1.default.join(__dirname, "preload.js"), // Vérifie bien si c'est preload.js ou preloads.js !
             contextIsolation: true,
             nodeIntegration: false,
         },
@@ -22,7 +48,6 @@ function createWindow() {
         win.loadURL("http://localhost:5173");
     }
     else {
-        // CORRECTION ICI : En prod, l'application doit viser les ressources du package, pas le dossier de travail courant
         win.loadFile(path_1.default.join(electron_1.app.getAppPath(), "dist/index.html"));
     }
 
@@ -31,27 +56,6 @@ function createWindow() {
         return { action: "deny" };
     });
 }
-
-// IPC HANDLER : Écoute la demande de React pour lui fournir le gros JSON
-electron_1.ipcMain.handle('get-builtin-database', async () => {
-    try {
-        const isDev = !electron_1.app.isPackaged;
-        
-        // Si dev : on cherche dans les sources. Si prod : on cherche dans les extraResources
-        const jsonPath = isDev
-            ? path_1.default.join(electron_1.app.getAppPath(), "src/core/engine/database.json")
-            : path_1.default.join(process.resourcesPath, "database.json");
-
-        if (fs_1.default.existsSync(jsonPath)) {
-            const rawData = fs_1.default.readFileSync(jsonPath, "utf-8");
-            return JSON.parse(rawData);
-        }
-        return null;
-    } catch (error) {
-        console.error("Erreur lors de la lecture du JSON builtin:", error);
-        return null;
-    }
-});
 
 electron_1.app.whenReady().then(createWindow);
 
