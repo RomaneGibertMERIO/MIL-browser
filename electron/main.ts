@@ -1,5 +1,6 @@
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, shell, ipcMain } from "electron";
 import path from "path";
+import os from "os"; // <-- Added for retrieving the real OS username
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -25,6 +26,11 @@ function createWindow() {
     return { action: "deny" };
   });
 }
+
+// <-- Added IPC handler to expose system username securely to React
+ipcMain.handle("get-system-username", () => {
+  return os.userInfo().username || "Unknown-User";
+});
 
 app.whenReady().then(createWindow);
 
