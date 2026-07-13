@@ -24,7 +24,7 @@ import { create } from "zustand";
 
 export type AppMode = "assistant" | "admin";
 
-export type AdminView = "browse" | "library" | "standards" | "settings";
+export type AdminView = 'library' | 'standards' | 'settings' | 'validations';
 
 /** Identifies the currently selected taxonomy node by stable ids. */
 export interface ActiveNode {
