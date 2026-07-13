@@ -52,7 +52,7 @@ export default function App() {
 }
 
 // ---------------------------------------------------------------------------
-// AdminLayout — sidebar + content pane
+// AdminLayout — sidebar + content pane (MODIFIÉ)
 // ---------------------------------------------------------------------------
 
 function AdminLayout() {
@@ -79,18 +79,27 @@ function AdminLayout() {
             {adminView === 'library' ? 'Library'
               : adminView === 'standards' ? 'Standards'
               : adminView === 'settings' ? 'Settings'
+              : adminView === 'validations' ? '🔧 Pending Validations' // <-- AJOUT DU TITRE
               : adminView}
           </span>
-          <span className="ml-auto">
+          
+          {/* AJOUT DU PETIT BANDEAU UTILISATEUR CONNECTÉ */}
+          <div className="ml-auto flex items-center gap-4">
+            <div className="text-right select-none">
+              <p className="text-xs font-semibold text-gray-700">👤 Session : Labo-User</p>
+              <p className="text-[10px] text-gray-400 font-mono">Dépôt : Z:/mil-git-db.git</p>
+            </div>
+            
             <button
               onClick={() => setMode('assistant')}
               className="text-sm text-gray-400 hover:text-gray-700 transition-colors px-3 py-1.5 rounded-lg hover:bg-gray-100 font-medium"
             >
               Browse Standards ↗
             </button>
-          </span>
+          </div>
         </header>
 
+        {/* MODIFICATION DU SCROLLING POUR LA VUE VALIDATION */}
         <main className={adminView === 'library' ? 'flex-1 overflow-hidden' : 'flex-1 overflow-y-auto px-6 py-6'}>
           <ContentPane
             adminView={adminView}
@@ -102,6 +111,53 @@ function AdminLayout() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// ContentPane — routes adminView to the correct feature page (MODIFIÉ)
+// ---------------------------------------------------------------------------
+
+interface ContentPaneProps {
+  adminView: AdminView;
+  standard:  ReturnType<typeof useStandard>;
+}
+
+function ContentPane({ adminView, standard }: ContentPaneProps) {
+  const setMode = useAppStore((s) => s.setMode);
+
+  if (adminView === 'browse') {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+        <p className="text-gray-500 text-sm">The Standards Browser is in full-screen Browse mode.</p>
+        <button
+          onClick={() => setMode('assistant')}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+        >
+          Open Standards Browser ↗
+        </button>
+      </div>
+    );
+  }
+
+  if (adminView === 'library') {
+    if (standard === undefined) {
+      return (
+        <div className="flex items-center justify-center h-full text-sm text-gray-400">
+          Select a standard in the sidebar to manage profiles.
+        </div>
+      );
+    }
+    return <LibraryPage standard={standard} />;
+  }
+
+  if (adminView === 'standards') return <StandardsPage />;
+  if (adminView === 'settings') return <SettingsPage />;
+  
+  // <-- AJOUT DE LA ROUTE POUR NOTRE NOUVEL ÉCRAN ADMIN
+  if (adminView === ('validations' as AdminView)) {
+    return <AdminValidationsPage />;
+  }
+
+  return null;
+}
 // ---------------------------------------------------------------------------
 // ContentPane — routes adminView to the correct feature page
 // ---------------------------------------------------------------------------
@@ -144,3 +200,75 @@ function ContentPane({ adminView, standard }: ContentPaneProps) {
 
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// AdminValidationsPage — Écran de gestion pour l'administrateur
+// ---------------------------------------------------------------------------
+
+function AdminValidationsPage() {
+  // Données de test pour visualiser l'UI avant d'y brancher Git
+  const [pendingRequests, setPendingRequests] = useState([
+    { id: "1", name: "Profil Vibration Turbine M4", author: "Dupond", date: "13/07/2026", standard: "MIL-STD-810H" },
+    { id: "2", name: "Choc Pyro Palier Supérieur", author: "Martin", date: "12/07/2026", standard: "MIL-STD-202G" },
+  ]);
+
+  const handleAccept = (id: string) => {
+    alert(`Approbation lancée ! Le fichier va être fusionné (git merge) dans la branche principale.`);
+    setPendingRequests(pendingRequests.filter(r => r.id !== id));
+  };
+
+  const handleReject = (id: string) => {
+    alert(`Refusé. La branche Git correspondante va être supprimée du dossier réseau.`);
+    setPendingRequests(pendingRequests.filter(r => r.id !== id));
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-gray-900">Demandes de validation en attente</h2>
+        <p className="text-sm text-gray-500">Ces profils ont été soumis par l'équipe et attendent votre intégration dans le Git officiel.</p>
+      </div>
+
+      {pendingRequests.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-400 text-sm">
+          🎉 Aucune demande en attente. Tout est synchronisé !
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden shadow-sm">
+          {pendingRequests.map((req) => (
+            <div key={req.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm text-gray-900">{req.name}</span>
+                  <span className="text-[10px] bg-blue-50 text-blue-600 font-medium px-1.5 py-0.5 rounded border border-blue-100">
+                    {req.standard}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400">
+                  Proposé par <span className="font-medium text-gray-600">{req.author}</span> le {req.date}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleReject(req.id)}
+                  className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 border border-transparent rounded-lg transition-colors"
+                >
+                  Reject ❌
+                </button>
+                <button
+                  onClick={() => handleAccept(req.id)}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors"
+                >
+                  Approve & Commit ✓
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+// N'oublie pas d'ajouter l'import de useState en haut de App.tsx si ce n'est pas fait :
+// import { useState } from "react";
