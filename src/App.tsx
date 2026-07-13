@@ -2,15 +2,16 @@
  * Root application component.
  *
  * Responsibilities:
- *  1. Invoke useBootstrap() to seed the database and restore navigation state.
- *  2. Gate rendering behind bootstrapStore.ready.
- *  3. Delegate to assistant or admin layout based on appStore.mode.
+ * 1. Invoke useBootstrap() to seed the database and restore navigation state.
+ * 2. Gate rendering behind bootstrapStore.ready.
+ * 3. Delegate to assistant or admin layout based on appStore.mode.
  *
  * This file imports ONLY from the new architecture (src/core/, src/features/,
  * src/shared/, src/store/, src/app/). Legacy code under src/components/,
  * src/hooks/, src/lib/, src/types/, src/sources/ is no longer referenced.
  */
 
+import { useState } from 'react'; // <-- FIX: Added useState import
 import { useAppStore, type AdminView } from './store/appStore';
 import { useBootstrapStore } from './store/bootstrapStore';
 import { useBootstrap } from './shared/hooks/useBootstrap';
@@ -22,6 +23,15 @@ import { SettingsPage } from './features/settings/SettingsPage';
 import { Sidebar } from './app/Sidebar';
 import { LoadingSpinner } from './shared/components/ui/LoadingSpinner';
 import { ErrorBanner } from './shared/components/ui/ErrorBanner';
+
+// Interface for typings
+interface PendingRequest {
+  id: string;
+  name: string;
+  author: string;
+  date: string;
+  standard: string;
+}
 
 // ---------------------------------------------------------------------------
 // App — root component.
@@ -52,7 +62,7 @@ export default function App() {
 }
 
 // ---------------------------------------------------------------------------
-// AdminLayout — sidebar + content pane (MODIFIÉ)
+// AdminLayout — sidebar + content pane
 // ---------------------------------------------------------------------------
 
 function AdminLayout() {
@@ -79,15 +89,15 @@ function AdminLayout() {
             {adminView === 'library' ? 'Library'
               : adminView === 'standards' ? 'Standards'
               : adminView === 'settings' ? 'Settings'
-              : adminView === 'validations' ? '🔧 Pending Validations' // <-- AJOUT DU TITRE
+              : adminView === 'validations' ? 'Pending Validations'
               : adminView}
           </span>
           
-          {/* AJOUT DU PETIT BANDEAU UTILISATEUR CONNECTÉ */}
+          {/* User network info section (100% English) */}
           <div className="ml-auto flex items-center gap-4">
             <div className="text-right select-none">
-              <p className="text-xs font-semibold text-gray-700">👤 Session : Labo-User</p>
-              <p className="text-[10px] text-gray-400 font-mono">Dépôt : Z:/mil-git-db.git</p>
+              <p className="text-xs font-semibold text-gray-700">👤 Session: Labo-User</p>
+              <p className="text-[10px] text-gray-400 font-mono">Repo: Z:/mil-git-db.git</p>
             </div>
             
             <button
@@ -99,7 +109,6 @@ function AdminLayout() {
           </div>
         </header>
 
-        {/* MODIFICATION DU SCROLLING POUR LA VUE VALIDATION */}
         <main className={adminView === 'library' ? 'flex-1 overflow-hidden' : 'flex-1 overflow-y-auto px-6 py-6'}>
           <ContentPane
             adminView={adminView}
@@ -111,53 +120,6 @@ function AdminLayout() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// ContentPane — routes adminView to the correct feature page (MODIFIÉ)
-// ---------------------------------------------------------------------------
-
-interface ContentPaneProps {
-  adminView: AdminView;
-  standard:  ReturnType<typeof useStandard>;
-}
-
-function ContentPane({ adminView, standard }: ContentPaneProps) {
-  const setMode = useAppStore((s) => s.setMode);
-
-  if (adminView === 'browse') {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-        <p className="text-gray-500 text-sm">The Standards Browser is in full-screen Browse mode.</p>
-        <button
-          onClick={() => setMode('assistant')}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-        >
-          Open Standards Browser ↗
-        </button>
-      </div>
-    );
-  }
-
-  if (adminView === 'library') {
-    if (standard === undefined) {
-      return (
-        <div className="flex items-center justify-center h-full text-sm text-gray-400">
-          Select a standard in the sidebar to manage profiles.
-        </div>
-      );
-    }
-    return <LibraryPage standard={standard} />;
-  }
-
-  if (adminView === 'standards') return <StandardsPage />;
-  if (adminView === 'settings') return <SettingsPage />;
-  
-  // <-- AJOUT DE LA ROUTE POUR NOTRE NOUVEL ÉCRAN ADMIN
-  if (adminView === ('validations' as AdminView)) {
-    return <AdminValidationsPage />;
-  }
-
-  return null;
-}
 // ---------------------------------------------------------------------------
 // ContentPane — routes adminView to the correct feature page
 // ---------------------------------------------------------------------------
@@ -197,45 +159,46 @@ function ContentPane({ adminView, standard }: ContentPaneProps) {
 
   if (adminView === 'standards') return <StandardsPage />;
   if (adminView === 'settings') return <SettingsPage />;
+  if (adminView === 'validations') return <AdminValidationsPage />;
 
   return null;
 }
 
 // ---------------------------------------------------------------------------
-// AdminValidationsPage — Écran de gestion pour l'administrateur
+// AdminValidationsPage — Dashboard (100% English & Typed)
 // ---------------------------------------------------------------------------
 
 function AdminValidationsPage() {
-  // Données de test pour visualiser l'UI avant d'y brancher Git
-  const [pendingRequests, setPendingRequests] = useState([
-    { id: "1", name: "Profil Vibration Turbine M4", author: "Dupond", date: "13/07/2026", standard: "MIL-STD-810H" },
-    { id: "2", name: "Choc Pyro Palier Supérieur", author: "Martin", date: "12/07/2026", standard: "MIL-STD-202G" },
+  // FIX: Added explicit typed array for requests
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([
+    { id: "1", name: "Turbine M4 Vibration Profile", author: "Dupond", date: "2026-07-13", standard: "MIL-STD-810H" },
+    { id: "2", name: "Upper Bearing Pyroshock", author: "Martin", date: "2026-07-12", standard: "MIL-STD-202G" },
   ]);
 
   const handleAccept = (id: string) => {
-    alert(`Approbation lancée ! Le fichier va être fusionné (git merge) dans la branche principale.`);
-    setPendingRequests(pendingRequests.filter(r => r.id !== id));
+    alert(`Approval triggered! The file will be merged into the main branch.`);
+    setPendingRequests(pendingRequests.filter((r: PendingRequest) => r.id !== id));
   };
 
   const handleReject = (id: string) => {
-    alert(`Refusé. La branche Git correspondante va être supprimée du dossier réseau.`);
-    setPendingRequests(pendingRequests.filter(r => r.id !== id));
+    alert(`Rejected. The corresponding feature branch will be deleted from the network directory.`);
+    setPendingRequests(pendingRequests.filter((r: PendingRequest) => r.id !== id));
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-gray-900">Demandes de validation en attente</h2>
-        <p className="text-sm text-gray-500">Ces profils ont été soumis par l'équipe et attendent votre intégration dans le Git officiel.</p>
+        <h2 className="text-xl font-bold text-gray-900">Pending Validation Requests</h2>
+        <p className="text-sm text-gray-500">These profiles were submitted by the team and are waiting to be merged into the official repository.</p>
       </div>
 
       {pendingRequests.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-400 text-sm">
-          🎉 Aucune demande en attente. Tout est synchronisé !
+          🎉 No pending validation requests. Everything is synchronized!
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden shadow-sm">
-          {pendingRequests.map((req) => (
+          {pendingRequests.map((req: PendingRequest) => (
             <div key={req.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -245,7 +208,7 @@ function AdminValidationsPage() {
                   </span>
                 </div>
                 <p className="text-xs text-gray-400">
-                  Proposé par <span className="font-medium text-gray-600">{req.author}</span> le {req.date}
+                  Submitted by <span className="font-medium text-gray-600">{req.author}</span> on {req.date}
                 </p>
               </div>
 
@@ -270,5 +233,3 @@ function AdminValidationsPage() {
     </div>
   );
 }
-// N'oublie pas d'ajouter l'import de useState en haut de App.tsx si ce n'est pas fait :
-// import { useState } from "react";
