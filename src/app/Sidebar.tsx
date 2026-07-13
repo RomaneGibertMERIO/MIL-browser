@@ -1,16 +1,3 @@
-/**
- * Admin sidebar.
- *
- * Left navigation panel for admin mode. Shows:
- *   - Top navigation tabs: Browse / Library / Standards / Settings
- *   - Browse + Library: shows the TaxonomyTree for the active standard
- *   - Standard selector dropdown
- *   - Mode toggle to switch back to the assistant
- *
- * All state reads and writes go through the Zustand appStore.
- * The sidebar never interacts with IndexedDB directly.
- */
-
 import { useMemo } from "react";
 import { useAppStore, type AdminView } from "../store/appStore";
 import { useStandards } from "../shared/hooks/useStandards";
@@ -20,12 +7,13 @@ import { TaxonomyTree } from "../features/browse/TaxonomyTree";
 import { saveActiveStandard } from "../core/db/repositories/settings.repo";
 
 // ---------------------------------------------------------------------------
-// Nav items
+// Nav items (MODIFIÉ : Ajout de la vue validations avec son icône)
 // ---------------------------------------------------------------------------
 
 const NAV_ITEMS: { view: AdminView; label: string; icon: string }[] = [
-  { view: "library",  label: "Library",   icon: "◧" },
+  { view: "library",   label: "Library",   icon: "◧" },
   { view: "standards", label: "Standards", icon: "≡" },
+  { view: "validations" as AdminView, label: "Validations", icon: "🔧" }, // <-- AJOUT ICI
   { view: "settings",  label: "Settings",  icon: "⚙" },
 ];
 
@@ -42,7 +30,7 @@ export function Sidebar() {
   const setActiveStd    = useAppStore((s) => s.setActiveStandard);
   const setActiveNode   = useAppStore((s) => s.setActiveNode);
 
-  const standards  = useStandards();
+  const standards   = useStandards();
   const allProfiles = useProfilesByStandard(activeStdId ?? "");
   const activeStandard = standards?.find((s) => s.manifest.id === activeStdId) ?? null;
 
@@ -105,14 +93,23 @@ export function Sidebar() {
           <button
             key={view}
             onClick={() => setAdminView(view)}
-            className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+            className={`w-full text-left flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
               adminView === view
                 ? "bg-blue-600 text-white"
                 : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
             }`}
           >
-            <span className="w-5 text-center text-base">{icon}</span>
-            {label}
+            <div className="flex items-center gap-3">
+              <span className="w-5 text-center text-base">{icon}</span>
+              <span>{label}</span>
+            </div>
+
+            {/* AJOUT : Un petit indicateur visuel pour simuler les requêtes en attente sur l'onglet validations */}
+            {view === ('validations' as AdminView) && (
+              <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
+                2
+              </span>
+            )}
           </button>
         ))}
       </nav>
