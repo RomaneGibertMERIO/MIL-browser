@@ -11,6 +11,7 @@
  */
 
 import { useState, type FormEvent } from "react";
+import { useAppStore } from "../../store/appStore";
 import type { AppSettings } from "../../core/domain/sync";
 import { getSettings, saveSyncSettings } from "../../core/db/repositories/settings.repo";
 import {
@@ -23,6 +24,8 @@ import { Card } from "../../shared/components/ui/Card";
 import { ErrorBanner } from "../../shared/components/ui/ErrorBanner";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 import { useRef, useEffect } from "react";
+
+
 
 // ---------------------------------------------------------------------------
 // SettingsPage
