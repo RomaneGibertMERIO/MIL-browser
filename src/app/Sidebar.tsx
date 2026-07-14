@@ -1,26 +1,25 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAppStore, type AdminView } from "../store/appStore";
 import { useStandards } from "../shared/hooks/useStandards";
 import { useProfilesByStandard } from "../shared/hooks/useProfiles";
 import { buildTree } from "../core/engine/treeBuilder";
 import { TaxonomyTree } from "../features/browse/TaxonomyTree";
 import { saveActiveStandard } from "../core/db/repositories/settings.repo";
+import { SubmitChangesModal } from "./SubmitChangesModal";
 
 // ---------------------------------------------------------------------------
-// Nav items (MODIFIÉ : Ajout de la vue validations avec son icône)
+// Nav items
 // ---------------------------------------------------------------------------
-
 const NAV_ITEMS: { view: AdminView; label: string; icon: string }[] = [
   { view: "library",   label: "Library",   icon: "◧" },
   { view: "standards", label: "Standards", icon: "≡" },
-  { view: "validations" as AdminView, label: "Validations", icon: "🔧" }, // <-- AJOUT ICI
+  { view: "validations", label: "Validations", icon: "🔧" },
   { view: "settings",  label: "Settings",  icon: "⚙" },
 ];
 
 // ---------------------------------------------------------------------------
-// Sidebar
+// Sidebar Component
 // ---------------------------------------------------------------------------
-
 export function Sidebar() {
   const adminView       = useAppStore((s) => s.adminView);
   const activeStdId     = useAppStore((s) => s.activeStandardId);
@@ -29,6 +28,12 @@ export function Sidebar() {
   const setMode         = useAppStore((s) => s.setMode);
   const setActiveStd    = useAppStore((s) => s.setActiveStandard);
   const setActiveNode   = useAppStore((s) => s.setActiveNode);
+
+  // Dynamic lists from store for our badges
+  const localChanges    = useAppStore((s) => s.localStagedChanges);
+  const pendingCommits  = useAppStore((s) => s.pendingCommits);
+
+  const [isSyncOpen, setIsSyncOpen] = useState(false);
 
   const standards   = useStandards();
   const allProfiles = useProfilesByStandard(activeStdId ?? "");
@@ -39,9 +44,7 @@ export function Sidebar() {
     return buildTree(activeStandard.nodes, allProfiles ?? []);
   }, [activeStandard, allProfiles]);
 
-  const showTree =
-    adminView === "library" &&
-    activeStandard !== null;
+  const showTree = adminView === "library" && activeStandard !== null;
 
   function handleStandardChange(id: string) {
     setActiveStd(id);
@@ -54,9 +57,9 @@ export function Sidebar() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 w-72 flex-shrink-0">
+    <div className="flex flex-col h-full bg-slate-900 w-72 flex-shrink-0 text-slate-300">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-slate-800">
+      <div className="px-5 py-5 border-b border-slate-800 flex-shrink-0">
         <p className="text-sm font-bold text-white tracking-widest uppercase">
           MIL-Browser
         </p>
@@ -67,7 +70,7 @@ export function Sidebar() {
       </div>
 
       {/* Standard selector */}
-      <div className="px-4 py-4 border-b border-slate-800">
+      <div className="px-4 py-4 border-b border-slate-800 flex-shrink-0">
         <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">
           Active Standard
         </label>
@@ -88,7 +91,7 @@ export function Sidebar() {
       </div>
 
       {/* Nav tabs */}
-      <nav className="px-3 py-3 border-b border-slate-800 space-y-1">
+      <nav className="px-3 py-3 border-b border-slate-800 space-y-1 flex-shrink-0">
         {NAV_ITEMS.map(({ view, label, icon }) => (
           <button
             key={view}
@@ -104,10 +107,10 @@ export function Sidebar() {
               <span>{label}</span>
             </div>
 
-            {/* AJOUT : Un petit indicateur visuel pour simuler les requêtes en attente sur l'onglet validations */}
-            {view === ('validations' as AdminView) && (
+            {/* Dynamic visual indicator for pending validations */}
+            {view === "validations" && pendingCommits.length > 0 && (
               <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
-                2
+                {pendingCommits.length}
               </span>
             )}
           </button>
@@ -115,7 +118,7 @@ export function Sidebar() {
       </nav>
 
       {/* Taxonomy tree — shown for browse + library views */}
-      {showTree && (
+      {showTree ? (
         <div className="flex-1 overflow-y-auto px-3 py-4 min-h-0">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-2 mb-3">
             Taxonomy
@@ -126,23 +129,46 @@ export function Sidebar() {
             onSelect={handleNodeSelect}
           />
         </div>
+      ) : (
+        <div className="flex-1" />
       )}
 
-      {!showTree && <div className="flex-1" />}
+      {/* Local Workspace / Sync Actions Section */}
+      <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex-shrink-0">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Local Workspace</span>
+          {localChanges.length > 0 && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              {localChanges.length} changes
+            </span>
+          )}
+        </div>
+
+        <button
+          onClick={() => setIsSyncOpen(true)}
+          disabled={localChanges.length === 0}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 disabled:opacity-30 disabled:hover:bg-blue-600 disabled:cursor-not-allowed transition-all shadow-sm"
+        >
+          <span>Submit Changes to Admin 📤</span>
+        </button>
+      </div>
 
       {/* Mode toggle */}
-      <div className="px-4 py-4 border-t border-slate-800">
+      <div className="px-4 py-4 border-t border-slate-800 flex-shrink-0">
         <button
           onClick={() => setMode("assistant")}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-100 transition-colors"
         >
-          <span className="text-base">&#9672;</span>
+          <span className="text-base">❖</span>
           <div className="text-left">
             <div className="text-slate-300">Browse Standards</div>
             <div className="text-xs text-slate-500 mt-0.5">Read-only exploration ↗</div>
           </div>
         </button>
       </div>
+
+      {/* Modal handler */}
+      {isSyncOpen && <SubmitChangesModal onClose={() => setIsSyncOpen(false)} />}
     </div>
   );
 }
