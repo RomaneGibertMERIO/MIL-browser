@@ -27,7 +27,6 @@ import { useRef, useEffect } from "react";
 // ---------------------------------------------------------------------------
 // SettingsPage
 // ---------------------------------------------------------------------------
-
 export function SettingsPage() {
   const standards = useStandards();
 
@@ -40,6 +39,12 @@ export function SettingsPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
+  // <-- AppStore interactions for Git Repository Path
+  const gitRepoPath = useAppStore((s) => s.gitRepoPath);
+  const setGitRepoPath = useAppStore((s) => s.setGitRepoPath);
+  const [localPathInput, setLocalPathInput] = useState(gitRepoPath);
+  const [pathSaveSuccess, setPathSaveSuccess] = useState(false);
+
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -47,11 +52,18 @@ export function SettingsPage() {
       setSettings(s);
       setSyncEnabled(s.sync.enabled);
       setEndpoint(s.sync.endpoint ?? "");
-      // Token is not pre-filled for security: user must re-enter to change.
     });
   }, []);
 
   if (settings === null || standards === undefined) return <LoadingSpinner />;
+
+  // Handler for saving the repository path
+  function handlePathSave(e: FormEvent) {
+    e.preventDefault();
+    setGitRepoPath(localPathInput.trim());
+    setPathSaveSuccess(true);
+    setTimeout(() => setPathSaveSuccess(false), 3000);
+  }
 
   async function handleSyncSave(e: FormEvent) {
     e.preventDefault();
@@ -66,7 +78,7 @@ export function SettingsPage() {
         cursor:     settings?.sync.cursor ?? null,
       });
       setSaveSuccess(true);
-      setTokenInput(""); // Clear token field after save
+      setTokenInput("");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save settings.");
     }
@@ -76,7 +88,7 @@ export function SettingsPage() {
     await exportDatabase();
   }
 
-async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file === undefined) return;
     setImporting(true);
@@ -86,11 +98,10 @@ async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     setImporting(false);
     e.target.value = "";
 
-    // Si des profils ont été importés avec succès, on recharge l'application pour synchroniser l'UI
     if (result.profilesImported > 0) {
       setTimeout(() => {
         window.location.reload();
-      }, 500); // Un léger délai pour laisser l'utilisateur voir le badge de succès
+      }, 500);
     }
   }
 
@@ -102,6 +113,43 @@ async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
   return (
     <div className="max-w-3xl space-y-6">
       <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
+
+      {/* ── NEW: Git Central Repository Location Configuration ────────── */}
+      <Card title="Git Network Repository Location">
+        <form onSubmit={handlePathSave} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Central Repository Network Path (Absolute path, shareable across lab workstations)
+            </label>
+            <input
+              type="text"
+              value={localPathInput}
+              onChange={(e) => setLocalPathInput(e.target.value)}
+              placeholder="e.g., Z:/mil-browser-repo.git or /volumes/network/repo.git"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+              autoComplete="off"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Modifying this path points your database synchronization actions to a relocated network drive folder.
+            </p>
+          </div>
+
+          {pathSaveSuccess && (
+            <p className="text-sm text-green-600 font-medium">
+              Repository path updated successfully.
+            </p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Update Path
+            </button>
+          </div>
+        </form>
+      </Card>
 
       {/* ── Sync ──────────────────────────────────────────────────────── */}
       <Card title="Sync Configuration">
