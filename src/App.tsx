@@ -5,7 +5,7 @@ import { useBootstrap } from './shared/hooks/useBootstrap';
 import { useStandard } from './shared/hooks/useStandards';
 import { AssistantPage } from './features/assistant/AssistantPage';
 import { LibraryPage } from './features/library/LibraryPage';
-import { StandardsPage } from './features/standards/StandardsPage';
+import { StandardsPage } from "./features/standards/StandardsPage";
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Sidebar } from './app/Sidebar';
 import { LoadingSpinner } from './shared/components/ui/LoadingSpinner';
