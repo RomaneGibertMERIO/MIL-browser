@@ -1,16 +1,3 @@
-/**
- * Root application component.
- *
- * Responsibilities:
- * 1. Invoke useBootstrap() to seed the database and restore navigation state.
- * 2. Gate rendering behind bootstrapStore.ready.
- * 3. Delegate to assistant or admin layout based on appStore.mode.
- *
- * This file imports ONLY from the new architecture (src/core/, src/features/,
- * src/shared/, src/store/, src/app/). Legacy code under src/components/,
- * src/hooks/, src/lib/, src/types/, src/sources/ is no longer referenced.
- */
-
 import { useState, useEffect } from 'react';
 import { useAppStore, type AdminView } from './store/appStore';
 import { useBootstrapStore } from './store/bootstrapStore';
@@ -24,16 +11,6 @@ import { Sidebar } from './app/Sidebar';
 import { LoadingSpinner } from './shared/components/ui/LoadingSpinner';
 import { ErrorBanner } from './shared/components/ui/ErrorBanner';
 
-// Interface for typings
-/*interface PendingRequest {
-  id: string;
-  name: string;
-  author: string;
-  date: string;
-  standard: string;
-}*/
-
-// Global window declaration for Electron safety
 declare global {
   interface Window {
     electronAPI?: {
@@ -41,10 +18,6 @@ declare global {
     };
   }
 }
-
-// ---------------------------------------------------------------------------
-// App — root component.
-// ---------------------------------------------------------------------------
 
 export default function App() {
   useBootstrap();
@@ -70,23 +43,16 @@ export default function App() {
   return <AdminLayout />;
 }
 
-// ---------------------------------------------------------------------------
-// AdminLayout — sidebar + content pane
-// ---------------------------------------------------------------------------
-
 function AdminLayout() {
   const adminView   = useAppStore((s) => s.adminView);
   const activeStdId = useAppStore((s) => s.activeStandardId);
-  const setMode     = useAppStore((s) => s.setMode);
 
-  // <-- MODIFIED: Pull dynamic state from the Zustand appStore
   const gitRepoPath = useAppStore((s) => s.gitRepoPath);
   const systemUsername = useAppStore((s) => s.systemUsername);
   const setSystemUsername = useAppStore((s) => s.setSystemUsername);
 
   const standard = useStandard(activeStdId ?? '');
 
-  // <-- MODIFIED: Retrieve genuine OS username via IPC Bridge on mount
   useEffect(() => {
     if (window.electronAPI?.getSystemUsername) {
       window.electronAPI
@@ -99,7 +65,7 @@ function AdminLayout() {
           setSystemUsername("Error-Session");
         });
     } else {
-      setSystemUsername("Browser-Session"); // Fallback for pure React development
+      setSystemUsername("Browser-Session");
     }
   }, [setSystemUsername]);
 
@@ -107,16 +73,14 @@ function AdminLayout() {
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar />
 
-      {/* Header + content */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* Topbar */}
-        <header className="flex-shrink-0 h-13 bg-white border-b border-gray-200 flex items-center px-6 gap-4">
-          <span className="font-bold text-gray-900 text-base tracking-tight">MIL Browser</span>
-          <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 rounded-md">
+        <header className="flex-shrink-0 h-16 bg-white border-b border-gray-200 flex items-center px-6 gap-4 shadow-xs">
+          <span className="font-black text-gray-900 text-lg tracking-tight">MIL Browser</span>
+          <span className="inline-flex items-center px-2 py-0.5 text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded-md">
             MANAGEMENT
           </span>
           <span className="text-gray-200 select-none mx-1">|</span>
-          <span className="text-sm text-blue-600 font-semibold capitalize">
+          <span className="text-base text-blue-600 font-extrabold capitalize">
             {adminView === 'library' ? 'Library'
               : adminView === 'standards' ? 'Standards'
               : adminView === 'settings' ? 'Settings'
@@ -124,19 +88,12 @@ function AdminLayout() {
               : adminView}
           </span>
           
-          {/* Dynamic User network info section */}
-          <div className="ml-auto flex items-center gap-4">
-            <div className="text-right select-none">
-              <p className="text-xs font-semibold text-gray-700">👤 Session: {systemUsername}</p>
-              <p className="text-[10px] text-gray-400 font-mono">Repo: {gitRepoPath}</p>
+          {/* RECONSTRUCTED & ENLARGED SESSION INFO PANEL */}
+          <div className="ml-auto flex items-center pr-2">
+            <div className="text-right border-l-2 border-gray-200 pl-4 py-1">
+              <p className="text-sm font-extrabold text-gray-900 tracking-tight">👤 Active Session: {systemUsername}</p>
+              <p className="text-xs text-gray-500 font-bold font-mono mt-0.5">Database Root: {gitRepoPath}</p>
             </div>
-            
-            <button
-              onClick={() => setMode('assistant')}
-              className="text-sm text-gray-400 hover:text-gray-700 transition-colors px-3 py-1.5 rounded-lg hover:bg-gray-100 font-medium"
-            >
-              Browse Standards ↗
-            </button>
           </div>
         </header>
 
@@ -150,10 +107,6 @@ function AdminLayout() {
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// ContentPane — routes adminView to the correct feature page
-// ---------------------------------------------------------------------------
 
 interface ContentPaneProps {
   adminView: AdminView;
@@ -195,9 +148,6 @@ function ContentPane({ adminView, standard }: ContentPaneProps) {
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// AdminValidationsPage — Split screen inspect & diff panel
-// ---------------------------------------------------------------------------
 export function AdminValidationsPage() {
   const pendingCommits = useAppStore((s) => s.pendingCommits);
   const approvedHistory = useAppStore((s) => s.approvedHistory);
@@ -325,8 +275,6 @@ export function AdminValidationsPage() {
         </div>
       ) : (
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-8 min-h-0 overflow-hidden">
-          
-          {/* LEFT COLUMN: Pending + History tracker */}
           <div className="lg:col-span-2 flex flex-col space-y-6 overflow-y-auto pr-2">
             <div>
               <span className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-3">Pending Pull Requests</span>
@@ -365,7 +313,6 @@ export function AdminValidationsPage() {
               )}
             </div>
 
-            {/* NEW: APPROVED HISTORY SECTION WITH BADGES */}
             {approvedHistory.length > 0 && (
               <div className="pt-4 border-t border-gray-200">
                 <span className="text-xs font-black text-emerald-600 uppercase tracking-widest block mb-3">
@@ -391,11 +338,9 @@ export function AdminValidationsPage() {
             )}
           </div>
 
-          {/* RIGHT COLUMN: Granular Change Review Inspector */}
           <div className="lg:col-span-3 flex flex-col bg-white border-2 border-gray-200 rounded-2xl overflow-hidden shadow-sm h-full">
             {activeCommit ? (
               <div className="flex flex-col h-full divide-y-2 divide-gray-150 overflow-hidden">
-                {/* Header Information */}
                 <div className="p-6 bg-gray-50 border-b-2 border-gray-100 flex-shrink-0">
                   <span className="text-[10px] bg-indigo-150 border border-indigo-200 text-indigo-700 font-black px-2.5 py-1 rounded-md tracking-wider">
                     COMMIT CONTROLLER ID: {activeCommit.id}
@@ -408,7 +353,6 @@ export function AdminValidationsPage() {
                   </p>
                 </div>
 
-                {/* Granular Line Payload Review list */}
                 <div className="p-6 overflow-y-auto space-y-8 flex-1">
                   <span className="text-xs font-black text-gray-400 uppercase tracking-widest block">
                     Review and Validate Items One by One
@@ -416,47 +360,39 @@ export function AdminValidationsPage() {
                   
                   {activeCommit.changes.map((change) => (
                     <div key={change.id} className="border-2 border-gray-150 rounded-2xl overflow-hidden bg-white shadow-xs hover:border-gray-300 transition-all">
-                      {/* Sub-header containing line action controls */}
                       <div className="p-4 bg-gray-50 flex items-center justify-between border-b border-gray-150 flex-wrap gap-3">
                         <div>
                           <p className="text-base font-extrabold text-gray-950">{change.name}</p>
                           <p className="text-xs text-gray-400 font-mono mt-0.5">{change.location}</p>
                         </div>
                         
-                        {/* LINE BY LINE DECISION BUTTONS */}
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleRejectChange(activeCommit.id, change.id, change.name)}
                             className="px-3.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-all active:scale-[0.98]"
-                            title="Reject and discard only this item"
                           >
                             Reject ❌
                           </button>
                           <button
                             onClick={() => handleApproveChange(activeCommit.id, change.id, change.name)}
                             className="px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all active:scale-[0.98]"
-                            title="Approve and write into core library"
                           >
                             Approve & Merge ✓
                           </button>
                         </div>
                       </div>
 
-                      {/* Content Inspector Area */}
                       <div className="p-5 space-y-6">
-                        {/* Created Action */}
                         {change.action === "Created" && change.proposedData && (
                           <div className="space-y-6">
                             <div className="bg-emerald-50/30 text-emerald-900 p-4 rounded-xl border border-emerald-200/60">
                               <span className="font-extrabold text-sm block mb-1">✓ Complete Structural Addition</span>
                               <p className="text-xs text-emerald-800">Properties proposed to be added in the database branch:</p>
                             </div>
-
                             <div>
                               <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">Target Field Properties</h4>
                               {renderDynamicFields(change.proposedData)}
                             </div>
-
                             {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
                               <div>
                                 <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Discrete Curve Dataset</h4>
@@ -466,21 +402,18 @@ export function AdminValidationsPage() {
                           </div>
                         )}
 
-                        {/* Deleted Action */}
                         {change.action === "Deleted" && (
                           <div className="bg-red-50 border border-red-200 text-red-800 text-sm p-4 rounded-xl font-bold">
                             ⚠️ Warning: Approving this change will remove this taxonomy and its linked data elements.
                           </div>
                         )}
 
-                        {/* Modified Action */}
                         {change.action === "Modified" && change.originalData && change.proposedData && (
                           <div className="space-y-6">
                             <div>
                               <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">Field Differences Mapping</h4>
                               {renderDynamicDiff(change.originalData, change.proposedData)}
                             </div>
-
                             {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
                               <div>
                                 <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Proposed Structural Dataset</h4>
