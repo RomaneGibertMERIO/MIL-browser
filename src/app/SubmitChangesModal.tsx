@@ -46,41 +46,48 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
+        <form onSubmit={handleSubmit} className="p-4 flex flex-col gap-4 overflow-y-auto">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-xs text-red-600 rounded-lg">
-              {error}
+            <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-xs font-semibold rounded-lg">
+              ⚠️ {error}
             </div>
           )}
 
-          {/* Staging change list */}
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
-              Select changes to push:
-            </label>
-            <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-60 overflow-y-auto">
-              {localChanges.map((change) => {
-                const actionColors =
-                  change.action === "Created" ? "bg-green-50 text-green-700 border-green-200" :
-                  change.action === "Deleted" ? "bg-red-50 text-red-700 border-red-200" :
-                  "bg-amber-50 text-amber-700 border-amber-200";
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-gray-500 uppercase">Change Explanation (for Admin review)</label>
+            <textarea
+              value={commitMessage}
+              onChange={(e) => {
+                setError(null);
+                setCommitMessage(e.target.value);
+              }}
+              placeholder="Explain why you added, changed or calibrated these profiles..."
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-slate-900 placeholder-gray-400 bg-white"
+            />
+          </div>
 
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-gray-500 uppercase">Select items to include ({selectedIds.length})</label>
+            <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto bg-gray-50/50">
+              {localChanges.map((change) => {
+                const isChecked = selectedIds.includes(change.id);
                 return (
-                  <label key={change.id} className="p-3 flex items-start gap-3 hover:bg-gray-50 cursor-pointer select-none">
+                  <label key={change.id} className="flex items-start gap-3 p-3 hover:bg-gray-50 cursor-pointer text-left select-none">
                     <input
                       type="checkbox"
-                      checked={selectedIds.includes(change.id)}
+                      checked={isChecked}
                       onChange={() => toggleSelect(change.id)}
-                      className="mt-1 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                      className="mt-1 h-4 w-4 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-sm text-gray-900 truncate">{change.name}</span>
-                        <span className={`text-[10px] font-bold border px-1.5 py-0.5 rounded ${actionColors}`}>
-                          {change.action}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-400 font-mono mt-0.5">{change.location}</p>
+                    <div className="text-xs">
+                      <p className="font-bold text-gray-800">
+                        <span className={`mr-1.5 px-1.5 py-0.5 rounded-sm font-extrabold ${
+                          change.action === 'Created' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        }`}>{change.action}</span>
+                        {change.name}
+                      </p>
+                      <p className="text-gray-400 font-mono mt-0.5">{change.location}</p>
                     </div>
                   </label>
                 );
@@ -88,35 +95,19 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
             </div>
           </div>
 
-          {/* Message input */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
-              Commit Explanation (Audit Log)
-            </label>
-            <textarea
-              required
-              rows={3}
-              value={commitMessage}
-              onChange={(e) => setCommitMessage(e.target.value)}
-              placeholder="Ex: Added standard category 4 vibration profile calibrations for 2026 lab shaker specs..."
-              className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+          <div className="mt-2 flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+              className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
             >
-              Request Merge 📤
+              Submit to Admin Area
             </button>
           </div>
         </form>
