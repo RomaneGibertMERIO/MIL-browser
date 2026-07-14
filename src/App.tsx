@@ -25,13 +25,13 @@ import { LoadingSpinner } from './shared/components/ui/LoadingSpinner';
 import { ErrorBanner } from './shared/components/ui/ErrorBanner';
 
 // Interface for typings
-interface PendingRequest {
+/*interface PendingRequest {
   id: string;
   name: string;
   author: string;
   date: string;
   standard: string;
-}
+}*/
 
 // Global window declaration for Electron safety
 declare global {
