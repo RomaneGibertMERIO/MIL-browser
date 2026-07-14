@@ -198,6 +198,8 @@ function ContentPane({ adminView, standard }: ContentPaneProps) {
 // ---------------------------------------------------------------------------
 // AdminValidationsPage — Split screen inspect & diff panel
 // ---------------------------------------------------------------------------
+import { useState } from 'react';
+import { useAppStore } from './store/appStore';
 
 export function AdminValidationsPage() {
   const pendingCommits = useAppStore((s) => s.pendingCommits);
@@ -210,58 +212,154 @@ export function AdminValidationsPage() {
   const activeCommit = pendingCommits.find((c) => c.id === selectedCommitId);
 
   const handleApprove = (id: string) => {
-    alert("Approved! The local staged metadata has been successfully merged into the core schema branch.");
+    alert("Approved! The proposed changes have been successfully merged into the master schema.");
     resolveCommit(id);
     setSelectedCommitId(null);
   };
 
   const handleReject = (id: string) => {
-    alert("Rejected. The branch will be dropped and modifications discarded.");
+    alert("Rejected. The modification request has been successfully declined.");
     resolveCommit(id);
     setSelectedCommitId(null);
   };
 
+  // Helper récursif pour explorer et afficher TOUS les champs d'un JSON de façon lisible et stylisée
+  const renderDynamicFields = (data: Record<string, any>) => {
+    if (!data || typeof data !== 'object') return null;
+
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {Object.entries(data).map(([key, value]) => {
+          if (key === 'dataset' || key === 'id' || key === 'standardId' || key === 'nodeId') return null;
+
+          let displayValue = "";
+          if (value === null || value === undefined) displayValue = "—";
+          else if (typeof value === "object") displayValue = JSON.stringify(value);
+          else displayValue = String(value);
+
+          return (
+            <div key={key} className="p-4 bg-gray-50 border border-gray-150 rounded-lg flex flex-col gap-1.5">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{key}</span>
+              <span className="text-base font-semibold text-gray-800 break-words">{displayValue}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Helper pour afficher dynamiquement les datasets sous forme de table sans en connaître la structure à l'avance
+  const renderDynamicDataset = (dataset: Array<Record<string, any>>) => {
+    if (!dataset || dataset.length === 0) return null;
+    const headers = Object.keys(dataset[0]);
+
+    return (
+      <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-100 text-gray-600 text-xs font-bold uppercase border-b border-gray-200">
+                {headers.map((h) => (
+                  <th key={h} className="p-4 select-none">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 text-sm font-medium text-gray-700">
+              {dataset.map((row, idx) => (
+                <tr key={idx} className="hover:bg-gray-50/50">
+                  {headers.map((h) => (
+                    <td key={h} className="p-4 font-mono text-gray-900">
+                      {row[h] !== null && row[h] !== undefined ? String(row[h]) : "—"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  // Helper de comparaison dynamique de champs modifiés (Diff)
+  const renderDynamicDiff = (original: Record<string, any>, proposed: Record<string, any>) => {
+    const allKeys = Array.from(new Set([...Object.keys(original), ...Object.keys(proposed)]))
+      .filter((k) => k !== 'dataset' && k !== 'id' && k !== 'standardId' && k !== 'nodeId');
+
+    return (
+      <div className="border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-200 shadow-xs">
+        <div className="grid grid-cols-3 bg-gray-100 font-bold text-xs text-gray-600 uppercase p-4">
+          <div>Property</div>
+          <div>Original Value</div>
+          <div>Proposed Value</div>
+        </div>
+        {allKeys.map((key) => {
+          const origVal = original[key];
+          const propVal = proposed[key];
+          
+          if (JSON.stringify(origVal) === JSON.stringify(propVal)) return null;
+
+          return (
+            <div key={key} className="grid grid-cols-3 p-4 items-center text-sm hover:bg-yellow-50/20">
+              <div className="font-bold text-gray-500 uppercase tracking-wide text-xs">{key}</div>
+              <div className="line-through text-red-600 bg-red-50/50 px-2.5 py-1.5 rounded-lg border border-red-100 font-mono inline-block max-w-max">
+                {origVal !== null && origVal !== undefined ? String(origVal) : "—"}
+              </div>
+              <div className="text-emerald-700 bg-emerald-50/50 px-2.5 py-1.5 rounded-lg border border-emerald-100 font-bold font-mono inline-block max-w-max">
+                {propVal !== null && propVal !== undefined ? String(propVal) : "—"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
-    <div className="h-full flex flex-col space-y-4 max-w-6xl mx-auto">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Repository Validation Dashboard</h2>
-        <p className="text-sm text-gray-500">
-          Review, diff-check, and merge user contributions into the official library repository.
-        </p>
+    <div className="h-full flex flex-col space-y-6 w-full max-w-full px-4">
+      {/* Header Area */}
+      <div className="flex items-center justify-between border-b border-gray-200 pb-4">
+        <div>
+          <h2 className="text-3xl font-black text-gray-900 tracking-tight">Repository Validation Dashboard</h2>
+          <p className="text-base text-gray-500 mt-1">
+            Review proposed taxonomy and metadata contributions to keep the standard unified.
+          </p>
+        </div>
       </div>
 
       {pendingCommits.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-400 text-sm">
-          🎉 No pending validation requests. Everything is synchronized!
+        <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-16 text-center text-gray-400 text-base shadow-xs">
+          🎉 No pending merge requests. Everything is in sync!
         </div>
       ) : (
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-6 min-h-[500px]">
-          {/* LEFT: Commits Queue */}
-          <div className="md:col-span-2 space-y-3 overflow-y-auto pr-1">
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Queue</span>
-            <div className="space-y-2">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-8 min-h-0 overflow-hidden">
+          
+          {/* LEFT: Commits list (Takes 2/5 width) */}
+          <div className="lg:col-span-2 flex flex-col space-y-4 overflow-y-auto pr-2">
+            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Pending Submissions</span>
+            <div className="space-y-3">
               {pendingCommits.map((commit) => {
                 const isActive = commit.id === selectedCommitId;
                 return (
                   <div
                     key={commit.id}
                     onClick={() => setSelectedCommitId(commit.id)}
-                    className={`p-4 rounded-xl border transition-all cursor-pointer text-left ${
+                    className={`p-6 rounded-2xl border-2 transition-all cursor-pointer text-left shadow-xs ${
                       isActive
-                        ? "bg-blue-50/50 border-blue-400 shadow-xs ring-1 ring-blue-400"
-                        : "bg-white border-gray-200 hover:bg-gray-50"
+                        ? "bg-blue-50/40 border-blue-500 shadow-md ring-1 ring-blue-500"
+                        : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/50"
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-semibold text-gray-400">👤 {commit.author}</span>
-                      <span className="text-xs text-gray-400">{commit.date}</span>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded-full">👤 {commit.author}</span>
+                      <span className="text-xs text-gray-400 font-semibold">{commit.date}</span>
                     </div>
-                    <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">{commit.commitMessage}</h4>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                        {commit.changes.length} change(s)
+                    <h4 className="font-bold text-lg text-gray-900 leading-snug mb-3">{commit.commitMessage}</h4>
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                      <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+                        📦 {commit.changes.length} change payload
                       </span>
-                      {isActive && <span className="text-xs text-blue-600 font-medium">Viewing details →</span>}
+                      {isActive && <span className="text-sm text-blue-600 font-extrabold">Active Inspection ➔</span>}
                     </div>
                   </div>
                 );
@@ -269,108 +367,103 @@ export function AdminValidationsPage() {
             </div>
           </div>
 
-          {/* RIGHT: Detail View with Diff Inspector */}
-          <div className="md:col-span-3 flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+          {/* RIGHT: Selected Commit Detail pane (Takes 3/5 width) */}
+          <div className="lg:col-span-3 flex flex-col bg-white border-2 border-gray-200 rounded-2xl overflow-hidden shadow-sm h-full">
             {activeCommit ? (
-              <div className="flex flex-col h-full divide-y divide-gray-100">
-                {/* Header info */}
-                <div className="p-5 flex items-start justify-between bg-gray-50/50">
-                  <div className="space-y-1">
-                    <span className="text-[10px] bg-indigo-100 border border-indigo-200 text-indigo-700 font-semibold px-2 py-0.5 rounded">
-                      COMMIT ID: {activeCommit.id}
+              <div className="flex flex-col h-full divide-y-2 divide-gray-100 overflow-hidden">
+                {/* Commit Main Action Header */}
+                <div className="p-6 bg-gray-50 flex items-center justify-between border-b-2 border-gray-100 flex-shrink-0">
+                  <div className="space-y-1 max-w-[60%]">
+                    <span className="text-[10px] bg-indigo-150 border border-indigo-200 text-indigo-700 font-black px-2.5 py-1 rounded-md tracking-wider">
+                      ID: {activeCommit.id}
                     </span>
-                    <h3 className="font-bold text-gray-900 text-base">{activeCommit.commitMessage}</h3>
-                    <p className="text-xs text-gray-400">
-                      Author: <span className="font-medium text-gray-600">{activeCommit.author}</span> · Date: {activeCommit.date}
+                    <h3 className="font-extrabold text-gray-900 text-xl tracking-tight leading-tight mt-1">{activeCommit.commitMessage}</h3>
+                    <p className="text-xs text-gray-400 font-semibold">
+                      Proposed by {activeCommit.author} on {activeCommit.date}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <button
                       onClick={() => handleReject(activeCommit.id)}
-                      className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 border border-transparent rounded-lg transition-colors"
+                      className="px-5 py-3 text-sm font-extrabold text-red-600 bg-red-50 hover:bg-red-100 border-2 border-red-200 rounded-xl transition-all active:scale-[0.98]"
                     >
-                      Reject ❌
+                      Reject Request ❌
                     </button>
                     <button
                       onClick={() => handleApprove(activeCommit.id)}
-                      className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors"
+                      className="px-5 py-3 text-sm font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-all active:scale-[0.98]"
                     >
-                      Merge & Commit ✓
+                      Approve & Merge ✓
                     </button>
                   </div>
                 </div>
 
-                {/* Inspecting Staged Items */}
-                <div className="p-5 overflow-y-auto space-y-6 flex-1">
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Proposed Changes</span>
+                {/* Inspecting each single change item in payload */}
+                <div className="p-6 overflow-y-auto space-y-8 flex-1">
+                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest block">Payload Payload Breakdown</span>
+                  
                   {activeCommit.changes.map((change) => (
-                    <div key={change.id} className="border border-gray-100 rounded-lg overflow-hidden">
+                    <div key={change.id} className="border-2 border-gray-100 rounded-xl overflow-hidden bg-white shadow-xs">
                       {/* Sub-header of item */}
-                      <div className="p-3 bg-gray-50 flex items-center justify-between border-b border-gray-100">
+                      <div className="p-4 bg-gray-50/80 flex items-center justify-between border-b border-gray-150">
                         <div>
-                          <p className="text-xs font-semibold text-gray-800">{change.name}</p>
-                          <p className="text-[10px] text-gray-400 font-mono mt-0.5">{change.location}</p>
+                          <p className="text-base font-extrabold text-gray-950">{change.name}</p>
+                          <p className="text-xs text-gray-400 font-mono mt-1">{change.location}</p>
                         </div>
-                        <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 font-semibold px-2 py-0.5 rounded capitalize">
-                          {change.type} / {change.action}
+                        <span className="text-xs bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-lg uppercase tracking-wider">
+                          {change.type} : {change.action}
                         </span>
                       </div>
 
-                      {/* Diff Details Content */}
-                      <div className="p-4 space-y-4">
-                        {change.action === "Created" && (
-                          <div className="bg-green-50/50 text-green-800 text-xs p-3 rounded-lg border border-green-100 space-y-1">
-                            <span className="font-bold">✓ Complete Addition Proposal:</span>
-                            <pre className="font-mono text-[11px] text-gray-600 overflow-x-auto p-2 bg-white rounded border border-gray-100 mt-2">
-                              {JSON.stringify(change.proposedData, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-
-                        {change.action === "Deleted" && (
-                          <div className="bg-red-50/50 text-red-800 text-xs p-3 rounded-lg border border-red-100 font-medium">
-                            🚨 Request to permanently delete this taxonomy node and all its child components from the core network.
-                          </div>
-                        )}
-
-                        {change.action === "Modified" && change.originalData && change.proposedData && (
-                          <div className="space-y-3">
-                            <span className="text-xs text-gray-500 font-semibold">Side-By-Side Property Diff:</span>
-                            <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100 text-xs">
-                              {/* Headers */}
-                              <div className="grid grid-cols-3 bg-gray-50 font-semibold text-gray-600 p-2.5">
-                                <div>Property</div>
-                                <div>Active Repo (Original)</div>
-                                <div>Staged contribution</div>
-                              </div>
-
-                              {/* Duration Diff row */}
-                              {change.originalData.duration !== change.proposedData.duration && (
-                                <div className="grid grid-cols-3 p-2.5 bg-yellow-50/20">
-                                  <div className="font-medium text-gray-500">Duration (min)</div>
-                                  <div className="line-through text-red-600 font-mono">{change.originalData.duration}</div>
-                                  <div className="text-emerald-700 font-semibold font-mono">{change.proposedData.duration}</div>
-                                </div>
-                              )}
-
-                              {/* rmsVertical row */}
-                              {change.originalData.rmsVertical !== change.proposedData.rmsVertical && (
-                                <div className="grid grid-cols-3 p-2.5 bg-yellow-50/20">
-                                  <div className="font-medium text-gray-500">rmsVertical (g)</div>
-                                  <div className="line-through text-red-600 font-mono">{change.originalData.rmsVertical}</div>
-                                  <div className="text-emerald-700 font-semibold font-mono">{change.proposedData.rmsVertical}</div>
-                                </div>
-                              )}
-
-                              {/* Notes row */}
-                              {change.originalData.notes !== change.proposedData.notes && (
-                                <div className="grid grid-cols-3 p-2.5 bg-yellow-50/20">
-                                  <div className="font-medium text-gray-500">Explanatory Notes</div>
-                                  <div className="text-red-500/80 italic">{change.originalData.notes}</div>
-                                  <div className="text-emerald-700 font-semibold">{change.proposedData.notes}</div>
-                                </div>
-                              )}
+                      {/* Content Inspector Body */}
+                      <div className="p-5 space-y-6">
+                        {/* CASE A: ADDITION (Dynamically maps all metadata properties and the complete dataset array) */}
+                        {change.action === "Created" && change.proposedData && (
+                          <div className="space-y-6">
+                            <div className="bg-emerald-50/30 text-emerald-900 p-4 rounded-xl border border-emerald-200/60">
+                              <span className="font-extrabold text-sm block mb-1">✓ Addition Proposal</span>
+                              <p className="text-xs text-emerald-800">The user proposes adding this clean resource structure with the following properties:</p>
                             </div>
+
+                            {/* Render Object Properties Dynamically */}
+                            <div>
+                              <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">Item Fields Map</h4>
+                              {renderDynamicFields(change.proposedData)}
+                            </div>
+
+                            {/* Render Dataset Dynamically */}
+                            {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
+                              <div>
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Item Dataset Matrix</h4>
+                                {renderDynamicDataset(change.proposedData.dataset)}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* CASE B: DELETION */}
+                        {change.action === "Deleted" && (
+                          <div className="bg-red-50 border-2 border-dashed border-red-200 text-red-800 text-sm p-5 rounded-xl font-bold flex items-center gap-3">
+                            <span className="text-2xl">⚠️</span>
+                            <span>Warning: This requests the permanent deletion of this structure from the active repository database.</span>
+                          </div>
+                        )}
+
+                        {/* CASE C: MODIFICATION (Diff comparisons for base properties and dataset changes) */}
+                        {change.action === "Modified" && change.originalData && change.proposedData && (
+                          <div className="space-y-6">
+                            <div>
+                              <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">Value Differences Mapping</h4>
+                              {renderDynamicDiff(change.originalData, change.proposedData)}
+                            </div>
+
+                            {/* Dataset matrix comparison */}
+                            {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
+                              <div>
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Proposed Dataset Matrix</h4>
+                                {renderDynamicDataset(change.proposedData.dataset)}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -379,8 +472,9 @@ export function AdminValidationsPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-                Select a submit request from the left list to inspect differences.
+              <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-base p-12 gap-2">
+                <span className="text-3xl">🔍</span>
+                <span>Select a submission in the queue to inspect raw or modified elements.</span>
               </div>
             )}
           </div>
