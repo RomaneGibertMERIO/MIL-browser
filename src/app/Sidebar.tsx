@@ -1,9 +1,6 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useAppStore, type AdminView } from "../store/appStore";
 import { useStandards } from "../shared/hooks/useStandards";
-import { useProfilesByStandard } from "../shared/hooks/useProfiles";
-import { buildTree } from "../core/engine/treeBuilder";
-import { TaxonomyTree } from "../features/browse/TaxonomyTree";
 import { saveActiveStandard } from "../core/db/repositories/settings.repo";
 import { SubmitChangesModal } from "./SubmitChangesModal";
 
@@ -17,11 +14,9 @@ const NAV_ITEMS: { view: AdminView; label: string; icon: string }[] = [
 export function Sidebar() {
   const adminView       = useAppStore((s) => s.adminView);
   const activeStdId     = useAppStore((s) => s.activeStandardId);
-  const activeNode      = useAppStore((s) => s.activeNode);
   const setAdminView    = useAppStore((s) => s.setAdminView);
   const setMode         = useAppStore((s) => s.setMode);
   const setActiveStd    = useAppStore((s) => s.setActiveStandard);
-  const setActiveNode   = useAppStore((s) => s.setActiveNode);
 
   const localChanges    = useAppStore((s) => s.localStagedChanges);
   const pendingCommits  = useAppStore((s) => s.pendingCommits);
@@ -29,24 +24,10 @@ export function Sidebar() {
   const [isSyncOpen, setIsSyncOpen] = useState(false);
 
   const standards   = useStandards();
-  const allProfiles = useProfilesByStandard(activeStdId ?? "");
-  const activeStandard = standards?.find((s) => s.manifest.id === activeStdId) ?? null;
-
-  const tree = useMemo(() => {
-    if (activeStandard === null) return [];
-    return buildTree(activeStandard.nodes, allProfiles ?? []);
-  }, [activeStandard, allProfiles]);
-
-  const showTree = adminView === "library" && activeStandard !== null;
 
   function handleStandardChange(id: string) {
     setActiveStd(id);
     void saveActiveStandard(id);
-  }
-
-  function handleNodeSelect(nodeId: string) {
-    if (activeStdId === null) return;
-    setActiveNode({ standardId: activeStdId, nodeId });
   }
 
   return (
@@ -60,7 +41,7 @@ export function Sidebar() {
           <p className="text-xs text-slate-400">Environmental Testing KB</p>
         </div>
 
-        {/* CLARIFIED EXIT BUTTON AT THE TOP */}
+        {/* EXIT BUTTON */}
         <button
           onClick={() => setMode("assistant")}
           className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider text-amber-400 bg-amber-950/40 border border-amber-700/50 rounded-lg hover:bg-amber-900/40 transition-all"
@@ -69,7 +50,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* SUBMIT CHANGES ACTION BUTTON - HIGHLY VISIBLE IN THE LIST */}
+      {/* SUBMIT CHANGES ACTION BUTTON */}
       <div className="px-4 pt-4 pb-2 flex-shrink-0">
         <button
           onClick={() => setIsSyncOpen(true)}
@@ -81,7 +62,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* STANDARD SELECTOR (LARGER DROPDOWN) */}
+      {/* STANDARD SELECTOR */}
       <div className="px-4 py-3 flex-shrink-0">
         <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">
           Selected Standard
@@ -102,7 +83,7 @@ export function Sidebar() {
         </select>
       </div>
 
-      {/* NAVIGATION TABS (LARGER FONTS & PADDINGS) */}
+      {/* NAVIGATION TABS */}
       <nav className="px-3 py-2 space-y-1.5 flex-shrink-0">
         {NAV_ITEMS.map(({ view, label, icon }) => (
           <button
@@ -128,21 +109,8 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* TAXONOMY TREE */}
-      {showTree ? (
-        <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0 border-t border-slate-800/60 mt-2">
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-2 mb-3">
-            Taxonomy Structure
-          </p>
-          <TaxonomyTree
-            tree={tree}
-            activeNodeId={activeNode?.nodeId ?? null}
-            onSelect={handleNodeSelect}
-          />
-        </div>
-      ) : (
-        <div className="flex-1" />
-      )}
+      {/* spacer to fill height cleanly without taxonomy tree */}
+      <div className="flex-1" />
 
       {/* MODAL CONTROL */}
       {isSyncOpen && <SubmitChangesModal onClose={() => setIsSyncOpen(false)} />}
