@@ -11,7 +11,7 @@
  * src/hooks/, src/lib/, src/types/, src/sources/ is no longer referenced.
  */
 
-import { useState } from 'react'; // <-- FIX: Added useState import
+import { useState, useEffect } from 'react'; // <-- MODIFIED: Added useEffect import
 import { useAppStore, type AdminView } from './store/appStore';
 import { useBootstrapStore } from './store/bootstrapStore';
 import { useBootstrap } from './shared/hooks/useBootstrap';
@@ -31,6 +31,15 @@ interface PendingRequest {
   author: string;
   date: string;
   standard: string;
+}
+
+// Global window declaration for Electron safety
+declare global {
+  interface Window {
+    electronAPI?: {
+      getSystemUsername: () => Promise<string>;
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +79,29 @@ function AdminLayout() {
   const activeStdId = useAppStore((s) => s.activeStandardId);
   const setMode     = useAppStore((s) => s.setMode);
 
+  // <-- MODIFIED: Pull dynamic state from the Zustand appStore
+  const gitRepoPath = useAppStore((s) => s.gitRepoPath);
+  const systemUsername = useAppStore((s) => s.systemUsername);
+  const setSystemUsername = useAppStore((s) => s.setSystemUsername);
+
   const standard = useStandard(activeStdId ?? '');
+
+  // <-- MODIFIED: Retrieve genuine OS username via IPC Bridge on mount
+  useEffect(() => {
+    if (window.electronAPI?.getSystemUsername) {
+      window.electronAPI
+        .getSystemUsername()
+        .then((username) => {
+          setSystemUsername(username);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch OS username", err);
+          setSystemUsername("Error-Session");
+        });
+    } else {
+      setSystemUsername("Browser-Session"); // Fallback for pure React development
+    }
+  }, [setSystemUsername]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -93,11 +124,11 @@ function AdminLayout() {
               : adminView}
           </span>
           
-          {/* User network info section (100% English) */}
+          {/* Dynamic User network info section */}
           <div className="ml-auto flex items-center gap-4">
             <div className="text-right select-none">
-              <p className="text-xs font-semibold text-gray-700">👤 Session: Labo-User</p>
-              <p className="text-[10px] text-gray-400 font-mono">Repo: Z:/mil-git-db.git</p>
+              <p className="text-xs font-semibold text-gray-700">👤 Session: {systemUsername}</p>
+              <p className="text-[10px] text-gray-400 font-mono">Repo: {gitRepoPath}</p>
             </div>
             
             <button
@@ -169,7 +200,6 @@ function ContentPane({ adminView, standard }: ContentPaneProps) {
 // ---------------------------------------------------------------------------
 
 function AdminValidationsPage() {
-  // FIX: Added explicit typed array for requests
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([
     { id: "1", name: "Turbine M4 Vibration Profile", author: "Dupond", date: "2026-07-13", standard: "MIL-STD-810H" },
     { id: "2", name: "Upper Bearing Pyroshock", author: "Martin", date: "2026-07-12", standard: "MIL-STD-202G" },
