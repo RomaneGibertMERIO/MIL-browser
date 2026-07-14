@@ -11,7 +11,7 @@
  * src/hooks/, src/lib/, src/types/, src/sources/ is no longer referenced.
  */
 
-import { useState, useEffect } from 'react'; // <-- MODIFIED: Added useEffect import
+import { useState, useEffect } from 'react';
 import { useAppStore, type AdminView } from './store/appStore';
 import { useBootstrapStore } from './store/bootstrapStore';
 import { useBootstrap } from './shared/hooks/useBootstrap';
@@ -198,8 +198,6 @@ function ContentPane({ adminView, standard }: ContentPaneProps) {
 // ---------------------------------------------------------------------------
 // AdminValidationsPage — Split screen inspect & diff panel
 // ---------------------------------------------------------------------------
-import { useState } from 'react';
-import { useAppStore } from './store/appStore';
 
 export function AdminValidationsPage() {
   const pendingCommits = useAppStore((s) => s.pendingCommits);
