@@ -140,7 +140,7 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveNode: (activeNode) => set({ activeNode }),
   clearActiveNode: () => set({ activeNode: null }),
   setGitRepoPath: (gitRepoPath) => set({ gitRepoPath }),
-  setSystemUsername: (username) => set({ systemUsername }),
+  setSystemUsername: (username) => set({ systemUsername: username }),
 
   // Ajout dynamique d'un changement local qui utilise l'ID généré
   addLocalChange: (change) => set((s) => ({
