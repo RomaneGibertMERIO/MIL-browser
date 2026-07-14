@@ -1,13 +1,3 @@
-/**
- * Library feature page.
- *
- * Provides full CRUD for user-created profiles within a selected standard.
- * Reads are live via useLiveQuery. Writes go through the profile engine
- * (validation) then the profile repository (IndexedDB + sync event).
- *
- * Sub-views: list → create | edit. Delete is confirmed via inline state.
- */
-
 import { useState, useMemo, useRef } from "react";
 import type { Profile, ProfileDraft } from "../../core/domain/profile";
 import { ProfileSchema } from "../../core/domain/profile";
@@ -31,33 +21,27 @@ import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
 import { ProfileForm } from "./ProfileForm";
 import { TimeSeriesChart } from "../../shared/components/charts/TimeSeriesChart";
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 interface LibraryPageProps {
   standard: StandardPlugin;
 }
 
-// ---------------------------------------------------------------------------
-// LibraryPage — 3-pane persistent workspace (list | editor | live preview)
-// ---------------------------------------------------------------------------
-
 export function LibraryPage({ standard }: LibraryPageProps) {
-  // Selection
+  // Sélection & Workspace State
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [formKey, setFormKey] = useState(0); // increment to force-remount ProfileForm
+  const [formKey, setFormKey] = useState(0);
 
-  // Live preview (driven by ProfileForm.onChange)
+  // Largeurs dynamiques des panneaux (Drag-to-resize)
+  const [leftWidth, setLeftWidth] = useState(288); // 72 en Tailwind = 288px
+  const [rightWidth, setRightWidth] = useState(320); // 80 en Tailwind = 320px
+
+  // Live preview & validation
   const [previewDraft, setPreviewDraft] = useState<ProfileDraft | null>(null);
   const [previewTab, setPreviewTab] = useState<"chart" | "table" | "fields">("chart");
-
-  // Save / validation
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
-  // Search / delete / import
+  // Outils
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -65,14 +49,8 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   const importInputRef = useRef<HTMLInputElement>(null);
 
   // Data
-  // Appel du hook de récupération des profils associés à cette norme
   const rawProfiles = useProfilesByStandard(standard.manifest.id);
-  
-  // Contient tous les profils (builtin + user) renvoyés par la bdd
-  const availableProfiles = useMemo(
-    () => rawProfiles ?? [],
-    [rawProfiles]
-  );
+  const availableProfiles = useMemo(() => rawProfiles ?? [], [rawProfiles]);
   
   const filteredProfiles = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -108,6 +86,54 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     return profileToDraft(selectedProfile, schema.datasetColumns);
   }, [selectedProfile, standard]);
 
+  // Détection des modifications non sauvegardées (Deep Check basique)
+  const isDirty = useMemo(() => {
+    if (!previewDraft) return false;
+    return JSON.stringify(previewDraft) !== JSON.stringify(formInitialDraft);
+  }, [previewDraft, formInitialDraft]);
+
+  // Garde-fou anti-perte de données
+  function confirmDiscardIfDirty(): boolean {
+    if (isDirty) {
+      return window.confirm("You have unsaved updates. Are you sure you want to discard your changes?");
+    }
+    return true;
+  }
+
+  // Resizer de gauche
+  function startResizeLeft(e: React.MouseEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = leftWidth;
+    function doResize(moveEvent: MouseEvent) {
+      const newWidth = startWidth + (moveEvent.clientX - startX);
+      if (newWidth > 200 && newWidth < 500) setLeftWidth(newWidth);
+    }
+    function stopResize() {
+      window.removeEventListener("mousemove", doResize);
+      window.removeEventListener("mouseup", stopResize);
+    }
+    window.addEventListener("mousemove", doResize);
+    window.addEventListener("mouseup", stopResize);
+  }
+
+  // Resizer de droite
+  function startResizeRight(e: React.MouseEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = rightWidth;
+    function doResize(moveEvent: MouseEvent) {
+      const newWidth = startWidth - (moveEvent.clientX - startX);
+      if (newWidth > 240 && newWidth < 600) setRightWidth(newWidth);
+    }
+    function stopResize() {
+      window.removeEventListener("mousemove", doResize);
+      window.removeEventListener("mouseup", stopResize);
+    }
+    window.addEventListener("mousemove", doResize);
+    window.addEventListener("mouseup", stopResize);
+  }
+
   // Actions
   function resetEditorState() {
     setPreviewDraft(null);
@@ -117,38 +143,37 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   }
 
   function selectProfile(profile: Profile) {
+    if (!confirmDiscardIfDirty()) return;
     setSelectedProfileId(profile.id);
     setIsCreating(false);
     resetEditorState();
   }
 
   function startCreate() {
+    if (!confirmDiscardIfDirty()) return;
     setSelectedProfileId(null);
     setIsCreating(true);
     resetEditorState();
   }
 
   function handleCancel() {
+    if (!confirmDiscardIfDirty()) return;
     if (isCreating) { setSelectedProfileId(null); setIsCreating(false); }
     resetEditorState();
   }
 
   async function handleSave(draft: ProfileDraft) {
     const schema = getEffectiveSchema(standard, draft.nodeId);
-    
-    // Déterminer si on édite un profil builtin existant
     const isEditingBuiltin = selectedProfile?.source === "builtin";
     
-    // Si c'est un builtin qu'on a modifié, on force un nouvel ID (Copie), sinon on garde l'id existant
     const targetId = isEditingBuiltin ? crypto.randomUUID() : selectedProfile?.id;
     const targetCreatedAt = isEditingBuiltin ? new Date().toISOString() : selectedProfile?.createdAt;
 
     const profile = buildProfileFromDraft(draft, schema, targetId, targetCreatedAt);
     
-    // On s'assure que l'enregistrement devient un profil utilisateur local modifiable
     if (isEditingBuiltin) {
       profile.source = "user";
-      profile.status = "local"; // Repasse en local/brouillon pour validation
+      profile.status = "local";
     }
 
     const result = validateProfile(profile, schema);
@@ -159,6 +184,8 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     
     await upsertProfile(profile);
     
+    // Bypass de sécurité pour recharger proprement le nouveau brouillon de référence
+    setPreviewDraft(null); 
     setSelectedProfileId(profile.id);
     setIsCreating(false);
     setSaveStatus("saved");
@@ -166,6 +193,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   }
 
   async function handleDuplicate(profile: Profile) {
+    if (!confirmDiscardIfDirty()) return;
     const copy: Profile = {
       ...profile, id: crypto.randomUUID(),
       name: `${profile.name} (copy)`, source: "user",
@@ -173,7 +201,9 @@ export function LibraryPage({ standard }: LibraryPageProps) {
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
     await upsertProfile(copy);
-    selectProfile(copy);
+    setSelectedProfileId(copy.id);
+    setIsCreating(false);
+    resetEditorState();
   }
 
   async function handleDeleteConfirm() {
@@ -208,16 +238,15 @@ export function LibraryPage({ standard }: LibraryPageProps) {
         }
         if (c > 0) { setPendingImport({ file, conflictCount: c }); return; }
       }
-    } catch { /* ignoré pour laisser le moteur gérer */ }
+    } catch {}
     
     const result = await importProfilesForStandard(file, standard);
     setImportResult(result);
     
     if (result.errors && result.errors.length > 0) {
-      alert("⚠️ ERREURS :\n\n" + JSON.stringify(result.errors, null, 2));
+      alert("⚠️ ERRORS :\n\n" + JSON.stringify(result.errors, null, 2));
     } else {
-      alert("🎉 Importation réussie : " + result.profilesImported + " profils ajoutés !");
-      window.location.reload();
+      alert("🎉 Successfully imported " + result.profilesImported + " profiles!");
     }
   }
 
@@ -228,15 +257,17 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     setPendingImport(null);
   }
 
-  // Render
   const showEditor = isCreating || selectedProfile !== null;
   const editorTitle = previewDraft?.name || selectedProfile?.name || (isCreating ? "New Profile" : "");
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full select-none">
 
       {/* Panel 1: Profile list */}
-      <div className="w-72 flex-shrink-0 flex flex-col border-r border-gray-200 bg-white overflow-hidden">
+      <div 
+        style={{ width: `${leftWidth}px` }} 
+        className="flex-shrink-0 flex flex-col border-r border-gray-200 bg-white overflow-hidden select-text"
+      >
         <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b border-gray-200 space-y-2">
           <button
             onClick={startCreate}
@@ -273,7 +304,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
 
         {importResult !== null && (
           <div className="mx-3 mt-2 p-2 rounded border border-blue-200 bg-blue-50 text-xs text-blue-700 flex items-center justify-between flex-shrink-0">
-            <span>Imported {importResult.profilesImported} profile{importResult.profilesImported !== 1 ? "s" : ""}{importResult.errors.length > 0 ? ` · ${importResult.errors.length} error(s)` : ""}.</span>
+            <span>Imported {importResult.profilesImported} profile{importResult.profilesImported !== 1 ? "s" : ""}.</span>
             <button onClick={() => setImportResult(null)} className="ml-2">✕</button>
           </div>
         )}
@@ -299,13 +330,19 @@ export function LibraryPage({ standard }: LibraryPageProps) {
 
         <div className="flex-shrink-0 px-4 py-2 border-t border-gray-100">
           <p className="text-xs text-gray-400">
-            {availableProfiles.length} profile{availableProfiles.length !== 1 ? "s" : ""} · {standard.manifest.label}
+            {availableProfiles.length} profiles · {standard.manifest.label}
           </p>
         </div>
       </div>
 
+      {/* LEFT DRAG BAR */}
+      <div 
+        onMouseDown={startResizeLeft} 
+        className="w-1.5 bg-transparent hover:bg-blue-500/30 cursor-col-resize flex-shrink-0 transition-colors border-r border-gray-100" 
+      />
+
       {/* Panel 2: Editor */}
-      <div className="flex-1 min-w-0 flex flex-col border-r border-gray-200 bg-white overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden select-text">
         {showEditor ? (
           <>
             <div className="flex-shrink-0 px-6 py-3 bg-white border-b border-gray-200 flex items-center gap-4">
@@ -325,7 +362,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
                   <span className="text-xs px-2 py-0.5 bg-green-50 border border-green-200 text-green-700 rounded font-medium">Saved ✓</span>
                 )}
                 <button type="button" onClick={handleCancel} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                  {isCreating ? "Cancel" : "Discard"}
+                  Discard
                 </button>
                 <button type="submit" form="profile-form" disabled={saveStatus === "saving"} className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors">
                   {saveStatus === "saving" ? "Saving…" : "Save"}
@@ -357,8 +394,17 @@ export function LibraryPage({ standard }: LibraryPageProps) {
         )}
       </div>
 
+      {/* RIGHT DRAG BAR */}
+      <div 
+        onMouseDown={startResizeRight} 
+        className="w-1.5 bg-transparent hover:bg-blue-500/30 cursor-col-resize flex-shrink-0 transition-colors border-l border-gray-100" 
+      />
+
       {/* Panel 3: Live preview */}
-      <div className="w-80 flex-shrink-0 flex flex-col bg-gray-50 overflow-hidden">
+      <div 
+        style={{ width: `${rightWidth}px` }} 
+        className="flex-shrink-0 flex flex-col bg-gray-50 overflow-hidden select-text"
+      >
         <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-200 flex items-center justify-between">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Preview</span>
           {previewProfile !== null && (
@@ -403,7 +449,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
 }
 
 // ---------------------------------------------------------------------------
-// LibraryListItem — compact clickable profile row with status badges
+// Composants secondaires inchangés (LibraryListItem, PreviewPanel, Dialogs, etc.)
 // ---------------------------------------------------------------------------
 
 function LibraryListItem({ profile, isSelected, onClick }: {
@@ -412,52 +458,32 @@ function LibraryListItem({ profile, isSelected, onClick }: {
   onClick: () => void;
 }) {
   const status = profile.status ?? "local";
-
   const statusConfig = {
-    local: {
-      dotColor: "bg-blue-500",
-      textColor: "text-blue-600",
-      label: "Local",
-    },
-    pending: {
-      dotColor: "bg-amber-500",
-      textColor: "text-amber-600",
-      label: "Pending",
-    },
-    approved: {
-      dotColor: "bg-green-500",
-      textColor: "text-green-600",
-      label: "Official",
-    },
+    local: { dotColor: "bg-blue-500", textColor: "text-blue-600", label: "Local" },
+    pending: { dotColor: "bg-amber-500", textColor: "text-amber-600", label: "Pending" },
+    approved: { dotColor: "bg-green-500", textColor: "text-green-600", label: "Official" },
   };
-
   const currentStatus = statusConfig[status] ?? statusConfig.local;
 
   return (
     <button
       onClick={onClick}
       className={`w-full text-left px-4 py-3 border-b border-gray-50 transition-colors ${
-        isSelected
-          ? "bg-blue-50 border-l-2 border-l-blue-500 pl-3.5"
-          : "hover:bg-gray-50"
+        isSelected ? "bg-blue-50 border-l-2 border-l-blue-500 pl-3.5" : "hover:bg-gray-50"
       }`}
     >
       <div className="flex items-center justify-between gap-2">
         <p className={`text-sm font-semibold truncate ${isSelected ? "text-blue-700" : "text-gray-900"}`}>
           {profile.name}
         </p>
-        
-        {/* Pastille de Statut */}
         <span className={`flex items-center gap-1.5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-gray-50 border border-gray-100 ${currentStatus.textColor}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${currentStatus.dotColor}`} />
           {currentStatus.label}
         </span>
       </div>
-
       {profile.description !== "" && (
         <p className="text-xs text-gray-400 truncate mt-0.5">{profile.description}</p>
       )}
-
       <div className="flex items-center justify-between mt-1 text-[11px] text-gray-400">
         <span>{profile.dataset.length} data points</span>
         {profile.author && profile.author !== "unknown" && (
@@ -467,10 +493,6 @@ function LibraryListItem({ profile, isSelected, onClick }: {
     </button>
   );
 }
-
-// ---------------------------------------------------------------------------
-// PreviewPanel — chart / table / fields live preview
-// ---------------------------------------------------------------------------
 
 function PreviewPanel({ profile, schema, tab }: {
   profile: Profile;
@@ -483,11 +505,7 @@ function PreviewPanel({ profile, schema, tab }: {
         {profile.dataset.length === 0 ? (
           <p className="text-xs text-gray-400 text-center py-8">Dataset is empty — add rows to see the chart.</p>
         ) : (
-          <TimeSeriesChart 
-              columns={schema.datasetColumns} 
-              data={profile.dataset} 
-              fields={profile.fields}
-            />
+          <TimeSeriesChart columns={schema.datasetColumns} data={profile.dataset} fields={profile.fields} />
         )}
       </div>
     );
@@ -495,9 +513,7 @@ function PreviewPanel({ profile, schema, tab }: {
 
   if (tab === "table") {
     const cols = schema.datasetColumns.filter(c => c.axis !== "none");
-    if (profile.dataset.length === 0) {
-      return <p className="text-xs text-gray-400 text-center py-8 px-4">No dataset rows.</p>;
-    }
+    if (profile.dataset.length === 0) return <p className="text-xs text-gray-400 text-center py-8 px-4">No dataset rows.</p>;
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
@@ -505,8 +521,7 @@ function PreviewPanel({ profile, schema, tab }: {
             <tr>
               {cols.map(col => (
                 <th key={col.key} className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  {col.label}
-                  <span className="font-normal ml-1 text-gray-300 normal-case">({col.unit})</span>
+                  {col.label} <span className="font-normal ml-1 text-gray-300 normal-case">({col.unit})</span>
                 </th>
               ))}
             </tr>
@@ -527,14 +542,11 @@ function PreviewPanel({ profile, schema, tab }: {
     );
   }
 
-  // fields tab
   const fieldsWithValues = schema.fields.filter(f => {
     const v = profile.fields[f.key];
     return v !== null && v !== undefined && v !== "";
   });
-  if (fieldsWithValues.length === 0) {
-    return <p className="text-xs text-gray-400 text-center py-8 px-4">No metadata fields filled in.</p>;
-  }
+  if (fieldsWithValues.length === 0) return <p className="text-xs text-gray-400 text-center py-8 px-4">No metadata fields filled in.</p>;
   return (
     <div className="p-4 space-y-3">
       {fieldsWithValues.map(f => (
@@ -547,99 +559,46 @@ function PreviewPanel({ profile, schema, tab }: {
   );
 }
 
-interface DeleteConfirmDialogProps {
-  profileName: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-
-function DeleteConfirmDialog({
-  profileName,
-  onConfirm,
-  onCancel,
-}: DeleteConfirmDialogProps) {
+function DeleteConfirmDialog({ profileName, onConfirm, onCancel }: DeleteConfirmDialogProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
       <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm mx-4">
-        <h3 className="text-base font-semibold text-gray-900 mb-2">
-          Delete profile?
-        </h3>
+        <h3 className="text-base font-semibold text-gray-900 mb-2">Delete profile?</h3>
         <p className="text-sm text-gray-500 mb-5">
-          <span className="font-medium text-gray-800">{profileName}</span> will
-          be permanently deleted. This action cannot be undone.
+          <span className="font-medium text-gray-800">{profileName}</span> will be permanently deleted.
         </p>
         <div className="flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
-          >
-            Delete
-          </button>
+          <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">Delete</button>
         </div>
       </div>
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// ImportOverwriteDialog
-// ---------------------------------------------------------------------------
-
-interface ImportOverwriteDialogProps {
-  conflictCount: number;
-  onConfirm: () => void;
-  onCancel: () => void;
 }
 
 function ImportOverwriteDialog({ conflictCount, onConfirm, onCancel }: ImportOverwriteDialogProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
       <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm mx-4">
-        <h3 className="text-base font-semibold text-gray-900 mb-2">
-          Overwrite existing profiles?
-        </h3>
+        <h3 className="text-base font-semibold text-gray-900 mb-2">Overwrite existing profiles?</h3>
         <p className="text-sm text-gray-500 mb-5">
-          The import file contains{" "}
-          <span className="font-medium text-gray-800">{conflictCount} profile{conflictCount !== 1 ? "s" : ""}</span>{" "}
-          that already exist in your library. Proceeding will overwrite them with the imported versions.
+          The file contains <span className="font-medium text-gray-800">{conflictCount} profiles</span> that already exist.
         </p>
         <div className="flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700 transition-colors"
-          >
-            Overwrite & Import
-          </button>
+          <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700">Overwrite & Import</button>
         </div>
       </div>
     </div>
   );
 }
 
-function profileToDraft(
-  profile: Profile,
-  columns: StandardPlugin["profileSchema"]["datasetColumns"],
-): ProfileDraft {
+function profileToDraft(profile: Profile, columns: StandardPlugin["profileSchema"]["datasetColumns"]): ProfileDraft {
   const datasetRows = profile.dataset.map((row) => {
     const stringRow: Record<string, string> = {};
-    for (const col of columns) {
-      stringRow[col.key] = String(row[col.key] ?? "");
-    }
+    for (const col of columns) stringRow[col.key] = String(row[col.key] ?? "");
     return stringRow;
   });
-
   return {
     name: profile.name,
     description: profile.description,
@@ -650,3 +609,6 @@ function profileToDraft(
     datasetRows,
   };
 }
+
+interface DeleteConfirmDialogProps { profileName: string; onConfirm: () => void; onCancel: () => void; }
+interface ImportOverwriteDialogProps { conflictCount: number; onConfirm: () => void; onCancel: () => void; }
