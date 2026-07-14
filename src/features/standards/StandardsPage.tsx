@@ -1,204 +1,434 @@
 /**
- * Settings page.
+ * Standards management page (admin mode).
  *
- * Allows the user to configure application-level preferences:
- * - Active standard (which standard is selected in the sidebar)
- * - Git Repository Configuration (local network path for shared synchronization)
- * - Data management (import/export full database)
- *
- * All writes go through the settings repository (IndexedDB) and AppStore.
+ * Lists all loaded standards.
+ * Allows: import from JSON, create new, edit taxonomy, delete (user standards).
  */
 
-import { useState, type FormEvent, useRef, useEffect } from "react";
-import { useAppStore } from "../../store/appStore";
-import type { AppSettings } from "../../core/domain/sync";
-import { getSettings } from "../../core/db/repositories/settings.repo";
+import { useRef, useState } from "react";
+import type { StandardPlugin, StandardNode } from "../../core/domain/standard";
+import { loadStandardFromFile } from "../../core/engine/standardLoader";
 import {
-  exportDatabase,
-  importDatabase,
-  type ImportResult,
-} from "../../core/engine/importExportEngine";
+  deleteStandardAndProfiles,
+  updateStandardNodes,
+  createStandard,
+} from "../../core/db/repositories/standards.repo";
 import { useStandards } from "../../shared/hooks/useStandards";
-import { Card } from "../../shared/components/ui/Card";
+import { Badge } from "../../shared/components/ui/Badge";
+import { EmptyState } from "../../shared/components/ui/EmptyState";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
+import { ErrorBanner } from "../../shared/components/ui/ErrorBanner";
+import { TaxonomyEditor } from "./TaxonomyEditor";
 
-// ---------------------------------------------------------------------------
-// SettingsPage
-// ---------------------------------------------------------------------------
-export function SettingsPage() {
+type SubView = "list" | "create" | "edit-taxonomy";
+
+export function StandardsPage() {
   const standards = useStandards();
-
-  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<ImportResult | null>(null);
-
-  // AppStore interactions for Git Repository Path
-  const gitRepoPath = useAppStore((s) => s.gitRepoPath);
-  const setGitRepoPath = useAppStore((s) => s.setGitRepoPath);
-  const [localPathInput, setLocalPathInput] = useState(gitRepoPath);
-  const [pathSaveSuccess, setPathSaveSuccess] = useState(false);
-
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [subView, setSubView] = useState<SubView>("list");
+  const [editingStandard, setEditingStandard] = useState<StandardPlugin | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    void getSettings().then((s) => {
-      setSettings(s);
-    });
-  }, []);
+  if (standards === undefined) return <LoadingSpinner />;
 
-  if (settings === null || standards === undefined) return <LoadingSpinner />;
-
-  // Handler for saving the repository path
-  function handlePathSave(e: FormEvent) {
-    e.preventDefault();
-    setGitRepoPath(localPathInput.trim());
-    setPathSaveSuccess(true);
-    setTimeout(() => setPathSaveSuccess(false), 3000);
+  // ── Taxonomy editor ─────────────────────────────────────────────────────
+  if (subView === "edit-taxonomy" && editingStandard !== null) {
+    return (
+      <div className="h-full">
+        <TaxonomyEditor
+          standard={editingStandard}
+          onSave={async (nodes: StandardNode[]) => {
+            await updateStandardNodes(editingStandard.manifest.id, nodes);
+            setSubView("list");
+            setEditingStandard(null);
+          }}
+          onCancel={() => { setSubView("list"); setEditingStandard(null); }}
+        />
+      </div>
+    );
   }
 
-  async function handleExport() {
-    await exportDatabase();
+  // ── Create new standard ─────────────────────────────────────────────────
+  if (subView === "create") {
+    return (
+      <NewStandardForm
+        existingIds={(standards ?? []).map(s => s.manifest.id)}
+        onCreated={async (plugin) => {
+          await createStandard(plugin);
+          setEditingStandard(plugin);
+          setSubView("edit-taxonomy");
+        }}
+        onCancel={() => setSubView("list")}
+      />
+    );
   }
 
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file === undefined) return;
     setImporting(true);
+    setImportError(null);
+    try {
+      await loadStandardFromFile(file);
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : "Failed to import standard.",
+      );
+    } finally {
+      setImporting(false);
+      e.target.value = "";
+    }
+  }
 
-    const result = await importDatabase(file);
-    setImportResult(result);
-    setImporting(false);
-    e.target.value = "";
-
-    if (result.profilesImported > 0) {
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
+  async function handleDeleteConfirm() {
+    if (deletingId === null) return;
+    try {
+      await deleteStandardAndProfiles(deletingId);
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : "Failed to delete standard.",
+      );
+    } finally {
+      setDeletingId(null);
     }
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
+    <>
+      {deletingId !== null && (
+        <StandardDeleteDialog
+          standardLabel={
+            standards.find((s) => s.manifest.id === deletingId)?.manifest.label ?? ""
+          }
+          onConfirm={() => { void handleDeleteConfirm(); }}
+          onCancel={() => setDeletingId(null)}
+        />
+      )}
 
-      {/* ── Git Central Repository Location Configuration ────────── */}
-      <Card title="Git Network Repository Location">
-        <form onSubmit={handlePathSave} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Central Repository Network Path (Absolute path, shareable across lab workstations)
-            </label>
-            <input
-              type="text"
-              value={localPathInput}
-              onChange={(e) => setLocalPathInput(e.target.value)}
-              placeholder="e.g., Z:/mil-browser-repo.git or /volumes/network/repo.git"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
-              autoComplete="off"
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Standards</h2>
+          <p className="text-sm text-gray-400 mt-0.5">
+            {standards.length} standard{standards.length !== 1 ? "s" : ""} loaded
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json"
+            onChange={(e) => { void handleImportFile(e); }}
+            className="hidden"
+          />
+          <button
+            onClick={() => setSubView("create")}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            + New Standard
+          </button>
+          <button
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {importing ? "Importing…" : "Import Standard"}
+          </button>
+        </div>
+      </div>
+
+      {importError !== null && (
+        <ErrorBanner message={importError} onDismiss={() => setImportError(null)} />
+      )}
+
+      {standards.length === 0 ? (
+        <EmptyState
+          title="No standards"
+          message="Import a standard JSON file to get started."
+        />
+      ) : (
+        <div className="space-y-3">
+          {standards.map((s) => (
+            <StandardCard
+              key={s.manifest.id}
+              standard={s}
+              onDelete={() => setDeletingId(s.manifest.id)}
+              onEditTaxonomy={() => {
+                setEditingStandard(s);
+                setSubView("edit-taxonomy");
+              }}
             />
-            <p className="mt-1 text-xs text-gray-400">
-              Modifying this path points your database synchronization actions to a relocated network drive folder.
-            </p>
-          </div>
+          ))}
+        </div>
+      )}
 
-          {pathSaveSuccess && (
-            <p className="text-sm text-green-600 font-medium">
-              Repository path updated successfully.
-            </p>
+      <div className="mt-8 p-4 rounded-lg bg-blue-50 border border-blue-200">
+        <h3 className="text-sm font-semibold text-blue-800 mb-1">
+          Standard Plugin Format
+        </h3>
+        <p className="text-xs text-blue-700 leading-relaxed">
+          Standards are loaded from JSON plugin files. Each plugin defines the
+          standard manifest, taxonomy nodes, profile schema (fields and chart
+          columns), and optional schema migration rules. Builtin standards are
+          seeded from <code className="font-mono">public/standards/</code>.
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// StandardCard
+// ---------------------------------------------------------------------------
+interface StandardCardProps {
+  standard: StandardPlugin;
+  onDelete: () => void;
+  onEditTaxonomy: () => void;
+}
+
+function StandardCard({ standard, onDelete, onEditTaxonomy }: StandardCardProps) {
+  const m = standard.manifest;
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-4">
+      <div className="flex items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className="font-semibold text-sm text-gray-900">{m.label}</span>
+            {m.isBuiltin && <Badge variant="blue">Built-in</Badge>}
+            <Badge variant="gray">v{m.version}</Badge>
+          </div>
+          {m.description !== undefined && (
+            <p className="text-sm text-gray-500 line-clamp-2 mb-2">{m.description}</p>
           )}
-
-          <div className="flex justify-end">
+          <div className="flex flex-wrap gap-4 text-xs text-gray-400">
+            <span>
+              <span className="text-gray-600 font-medium">{standard.nodes.length}</span> nodes
+            </span>
+            <span>
+              <span className="text-gray-600 font-medium">{standard.profileSchema.fields.length}</span> schema fields
+            </span>
+            {m.organization !== undefined && (
+              <span>Org: <span className="text-gray-600 font-medium">{m.organization}</span></span>
+            )}
+            <span className="font-mono">{m.id}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={onEditTaxonomy}
+            className="px-3 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+          >
+            Edit Taxonomy
+          </button>
+          
+          {!m.isBuiltin && (
             <button
-              type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+              onClick={onDelete}
+              className="px-3 py-1 text-xs font-medium text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors"
             >
-              Update Path
+              Remove
             </button>
-          </div>
-        </form>
-      </Card>
-
-      {/* ── Data Management ───────────────────────────────────────────── */}
-      <Card title="Data Management">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-800">Export Database</p>
-              <p className="text-xs text-gray-500">
-                Download all user profiles and standards as a JSON backup.
-              </p>
-            </div>
-            <button
-              onClick={() => { void handleExport(); }}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-            >
-              Export
-            </button>
-          </div>
-
-          <hr className="border-gray-100" />
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-800">Import Database</p>
-              <p className="text-xs text-gray-500">
-                Restore from a previously exported JSON backup.
-              </p>
-            </div>
-            <div>
-              <input
-                ref={importInputRef}
-                type="file"
-                accept=".json"
-                onChange={(e) => { void handleImportFile(e); }}
-                className="hidden"
-              />
-              <button
-                onClick={() => importInputRef.current?.click()}
-                disabled={importing}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50 transition-colors"
-              >
-                {importing ? "Importing…" : "Import"}
-              </button>
-            </div>
-          </div>
-
-          {importResult !== null && (
-            <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-700">
-              Imported {importResult.profilesImported} profiles.
-              {importResult.errors.length > 0 && (
-                <span className="text-amber-700">
-                  {" "}
-                  {importResult.errors.length} error(s) — check console for details.
-                </span>
-              )}
-            </div>
           )}
         </div>
-      </Card>
-
-      {/* ── About ─────────────────────────────────────────────────────── */}
-      <Card title="About">
-        <div className="space-y-2 text-sm text-gray-500">
-          <p>
-            <span className="font-medium text-gray-700">Application</span>{" "}
-            MIL-Browser — Environmental Testing Knowledge Base
-          </p>
-          <p>
-            <span className="font-medium text-gray-700">Version</span>{" "}
-            2.0.0
-          </p>
-          <p>
-            <span className="font-medium text-gray-700">Standards loaded</span>{" "}
-            {standards.length}
-          </p>
-          <p>
-            <span className="font-medium text-gray-700">Architecture</span>{" "}
-            IndexedDB · Zod · Zustand · Recharts
-          </p>
-        </div>
-      </Card>
+      </div>
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// StandardDeleteDialog
+// ---------------------------------------------------------------------------
+interface StandardDeleteDialogProps {
+  standardLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function StandardDeleteDialog({ standardLabel, onConfirm, onCancel }: StandardDeleteDialogProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm mx-4">
+        <h3 className="text-base font-semibold text-gray-900 mb-2">Remove standard?</h3>
+        <p className="text-sm text-gray-500 mb-5">
+          <span className="font-medium text-gray-800">{standardLabel}</span> and all user profiles belonging to it will be permanently deleted.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// NewStandardForm
+// ---------------------------------------------------------------------------
+interface NewStandardFormProps {
+  existingIds: string[];
+  onCreated: (plugin: StandardPlugin) => Promise<void>;
+  onCancel: () => void;
+}
+
+function NewStandardForm({ existingIds, onCreated, onCancel }: NewStandardFormProps) {
+  const [label, setLabel] = useState("");
+  const [id, setId] = useState("");
+  const [organization, setOrg] = useState("");
+  const [version, setVersion] = useState("1.0");
+  const [description, setDesc] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  function handleLabelChange(value: string) {
+    setLabel(value);
+    setId(value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    const trimId = id.trim();
+    if (trimId.length === 0) { setError("ID is required."); return; }
+    if (label.trim().length === 0) { setError("Label is required."); return; }
+    if (organization.trim().length === 0) { setError("Organization is required."); return; }
+    if (existingIds.includes(trimId)) {
+      setError(`A standard with ID "${trimId}" already exists.`);
+      return;
+    }
+
+    const plugin: StandardPlugin = {
+      manifest: {
+        id: trimId,
+        version: version.trim() || "1.0",
+        schemaVersion: 1,
+        organization: organization.trim(),
+        label: label.trim(),
+        description: description.trim(),
+        isBuiltin: false,
+      },
+      nodes: [],
+      profileSchema: { version: 1, fields: [], datasetColumns: [] },
+      migrations: [],
+    };
+
+    setSaving(true);
+    try {
+      await onCreated(plugin);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create standard.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputCls = "w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
+  const labelCls = "block text-xs font-medium text-gray-700 mb-1";
+
+  return (
+    <div className="max-w-xl">
+      <div className="flex items-center gap-3 mb-6">
+        <button
+          onClick={onCancel}
+          className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z" />
+          </svg>
+          Back
+        </button>
+        <h2 className="text-lg font-semibold text-gray-900">Create New Standard</h2>
+      </div>
+
+      <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
+        <div>
+          <label className={labelCls}>Label <span className="text-red-500">*</span></label>
+          <input
+            type="text"
+            value={label}
+            onChange={e => handleLabelChange(e.target.value)}
+            placeholder="e.g. Company Environmental Standard 2024"
+            className={inputCls}
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <label className={labelCls}>ID <span className="text-red-500">*</span></label>
+          <input
+            type="text"
+            value={id}
+            onChange={e => setId(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+            placeholder="e.g. company-env-2024"
+            className={`${inputCls} font-mono`}
+          />
+          <p className="mt-1 text-xs text-gray-400">
+            Used as the unique key. Lowercase letters, numbers, and hyphens only. Cannot be changed after creation.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Organization <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={organization}
+              onChange={e => setOrg(e.target.value)}
+              placeholder="e.g. ACME Corp"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Version</label>
+            <input
+              type="text"
+              value={version}
+              onChange={e => setVersion(e.target.value)}
+              placeholder="e.g. 1.0"
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className={labelCls}>Description</label>
+          <textarea
+            value={description}
+            onChange={e => setDesc(e.target.value)}
+            rows={3}
+            placeholder="Optional description of this standard…"
+            className={`${inputCls} resize-none`}
+          />
+        </div>
+
+        {error !== null && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{error}</p>
+        )}
+
+        <div className="flex justify-end gap-3 pt-1">
+          <button type="button" onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? "Creating…" : "Create & Edit Taxonomy →"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
