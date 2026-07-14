@@ -8,15 +8,12 @@ export interface ActiveNode {
   nodeId: string;
 }
 
-// ---------------------------------------------------------------------------
-// Structuring Mock Changes for the Staging Area
-// ---------------------------------------------------------------------------
 export interface MockChangeItem {
   id: string;
   type: 'standard' | 'taxonomy' | 'profile';
   action: 'Created' | 'Modified' | 'Deleted';
   name: string;
-  location: string; // e.g. "MIL-STD-810H > Method 514.8"
+  location: string;
   originalData?: any;
   proposedData?: any;
 }
@@ -29,6 +26,15 @@ export interface AdminCommitRequest {
   changes: MockChangeItem[];
 }
 
+// Pour suivre l'historique des éléments approuvés et afficher "Official par [Nom]"
+export interface ApprovedHistoryItem {
+  id: string;
+  name: string;
+  approvedBy: string;
+  author: string;
+  date: string;
+}
+
 interface AppState {
   mode: AppMode;
   adminView: AdminView;
@@ -37,10 +43,9 @@ interface AppState {
   gitRepoPath: string;
   systemUsername: string;
 
-  // Staging area for local edits (User side)
   localStagedChanges: MockChangeItem[];
-  // Commit queue for validation (Admin side)
   pendingCommits: AdminCommitRequest[];
+  approvedHistory: ApprovedHistoryItem[]; // Historique de validation réelle
 
   setMode: (mode: AppMode) => void;
   setAdminView: (view: AdminView) => void;
@@ -50,11 +55,12 @@ interface AppState {
   setGitRepoPath: (path: string) => void;
   setSystemUsername: (username: string) => void;
 
-  // Mock actions
-  addLocalChange: (change: MockChangeItem) => void;
+  addLocalChange: (change: Omit<MockChangeItem, 'id'>) => void;
   clearLocalChanges: () => void;
   submitCommit: (commitMessage: string, selectedIds: string[]) => void;
-  resolveCommit: (commitId: string) => void;
+  
+  // Validation granulaire (changement par changement)
+  resolveSingleChange: (commitId: string, changeId: string, action: 'approve' | 'reject') => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -64,8 +70,8 @@ export const useAppStore = create<AppState>((set) => ({
   activeNode: null,
   gitRepoPath: "Z:/mil-git-db.git",
   systemUsername: "Loading...",
+  approvedHistory: [],
 
-  // Seed default changes so the interface isn't empty on launch
   localStagedChanges: [
     {
       id: "change-1",
@@ -80,8 +86,8 @@ export const useAppStore = create<AppState>((set) => ({
         dataset: [{ Freq: 5, ASDV: 0.015 }, { Freq: 20, ASDV: 0.020 }]
       },
       proposedData: {
-        duration: 45, // Decreased duration
-        rmsVertical: 1.25, // Increased intensity
+        duration: 45,
+        rmsVertical: 1.25,
         notes: "Optimized for laboratory shaker limit restrictions (2026 calibration).",
         dataset: [{ Freq: 5, ASDV: 0.018 }, { Freq: 20, ASDV: 0.025 }]
       }
@@ -97,21 +103,13 @@ export const useAppStore = create<AppState>((set) => ({
         rmsVertical: 0.95,
         notes: "Brand new turbine signature profile."
       }
-    },
-    {
-      id: "change-3",
-      type: "taxonomy",
-      action: "Created",
-      name: "Method 516.7 - Pyroshock",
-      location: "MIL-STD-202G > Dynamic Section"
     }
   ],
 
-  // Mock initial admin queue
   pendingCommits: [
     {
       id: "commit-101",
-      author: "Martin",
+      author: "Martin (Lab Tech)",
       date: "2026-07-14",
       commitMessage: "Calibrated M4 profile parameters to safely match Shaker B tolerances",
       changes: [
@@ -123,6 +121,14 @@ export const useAppStore = create<AppState>((set) => ({
           location: "MIL-STD-202G > Dynamic",
           originalData: { duration: 10, rmsVertical: 0.45 },
           proposedData: { duration: 12, rmsVertical: 0.55 }
+        },
+        {
+          id: "change-legacy-2",
+          type: "profile",
+          action: "Created",
+          name: "Secondary Exhaust Resonant Freq",
+          location: "MIL-STD-202G > Structural",
+          proposedData: { duration: 15, rmsVertical: 0.22, notes: "Requested on-site sensor test payload" }
         }
       ]
     }
@@ -134,9 +140,16 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveNode: (activeNode) => set({ activeNode }),
   clearActiveNode: () => set({ activeNode: null }),
   setGitRepoPath: (gitRepoPath) => set({ gitRepoPath }),
-  setSystemUsername: (systemUsername) => set({ systemUsername }),
+  setSystemUsername: (username) => set({ systemUsername }),
 
-  addLocalChange: (change) => set((s) => ({ localStagedChanges: [...s.localStagedChanges, change] })),
+  // Ajout dynamique d'un changement local qui utilise l'ID généré
+  addLocalChange: (change) => set((s) => ({
+    localStagedChanges: [
+      ...s.localStagedChanges,
+      { ...change, id: `change-${Date.now()}` }
+    ]
+  })),
+  
   clearLocalChanges: () => set({ localStagedChanges: [] }),
 
   submitCommit: (commitMessage, selectedIds) => set((s) => {
@@ -145,7 +158,7 @@ export const useAppStore = create<AppState>((set) => ({
 
     const newCommit: AdminCommitRequest = {
       id: `commit-${Date.now()}`,
-      author: s.systemUsername,
+      author: s.systemUsername, // Prend dynamiquement ton nom de session Electron / Navigateur
       date: new Date().toISOString().split('T')[0],
       commitMessage,
       changes: changesToSubmit
@@ -157,7 +170,45 @@ export const useAppStore = create<AppState>((set) => ({
     };
   }),
 
-  resolveCommit: (commitId) => set((s) => ({
-    pendingCommits: s.pendingCommits.filter((c) => c.id !== commitId)
-  }))
+  // Méthode granulaire pour valider / rejeter un seul changement à la fois
+  resolveSingleChange: (commitId, changeId, action) => set((s) => {
+    const commitIndex = s.pendingCommits.findIndex((c) => c.id === commitId);
+    if (commitIndex === -1) return {};
+
+    const commit = s.pendingCommits[commitIndex];
+    const targetChange = commit.changes.find((ch) => ch.id === changeId);
+    
+    let updatedHistory = [...s.approvedHistory];
+
+    if (action === 'approve' && targetChange) {
+      // Stocke la validation réussie avec l'admin actuel (systemUsername) et l'auteur d'origine
+      updatedHistory.push({
+        id: targetChange.id,
+        name: targetChange.name,
+        approvedBy: s.systemUsername,
+        author: commit.author,
+        date: new Date().toISOString().split('T')[0]
+      });
+    }
+
+    // Filtre pour enlever l'élément traité de ce commit particulier
+    const remainingChanges = commit.changes.filter((ch) => ch.id !== changeId);
+
+    let updatedCommits = [...s.pendingCommits];
+    if (remainingChanges.length === 0) {
+      // Si plus aucun changement dans le commit, on supprime le commit complet de la file
+      updatedCommits = updatedCommits.filter((c) => c.id !== commitId);
+    } else {
+      // Sinon, on met simplement à jour le commit avec la liste réduite
+      updatedCommits[commitIndex] = {
+        ...commit,
+        changes: remainingChanges
+      };
+    }
+
+    return {
+      pendingCommits: updatedCommits,
+      approvedHistory: updatedHistory
+    };
+  })
 }));
