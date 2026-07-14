@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAppStore, type MockChangeItem } from "../store/appStore";
+import { useAppStore } from "../store/appStore";
 
 interface SubmitChangesModalProps {
   onClose: () => void;
