@@ -201,4 +201,4 @@ export function SettingsPage() {
     </div>
   );
 }
-export { StandardsPage };
+
