@@ -10,10 +10,10 @@
  *
  * Design decisions:
  * - Active node is stored as { standardId, nodeId } rather than a resolved
- *   TaxonomyNodeItem, because TaxonomyNodeItem is a derived runtime type
- *   that must be re-built whenever the standard definition changes.
+ * TaxonomyNodeItem, because TaxonomyNodeItem is a derived runtime type
+ * that must be re-built whenever the standard definition changes.
  * - The store never imports from the database layer — it receives values
- *   from the bootstrap sequence via setActiveStandard / setLastView.
+ * from the bootstrap sequence via setActiveStandard / setLastView.
  */
 
 import { create } from "zustand";
@@ -43,6 +43,10 @@ interface AppState {
   activeStandardId: string | null;
   /** The taxonomy node currently selected in the sidebar or assistant. */
   activeNode: ActiveNode | null;
+  
+  // New network-related state variables
+  gitRepoPath: string;
+  systemUsername: string;
 
   setMode: (mode: AppMode) => void;
   setAdminView: (view: AdminView) => void;
@@ -50,6 +54,10 @@ interface AppState {
   setActiveNode: (node: ActiveNode | null) => void;
   /** Clears the active node without clearing the active standard. */
   clearActiveNode: () => void;
+  
+  // New actions to modify the state variables
+  setGitRepoPath: (path: string) => void;
+  setSystemUsername: (username: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -66,6 +74,10 @@ export const useAppStore = create<AppState>((set) => ({
   adminView: "browse",
   activeStandardId: null,
   activeNode: null,
+  
+  // Initial default values
+  gitRepoPath: "Z:/mil-git-db.git",
+  systemUsername: "Loading...",
 
   setMode: (mode) => set({ mode }),
   setAdminView: (adminView) => set({ adminView }),
@@ -73,4 +85,8 @@ export const useAppStore = create<AppState>((set) => ({
     set({ activeStandardId, activeNode: null }),
   setActiveNode: (activeNode) => set({ activeNode }),
   clearActiveNode: () => set({ activeNode: null }),
+  
+  // Implementing the setters
+  setGitRepoPath: (gitRepoPath) => set({ gitRepoPath }),
+  setSystemUsername: (systemUsername) => set({ systemUsername }),
 }));
