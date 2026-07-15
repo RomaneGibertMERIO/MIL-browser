@@ -47,3 +47,23 @@ export async function createStandard(standard: StandardPlugin): Promise<void> {
   if (existing !== undefined) throw new Error(`Standard "${standard.manifest.id}" already exists.`);
   await upsertStandard(standard);
 }
+
+/**
+ * Supprime un standard et tous les profils associés.
+ * Les événements de suppression (tombstones) sont automatiquement générés par les hooks Dexie.
+ */
+export async function deleteStandardAndProfiles(id: string): Promise<void> {
+  const standard = await getStandardById(id);
+  if (!standard) return;
+  if (standard.manifest.isBuiltin) {
+    throw new Error(`Cannot delete builtin standard "${id}".`);
+  }
+
+  await db.transaction("rw", [db.standards, db.profiles, db.syncEvents], async () => {
+    // 1. Supprime les profils liés (déclenche automatiquement le hook "deleting" de schema.ts)
+    await db.profiles.where("standardId").equals(id).delete();
+
+    // 2. Supprime le standard (déclenche automatiquement le hook de suppression s'il existe)
+    await db.standards.delete(id);
+  });
+}
