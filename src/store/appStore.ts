@@ -189,15 +189,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   /**
    * PUSH : Soumet un commit sur le réseau et supprime l'événement local d'IndexedDB
    */
-  submitCommit: async (_commitMessage, selectedIds) => {
+
+  submitCommit: async (commitMessage, selectedIds) => {
     const state = get();
 
     if (window.electronAPI) {
       // Trouver les événements Dexie correspondant aux changements sélectionnés
       const events = await db.syncEvents.where("id").anyOf(selectedIds).toArray();
 
-      // DESACTIVER LES HOOKS pour éviter la boucle lors du passage au statut "pending"
-      db.isSyncingInternal = true;
+      // DESACTIVER LES HOOKS
+      (db as any).isSyncingInternal = true;
       try {
         for (const event of events) {
           const payload = event.payload as any;
@@ -205,13 +206,13 @@ export const useAppStore = create<AppState>((set, get) => ({
             const profileToSend = {
               ...payload,
               author: state.systemUsername,
-              status: "pending" as const
+              status: "pending" as const // Devient en attente de validation
             };
             
-            // Sauvegarde locale propre (sans déclencher le hook !)
+            // Sauvegarde locale propre
             await upsertProfile(profileToSend);
 
-            // Envoi au service Git d'Electron
+            // Envoi au service Git d'Electron avec l'objet destructuré requis par le main process
             await window.electronAPI.gitSubmitProfile({
               username: state.systemUsername,
               profile: profileToSend
@@ -219,45 +220,82 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         }
 
-        // Nettoyer les événements transmis avec succès pour éviter de les re-proposer à l'envoi
+        // Supprime les éléments cochés de la liste à pousser
         await db.syncEvents.where("id").anyOf(selectedIds).delete();
       } finally {
-        // RÉACTIVER LES HOOKS
-        db.isSyncingInternal = false;
+        (db as any).isSyncingInternal = false;
       }
     }
 
-    // Actualisation de l'UI
+    // Actualisation globale de l'interface
     await get().refreshLocalChanges();
     await get().triggerGitSync();
   },
   
-
   /**
-   * Validation d'une soumission par un administrateur
+   * Validation / Rejet d'une soumission par un administrateur
    */
   resolveSingleChange: async (_commitId, changeId, action) => {
+    const state = get();
     if (window.electronAPI) {
       if (action === "approve") {
-        // Approuver le fichier JSON sur le dépôt partagé
-        const result = await window.electronAPI.gitApproveProfile(changeId);
+        // Approuver le fichier JSON sur le dépôt partagé avec le bon format d'argument
+        const result = await window.electronAPI.gitApproveProfile({
+          adminUsername: state.systemUsername,
+          profileId: changeId
+        });
 
         if (result.success) {
-          // Mettre à jour l'entité locale en "approved" dans notre base IndexedDB
+          (db as any).isSyncingInternal = true;
+          try {
+            const updatedProfiles = await getAllProfiles();
+            const targetProfile = updatedProfiles.find((p: any) => p.id === changeId);
+            if (targetProfile) {
+              await upsertProfile({
+                ...targetProfile,
+                status: "approved", // Passe officiel
+                author: targetProfile.author // Conserve le nom de l'auteur original
+              });
+            }
+          } finally {
+            (db as any).isSyncingInternal = false;
+          }
+        }
+      } else if (action === "reject") {
+        // REJET : Repasse en local chez l'utilisateur et disparaît de chez l'admin
+        (db as any).isSyncingInternal = true;
+        try {
           const updatedProfiles = await getAllProfiles();
           const targetProfile = updatedProfiles.find((p: any) => p.id === changeId);
           if (targetProfile) {
-            await upsertProfile({
+            // Le statut repasse en "local"
+            const rolledBackProfile = {
               ...targetProfile,
-              status: "approved"
+              status: "local" as const
+            };
+            await upsertProfile(rolledBackProfile);
+            
+            // Re-générer un événement local pour qu'il réapparaisse dans la liste à pousser de l'user
+            (db as any).isSyncingInternal = false; // Réactivation temporaire pour logguer le retour
+            await db.syncEvents.put({
+              id: changeId,
+              deviceId: "system",
+              timestamp: Date.now(),
+              operation: "upsert",
+              entity: "profile",
+              payload: rolledBackProfile
             });
           }
+        } finally {
+          (db as any).isSyncingInternal = false;
         }
-      } else {
-        console.log(`Profil rejeté : ${changeId}`);
+
+        // Optionnel : Notifier le dépôt central en supprimant ou modifiant le JSON si nécessaire
+        // Pour l'instant, le repasser en local suffit à le sortir des pendingProfiles du prochain Pull admin.
       }
     }
 
+    // Déclenche le pull automatique immédiat pour synchroniser les vues
     await get().triggerGitSync();
   }
 }));
