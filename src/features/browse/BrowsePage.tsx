@@ -166,6 +166,21 @@ interface ProfileListItemProps {
 }
 
 function ProfileListItem({ profile, onSelect }: ProfileListItemProps) {
+  // Calcul dynamique du badge selon la règle de gestion définie
+  let badgeLabel = "Local";
+  let badgeColor: "gray" | "blue" | "green" | "yellow" = "gray";
+
+  if (profile.status === "approved") {
+    badgeLabel = "Officiel";
+    badgeColor = "green";
+  } else if (profile.status === "pending") {
+    badgeLabel = "En attente";
+    badgeColor = "yellow";
+  } else if (profile.source === "builtin") {
+    badgeLabel = "Dépôt initial";
+    badgeColor = "blue";
+  }
+
   return (
     <button
       onClick={() => onSelect(profile)}
@@ -177,9 +192,14 @@ function ProfileListItem({ profile, onSelect }: ProfileListItemProps) {
             <span className="font-semibold text-sm text-gray-900 group-hover:text-blue-700 transition-colors">
               {profile.name}
             </span>
-            <Badge variant={profile.source === "builtin" ? "blue" : "gray"}>
-              {profile.source === "builtin" ? "Built-in" : "User"}
+            <Badge variant={badgeColor}>
+              {badgeLabel}
             </Badge>
+            {profile.author && (
+              <span className="text-xs text-gray-400">
+                par {profile.author}
+              </span>
+            )}
           </div>
           {profile.description !== "" && (
             <p className="text-sm text-gray-500 line-clamp-1">
@@ -188,13 +208,12 @@ function ProfileListItem({ profile, onSelect }: ProfileListItemProps) {
           )}
         </div>
         <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full flex-shrink-0">
-          {profile.dataset.length} pts
+          {profile.dataset?.length || 0} pts
         </span>
       </div>
     </button>
   );
 }
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
