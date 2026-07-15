@@ -43,8 +43,13 @@ export function useBootstrap(): void {
         );
       }
 
-      // 3. Récupération des paramètres locaux (on n'essaie plus de lire gitRepoPath ici)
+      // 3. Récupération des paramètres locaux
       const settings = await getSettings();
+      
+      // Si un chemin réseau est enregistré dans vos settings Dexie, on met à jour le store
+      if (settings.gitRepoPath) {
+        setGitRepoPath(settings.gitRepoPath);
+      }
       
       // 4. Lancement de la synchronisation Git (PULL)
       try {
