@@ -1,4 +1,4 @@
-export interface ElectronAPI {
+export interface CustomElectronAPI {
   getSystemUsername: () => Promise<string>;
   gitSetRepoPath: (path: string) => Promise<{ success: boolean; error?: string }>;
   gitSync: (username: string) => Promise<{ success: boolean; error?: string; pulledProfiles?: any[] }>;
@@ -8,6 +8,7 @@ export interface ElectronAPI {
 
 declare global {
   interface Window {
-    electronAPI: ElectronAPI;
+    // On surcharge proprement en utilisant un type d'intersection
+    electronAPI: CustomElectronAPI;
   }
 }
