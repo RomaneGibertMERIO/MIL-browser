@@ -130,7 +130,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       // Reconstruire la liste locale des validations en attente à partir de l'état "pending" des profils reçus
       const dbProfiles = await getAllProfiles();
-      const pendingProfiles = dbProfiles.filter(p => p.status === "pending");
+      const pendingProfiles = dbProfiles.filter((p: any) => p.status === "pending");
 
       const reconstructedCommits: AdminCommitRequest[] = pendingProfiles.map((p: any) => ({
         id: `commit-${p.id}`,
@@ -156,7 +156,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   /**
    * PUSH : Soumission d'un lot de modifications locales vers le dépôt Git
    */
-  submitCommit: async (_commitMessage, selectedIds) => { // Changé commitMessage en _commitMessage pour signaler qu'il est intentionnellement inutilisé
+  submitCommit: async (_commitMessage, selectedIds) => {
     const state = get();
     const changesToSubmit = state.localStagedChanges.filter((c) => selectedIds.includes(c.id));
     const remainingChanges = state.localStagedChanges.filter((c) => !selectedIds.includes(c.id));
@@ -189,16 +189,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   /**
    * Validation d'une soumission (Action de l'Administrateur)
    */
-  resolveSingleChange: async (_commitId, changeId, action) => { // Changé commitId en _commitId
+  resolveSingleChange: async (_commitId, changeId, action) => {
     const state = get();
     
     if (window.electronAPI) {
       if (action === "approve") {
-        // Correction de l'envoi des paramètres typés
+        // Option A : Si votre d.ts ou preload attend un objet (recommandé pour transmettre l'admin)
         const result = await window.electronAPI.gitApproveProfile({
           adminUsername: state.systemUsername,
           profileId: changeId
         });
+
+        // Option B : Si votre déclaration d.ts n'accepte qu'une string simple pour l'ID, décommentez la ligne suivante :
+        // const result = await window.electronAPI.gitApproveProfile(changeId);
 
         if (result.success) {
           const updatedProfiles = await getAllProfiles();
