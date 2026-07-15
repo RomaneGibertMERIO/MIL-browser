@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { upsertProfile, getAllProfiles } from "../repository/profileRepo"; // Ajustez les chemins d'importation selon votre structure
-import { upsertStandard, getAllStandards } from "../repository/standardRepo";
+import { upsertProfile, getAllProfiles } from "../../core/db/repositories/profile.repo"; 
+import { upsertStandard } from "../../core/db/repositories/standard.repo";
 
 export type AppMode = "assistant" | "admin";
 export type AdminView = 'browse' | 'library' | 'standards' | 'settings' | 'validations';
