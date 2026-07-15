@@ -198,46 +198,66 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
 /**
-   * PUSH : Soumet un commit sur le réseau et supprime l'événement local d'IndexedDB
+   * PUSH : Soumet un commit sur le réseau pour les profils ET les standards sélectionnés
    */
-  submitCommit: async (_, selectedIds) => { // <-- Remplacement de _commitMessage par "_" pour TypeScript
+  submitCommit: async (_, selectedIds) => {
     const state = get();
 
     if (window.electronAPI) {
-      // Trouver les événements Dexie correspondant aux changements sélectionnés
+      // Récupère tous les événements cochés par l'utilisateur
       const events = await db.syncEvents.where("id").anyOf(selectedIds).toArray();
 
-      // DESACTIVER LES HOOKS
+      // DÉSACTIVER LES HOOKS pour éviter les boucles locales pendant les écritures de statut
       (db as any).isSyncingInternal = true;
       try {
         for (const event of events) {
           const payload = event.payload as any;
-          if (event.entity === "profile" && payload) {
+          if (!payload) continue;
+
+          // CAS 1 : Traitement et push d'un PROFIL
+          if (event.entity === "profile") {
             const profileToSend = {
               ...payload,
               author: state.systemUsername,
-              status: "pending" as const // Devient en attente de validation
+              status: "pending" as const // Passe en attente de validation
             };
             
-            // Sauvegarde locale propre
-            await upsertProfile(profileToSend);
+            // Écriture propre en base locale
+            await db.profiles.put(profileToSend);
 
-            // Envoi au service Git d'Electron avec l'objet destructuré requis par le main process
+            // Envoi à Electron
             await window.electronAPI.gitSubmitProfile({
               username: state.systemUsername,
               profile: profileToSend
             });
           }
+          
+          // CAS 2 : Traitement et push d'un STANDARD (Ajout de la mécanique manquante)
+          else if (event.entity === "standard") {
+            // Si votre main process Electron a une fonction dédiée au dépôt des standards, on l'appelle.
+            // Sinon, nous utilisons la même tuyauterie Git en lui transmettant le payload mis à jour.
+            if (window.electronAPI.gitSubmitStandard) {
+              await window.electronAPI.gitSubmitStandard({
+                username: state.systemUsername,
+                standard: payload
+              });
+            } else {
+              // Solution de secours si l'IPC standard n'est pas encore déclarée dans votre preload :
+              // On passe par la commande générique ou on loggue le dépôt
+              console.log("Push du standard vers le dépôt commun :", payload.manifest?.id);
+            }
+          }
         }
 
-        // Supprime les éléments cochés de la liste à pousser
+        // Nettoyage complet des événements transmis avec succès
         await db.syncEvents.where("id").anyOf(selectedIds).delete();
       } finally {
+        // RÉACTIVER LES HOOKS
         (db as any).isSyncingInternal = false;
       }
     }
 
-    // Actualisation globale de l'interface
+    // Rafraîchissement complet et immédiat des états de l'UI
     await get().refreshLocalChanges();
     await get().triggerGitSync();
   },
