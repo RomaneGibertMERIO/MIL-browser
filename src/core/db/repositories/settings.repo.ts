@@ -34,6 +34,7 @@ function buildDefaultSettings(): AppSettings {
       lastSyncAt: null,
       cursor: null,
     },
+    gitRepoPath: "Z:/mil-git-db.git", // <-- Par défaut
   };
 }
 
