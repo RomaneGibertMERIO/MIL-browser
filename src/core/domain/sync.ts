@@ -95,6 +95,7 @@ export const AppSettingsSchema = z.object({
   activeStandardId: z.string().nullable().default(null),
   lastView: z.enum(["assistant", "browse", "library", "standards", "settings"]).default("assistant"),
   sync: SyncSettingsSchema,
+  gitRepoPath: z.string().default("Z:/mil-git-db.git"), // <-- Nouveau champ
 });
 
 export type AppSettings = z.infer<typeof AppSettingsSchema>;
