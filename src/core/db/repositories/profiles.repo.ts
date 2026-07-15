@@ -1,46 +1,19 @@
 import { db } from "../schema";
 import type { Profile } from "../../domain/profile";
-import type { SyncEvent } from "../../domain/sync";
-import { getDeviceId } from "../../utils/deviceId";
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Enregistre ou met à jour un événement de synchronisation de profil unique.
- */
-async function logProfileEvent(
-  operation: SyncEvent["operation"],
-  payload: any,
-): Promise<void> {
-  // SÉCURITÉ : Si l'application est en train de synchroniser le réseau,
-  // on ne journalise pas pour éviter les boucles et doublons.
-  if ((db as any).isSyncingInternal) return;
-
-  const entityId = operation === "delete" ? String(payload.id) : String(payload.id);
-
-  const event: SyncEvent = {
-    id: entityId, // L'ID de l'événement est l'ID du profil : écrase le doublon précédent
-    deviceId: getDeviceId(),
-    timestamp: Date.now(),
-    operation,
-    entity: "profile",
-    payload,
-  };
-  
-  // .put() écrase au lieu d'empiler avec .add()
-  await db.syncEvents.put(event);
-}
 
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
 
+/** Returns all profiles in the database, sorted by updatedAt descending. */
 export async function getAllProfiles(): Promise<Profile[]> {
   return db.profiles.orderBy("updatedAt").reverse().toArray();
 }
 
+/**
+ * Returns all profiles belonging to the given standard, ordered by updatedAt
+ * descending.
+ */
 export async function getProfilesByStandard(standardId: string): Promise<Profile[]> {
   return db.profiles
     .where("standardId")
@@ -49,10 +22,16 @@ export async function getProfilesByStandard(standardId: string): Promise<Profile
     .sortBy("updatedAt");
 }
 
+/**
+ * Returns all profiles whose nodeId exactly matches the given node.
+ */
 export async function getProfilesByNodeId(nodeId: string): Promise<Profile[]> {
   return db.profiles.where("nodeId").equals(nodeId).toArray();
 }
 
+/**
+ * Returns all profiles whose standardId and nodeId both match.
+ */
 export async function getProfilesByStandardAndNode(
   standardId: string,
   nodeId: string,
@@ -63,6 +42,9 @@ export async function getProfilesByStandardAndNode(
     .toArray();
 }
 
+/**
+ * Returns a single profile by its id, or undefined if not found.
+ */
 export async function getProfileById(id: string): Promise<Profile | undefined> {
   return db.profiles.get(id);
 }
@@ -71,19 +53,27 @@ export async function getProfileById(id: string): Promise<Profile | undefined> {
 // Writes
 // ---------------------------------------------------------------------------
 
+/**
+ * Inserts or replaces a profile in the database.
+ * The sync event is automatically handled by Dexie hooks in schema.ts
+ */
 export async function upsertProfile(profile: Profile): Promise<void> {
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
     const existing = await db.profiles.get(profile.id);
     
+    // Sécurité historique conservée pour le premier démarrage local
     if (existing?.source === "builtin") {
       throw new Error(`Cannot overwrite deployment asset profile: ${profile.id}`);
     }
 
+    // Déclenche automatiquement le hook "creating" ou "updating" de schema.ts
     await db.profiles.put(profile);
-    await logProfileEvent("upsert", profile);
   });
 }
 
+/**
+ * Installs or refreshes a profile shipped with the application.
+ */
 export async function seedBuiltinProfile(profile: Profile): Promise<void> {
   if (profile.source !== "builtin") {
     throw new Error(`Profile "${profile.id}" is not a builtin profile.`);
@@ -98,13 +88,20 @@ export async function seedBuiltinProfile(profile: Profile): Promise<void> {
   });
 }
 
+/**
+ * Deletes a profile by id.
+ * The tombstone event is automatically handled by Dexie hooks in schema.ts
+ */
 export async function deleteProfile(id: string): Promise<void> {
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
+    // Déclenche automatiquement le hook "deleting" de schema.ts
     await db.profiles.delete(id);
-    await logProfileEvent("delete", { id });
   });
 }
 
+/**
+ * Replaces all user-source profiles for a given standard.
+ */
 export async function replaceUserProfiles(
   standardId: string,
   profiles: Profile[],
@@ -117,8 +114,8 @@ export async function replaceUserProfiles(
       .delete();
 
     for (const profile of profiles) {
+      // Déclenche automatiquement le hook pour chaque profil inséré
       await db.profiles.put(profile);
-      await logProfileEvent("upsert", profile);
     }
   });
 }
