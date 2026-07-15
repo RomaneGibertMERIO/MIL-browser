@@ -18,6 +18,10 @@ export class AppDatabase extends Dexie {
   standards!: Table<StandardPlugin, string>;
   syncEvents!: Table<SyncEvent, string>;
   settings!: Table<AppSettings, string>;
+  
+  // DRAPEAU : Permet de désactiver temporairement les hooks d'écriture
+  // lors d'une synchronisation pour éviter de créer des boucles infinies.
+  public isSyncingInternal = false;
 
   constructor() {
     super("mil_browser_v1");
@@ -44,10 +48,9 @@ export class AppDatabase extends Dexie {
 
     // ── Enregistrement des Hooks Dexie pour la synchronisation automatique ──
 
-    // Hook lors de la création / mise à jour d'un PROFIL (primKey changé en _primKey)
     this.profiles.hook("creating", (_primKey, obj) => {
-      // Ignorer si la source est un seed ou déjà synchronisé
-      if (obj.source === "builtin") return;
+      // SÉCURITÉ : Ne pas créer de SyncEvent si l'écriture vient de la synchro réseau ou d'un seed
+      if (this.isSyncingInternal || obj.source === "builtin") return;
       
       this.syncEvents.add({
         id: crypto.randomUUID(),
@@ -59,9 +62,9 @@ export class AppDatabase extends Dexie {
       }).catch(err => console.error("Failed to create SyncEvent (Profile):", err));
     });
 
-    // primKey changé en _primKey
     this.profiles.hook("updating", (mods, _primKey, obj) => {
-      if (obj.source === "builtin") return;
+      // SÉCURITÉ : Ne pas créer de SyncEvent si l'écriture vient de la synchro réseau ou d'un seed
+      if (this.isSyncingInternal || obj.source === "builtin") return;
       
       const updatedObj = { ...obj, ...mods };
       this.syncEvents.add({
@@ -74,9 +77,9 @@ export class AppDatabase extends Dexie {
       }).catch(err => console.error("Fail to update SyncEvent (Profile):", err));
     });
 
-    // Hook lors de la suppression d'un PROFIL (on garde primKey car il est utilisé dans le payload !)
     this.profiles.hook("deleting", (primKey, obj) => {
-      if (obj.source === "builtin") return;
+      // SÉCURITÉ : Ne pas créer de SyncEvent si l'écriture vient de la synchro réseau
+      if (this.isSyncingInternal || obj.source === "builtin") return;
 
       this.syncEvents.add({
         id: crypto.randomUUID(),
@@ -88,10 +91,9 @@ export class AppDatabase extends Dexie {
       }).catch(err => console.error("Failed to delete SyncEvent (Profile):", err));
     });
 
-    // Hook lors de la modification des STANDARDS / Taxonomie (primKey changé en _primKey)
     this.standards.hook("updating", (mods, _primKey, obj) => {
-      // On ne traque pas les modifications des standards intégrés en lecture seule
-      if (obj.manifest?.isBuiltin) return;
+      // SÉCURITÉ : Ne pas créer de SyncEvent si l'écriture vient de la synchro réseau ou d'un seed
+      if (this.isSyncingInternal || obj.manifest?.isBuiltin) return;
 
       const updatedObj = { ...obj, ...mods };
       this.syncEvents.add({
@@ -103,7 +105,7 @@ export class AppDatabase extends Dexie {
         payload: updatedObj
       }).catch(err => console.error("Failed to update SyncEvent (Standard):", err));
     });
-  } // <-- Ferme le constructeur
-} // <-- Ferme la classe AppDatabase
+  }
+}
 
 export const db = new AppDatabase();
