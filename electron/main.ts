@@ -33,10 +33,6 @@ function createWindow() {
   });
 }
 
-// <-- Added IPC handler to expose system username securely to React
-ipcMain.handle("get-system-username", () => {
-  return os.userInfo().username || "Unknown-User";
-});
 
 // <-- Added IPC handler to expose system username securely to React
 ipcMain.handle("get-system-username", () => {
