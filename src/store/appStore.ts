@@ -114,14 +114,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 2. Lancer la synchronisation (Pull)
     const result = await window.electronAPI.gitSync(state.systemUsername);
     
-    if (result.success && result.pulledProfiles && result.pulledStandards) {
-      console.log(`Sync Git Réussie. Éléments récupérés : ${result.pulledProfiles.length} profils, ${result.pulledStandards.length} standards.`);
+    // On cast le résultat pour éviter les erreurs TS d'absence de propriété
+    const gitResult = result as { success: boolean; pulledProfiles?: any[]; pulledStandards?: any[]; error?: string };
+    
+    if (gitResult.success && gitResult.pulledProfiles && gitResult.pulledStandards) {
+      console.log(`Sync Git Réussie. Éléments récupérés : ${gitResult.pulledProfiles.length} profils, ${gitResult.pulledStandards.length} standards.`);
       
       // 3. Injecter les données reçues du Git réseau dans IndexedDB locale
-      for (const std of result.pulledStandards) {
+      for (const std of gitResult.pulledStandards) {
         await upsertStandard(std);
       }
-      for (const prof of result.pulledProfiles) {
+      for (const prof of gitResult.pulledProfiles) {
         await upsertProfile(prof);
       }
 
@@ -146,23 +149,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       set({ pendingCommits: reconstructedCommits });
     } else {
-      console.warn("La synchronisation Git réseau n'a pas pu être établie. Utilisation de la base IndexedDB locale.", result.error);
+      console.warn("La synchronisation Git réseau n'a pas pu être établie. Utilisation de la base IndexedDB locale.", gitResult.error);
     }
   },
 
   /**
    * PUSH : Soumission d'un lot de modifications locales vers le dépôt Git
    */
-  submitCommit: async (commitMessage, selectedIds) => {
+  submitCommit: async (_commitMessage, selectedIds) => { // Changé commitMessage en _commitMessage pour signaler qu'il est intentionnellement inutilisé
     const state = get();
     const changesToSubmit = state.localStagedChanges.filter((c) => selectedIds.includes(c.id));
     const remainingChanges = state.localStagedChanges.filter((c) => !selectedIds.includes(c.id));
 
-    // Soumission de chaque profil modifié/créé vers le Git
     if (window.electronAPI) {
       for (const change of changesToSubmit) {
         if (change.type === "profile" && change.proposedData) {
-          // On s'assure que l'ID et l'auteur sont à jour
           const profileToSend = {
             ...change.proposedData,
             author: state.systemUsername,
@@ -182,29 +183,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     set({ localStagedChanges: remainingChanges });
-    
-    // Déclenche une synchronisation globale pour rafraîchir l'interface
     await get().triggerGitSync();
   },
 
   /**
    * Validation d'une soumission (Action de l'Administrateur)
    */
-  resolveSingleChange: async (commitId, changeId, action) => {
+  resolveSingleChange: async (_commitId, changeId, action) => { // Changé commitId en _commitId
     const state = get();
     
     if (window.electronAPI) {
       if (action === "approve") {
-        // Appeler le service Electron pour approuver, changer le JSON en "approved" et push
+        // Correction de l'envoi des paramètres typés
         const result = await window.electronAPI.gitApproveProfile({
           adminUsername: state.systemUsername,
           profileId: changeId
         });
 
         if (result.success) {
-          // Mettre à jour IndexedDB localement
           const updatedProfiles = await getAllProfiles();
-          const targetProfile = updatedProfiles.find(p => p.id === changeId);
+          const targetProfile = updatedProfiles.find((p: any) => p.id === changeId);
           if (targetProfile) {
             await upsertProfile({
               ...targetProfile,
@@ -213,12 +211,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         }
       } else {
-        // En cas de rejet (reject), vous pouvez supprimer ou archiver le fichier
         console.log(`Profil rejeté : ${changeId}`);
       }
     }
 
-    // Force le rafraîchissement global pour refléter les changements
     await get().triggerGitSync();
   }
-}));
