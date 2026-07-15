@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { upsertProfile, getAllProfiles } from "../core/db/repositories/profiles.repo"; 
 import { upsertStandard } from "../core/db/repositories/standards.repo";
+import { db } from "../core/db/schema";
 
 export type AppMode = "assistant" | "admin";
 export type AdminView = 'browse' | 'library' | 'standards' | 'settings' | 'validations';
@@ -11,7 +12,7 @@ export interface ActiveNode {
 }
 
 export interface MockChangeItem {
-  id: string;
+  id: string; // Correspondra à l'ID de l'événement de synchro Dexie
   type: 'standard' | 'taxonomy' | 'profile';
   action: 'Created' | 'Modified' | 'Deleted';
   name: string;
@@ -60,7 +61,8 @@ interface AppState {
   clearLocalChanges: () => void;
   submitCommit: (commitMessage: string, selectedIds: string[]) => Promise<void>;
   
-  // Actions réelles de Synchronisation Git / IndexedDB
+  // Actions de synchronisation Git / IndexedDB
+  refreshLocalChanges: () => Promise<void>;
   triggerGitSync: () => Promise<void>;
   resolveSingleChange: (commitId: string, changeId: string, action: 'approve' | 'reject') => Promise<void>;
 }
@@ -84,7 +86,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   
   setGitRepoPath: (gitRepoPath) => {
     set({ gitRepoPath });
-    // Notifier le backend Electron du changement de chemin réseau
     if (window.electronAPI) {
       window.electronAPI.gitSetRepoPath(gitRepoPath);
     }
@@ -102,25 +103,47 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearLocalChanges: () => set({ localStagedChanges: [] }),
 
   /**
-   * PULL de synchronisation bidirectionnelle
+   * Lit la table `syncEvents` d'IndexedDB pour alimenter dynamiquement la liste de l'UI
+   */
+  refreshLocalChanges: async () => {
+    try {
+      const events = await db.syncEvents.toArray();
+      const changes: MockChangeItem[] = events.map((event) => {
+        const payload = event.payload as any;
+        return {
+          id: event.id,
+          type: event.entity as 'profile' | 'standard',
+          action: event.operation === 'upsert' ? 'Created' : 'Deleted',
+          name: payload?.name || `ID: ${payload?.id || event.id}`,
+          location: payload?.standardId ? `${payload.standardId}` : "Root",
+          proposedData: payload
+        };
+      });
+
+      set({ localStagedChanges: changes });
+    } catch (err) {
+      console.error("Erreur lors de la récupération des changements locaux (IndexedDB) :", err);
+    }
+  },
+
+  /**
+   * PULL : Synchronisation bidirectionnelle avec le dépôt Git distant
    */
   triggerGitSync: async () => {
     if (!window.electronAPI) return;
     const state = get();
     
-    // 1. Définir le chemin actif côté Electron
+    // 1. Configurer le chemin du dépôt côté Electron
     await window.electronAPI.gitSetRepoPath(state.gitRepoPath);
     
-    // 2. Lancer la synchronisation (Pull)
+    // 2. Lancer la synchronisation
     const result = await window.electronAPI.gitSync(state.systemUsername);
-    
-    // On cast le résultat pour éviter les erreurs TS d'absence de propriété
     const gitResult = result as { success: boolean; pulledProfiles?: any[]; pulledStandards?: any[]; error?: string };
     
     if (gitResult.success && gitResult.pulledProfiles && gitResult.pulledStandards) {
       console.log(`Sync Git Réussie. Éléments récupérés : ${gitResult.pulledProfiles.length} profils, ${gitResult.pulledStandards.length} standards.`);
       
-      // 3. Injecter les données reçues du Git réseau dans IndexedDB locale
+      // 3. Écriture dans IndexedDB locale
       for (const std of gitResult.pulledStandards) {
         await upsertStandard(std);
       }
@@ -128,7 +151,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         await upsertProfile(prof);
       }
 
-      // Reconstruire la liste locale des validations en attente à partir de l'état "pending" des profils reçus
+      // Reconstruire les propositions d'administration en attente de validation ("pending")
       const dbProfiles = await getAllProfiles();
       const pendingProfiles = dbProfiles.filter((p: any) => p.status === "pending");
 
@@ -149,51 +172,60 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       set({ pendingCommits: reconstructedCommits });
     } else {
-      console.warn("La synchronisation Git réseau n'a pas pu être établie. Utilisation de la base IndexedDB locale.", gitResult.error);
+      console.warn("La synchronisation Git réseau n'a pas pu être établie. Utilisation de la base locale.", gitResult.error);
     }
+
+    // Rafraîchir les changements locaux à pousser
+    await get().refreshLocalChanges();
   },
 
-/**
-   * PUSH : Soumission d'un lot de modifications locales vers le dépôt Git
+  /**
+   * PUSH : Soumet un commit sur le réseau et supprime l'événement local d'IndexedDB
    */
   submitCommit: async (_commitMessage, selectedIds) => {
     const state = get();
-    const changesToSubmit = state.localStagedChanges.filter((c) => selectedIds.includes(c.id));
-    const remainingChanges = state.localStagedChanges.filter((c) => !selectedIds.includes(c.id));
 
     if (window.electronAPI) {
-      for (const change of changesToSubmit) {
-        if (change.type === "profile" && change.proposedData) {
+      // Trouver les événements Dexie correspondant aux changements sélectionnés
+      const events = await db.syncEvents.where("id").anyOf(selectedIds).toArray();
+
+      for (const event of events) {
+        const payload = event.payload as any;
+        if (event.entity === "profile" && payload) {
           const profileToSend = {
-            ...change.proposedData,
+            ...payload,
             author: state.systemUsername,
-            status: "pending"
+            status: "pending" as const
           };
           
-          // Enregistrement dans IndexedDB
+          // Sauvegarde locale propre
           await upsertProfile(profileToSend);
 
-          // CORRECT : On passe directement l'objet profile comme attendu par CustomElectronAPI
+          // Envoi au service Git d'Electron
           await window.electronAPI.gitSubmitProfile(profileToSend);
         }
       }
+
+      // Nettoyer les événements transmis avec succès pour éviter de les re-proposer à l'envoi
+      await db.syncEvents.where("id").anyOf(selectedIds).delete();
     }
 
-    set({ localStagedChanges: remainingChanges });
+    // Actualisation de l'UI
+    await get().refreshLocalChanges();
     await get().triggerGitSync();
   },
 
-/**
-   * Validation d'une soumission (Action de l'Administrateur)
+  /**
+   * Validation d'une soumission par un administrateur
    */
   resolveSingleChange: async (_commitId, changeId, action) => {
-    // const state = get(); <-- Ligne supprimée pour éviter l'erreur TS6133
-    
     if (window.electronAPI) {
       if (action === "approve") {
+        // Approuver le fichier JSON sur le dépôt partagé
         const result = await window.electronAPI.gitApproveProfile(changeId);
 
         if (result.success) {
+          // Mettre à jour l'entité locale en "approved" dans notre base IndexedDB
           const updatedProfiles = await getAllProfiles();
           const targetProfile = updatedProfiles.find((p: any) => p.id === changeId);
           if (targetProfile) {
