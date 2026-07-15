@@ -212,7 +212,10 @@ export const useAppStore = create<AppState>((set, get) => ({
             await upsertProfile(profileToSend);
 
             // Envoi au service Git d'Electron
-            await window.electronAPI.gitSubmitProfile(profileToSend);
+            await window.electronAPI.gitSubmitProfile({
+              username: state.systemUsername,
+              profile: profileToSend
+            });
           }
         }
 
