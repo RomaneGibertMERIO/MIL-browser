@@ -186,11 +186,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().refreshLocalChanges();
   },
 
-  /**
+/**
    * PUSH : Soumet un commit sur le réseau et supprime l'événement local d'IndexedDB
    */
-
-  submitCommit: async (commitMessage, selectedIds) => {
+  submitCommit: async (_, selectedIds) => { // <-- Remplacement de _commitMessage par "_" pour TypeScript
     const state = get();
 
     if (window.electronAPI) {
@@ -236,14 +235,10 @@ export const useAppStore = create<AppState>((set, get) => ({
    * Validation / Rejet d'une soumission par un administrateur
    */
   resolveSingleChange: async (_commitId, changeId, action) => {
-    const state = get();
     if (window.electronAPI) {
       if (action === "approve") {
-        // Approuver le fichier JSON sur le dépôt partagé avec le bon format d'argument
-        const result = await window.electronAPI.gitApproveProfile({
-          adminUsername: state.systemUsername,
-          profileId: changeId
-        });
+        // Envoi direct de changeId (string) pour correspondre à la signature de preload.ts
+        const result = await window.electronAPI.gitApproveProfile(changeId);
 
         if (result.success) {
           (db as any).isSyncingInternal = true;
@@ -253,8 +248,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             if (targetProfile) {
               await upsertProfile({
                 ...targetProfile,
-                status: "approved", // Passe officiel
-                author: targetProfile.author // Conserve le nom de l'auteur original
+                status: "approved" // Passe officiel
               });
             }
           } finally {
@@ -268,7 +262,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           const updatedProfiles = await getAllProfiles();
           const targetProfile = updatedProfiles.find((p: any) => p.id === changeId);
           if (targetProfile) {
-            // Le statut repasse en "local"
             const rolledBackProfile = {
               ...targetProfile,
               status: "local" as const
@@ -276,7 +269,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             await upsertProfile(rolledBackProfile);
             
             // Re-générer un événement local pour qu'il réapparaisse dans la liste à pousser de l'user
-            (db as any).isSyncingInternal = false; // Réactivation temporaire pour logguer le retour
+            (db as any).isSyncingInternal = false;
             await db.syncEvents.put({
               id: changeId,
               deviceId: "system",
@@ -289,9 +282,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         } finally {
           (db as any).isSyncingInternal = false;
         }
-
-        // Optionnel : Notifier le dépôt central en supprimant ou modifiant le JSON si nécessaire
-        // Pour l'instant, le repasser en local suffit à le sortir des pendingProfiles du prochain Pull admin.
       }
     }
 
