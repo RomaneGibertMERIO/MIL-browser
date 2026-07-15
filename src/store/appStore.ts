@@ -183,15 +183,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().triggerGitSync();
   },
 
- /**
+/**
    * Validation d'une soumission (Action de l'Administrateur)
    */
   resolveSingleChange: async (_commitId, changeId, action) => {
-    const state = get();
+    // const state = get(); <-- Ligne supprimée pour éviter l'erreur TS6133
     
     if (window.electronAPI) {
       if (action === "approve") {
-        // CORRECT : On passe directement l'ID (string) comme attendu par CustomElectronAPI
         const result = await window.electronAPI.gitApproveProfile(changeId);
 
         if (result.success) {
