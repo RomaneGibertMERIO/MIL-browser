@@ -1,66 +1,76 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as git from "isomorphic-git";
 import { app } from "electron";
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
+import { fileURLToPath } from "url";
 
 const WORKSPACE_DIR = path.join(app.getPath("userData"), "git-workspace");
 const PROFILES_DIR = path.join(WORKSPACE_DIR, "profiles");
 const STANDARDS_DIR = path.join(WORKSPACE_DIR, "standards");
 
-function ensureDirectories() {
-  if (!fs.existsSync(WORKSPACE_DIR)) fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
-  if (!fs.existsSync(PROFILES_DIR)) fs.mkdirSync(PROFILES_DIR, { recursive: true });
-  if (!fs.existsSync(STANDARDS_DIR)) fs.mkdirSync(STANDARDS_DIR, { recursive: true });
+function ensureDirectories(baseDir: string = WORKSPACE_DIR) {
+  const profs = path.join(baseDir, "profiles");
+  const stds = path.join(baseDir, "standards");
+  if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
+  if (!fs.existsSync(profs)) fs.mkdirSync(profs, { recursive: true });
+  if (!fs.existsSync(stds)) fs.mkdirSync(stds, { recursive: true });
+}
+
+function getFsPath(remoteInput: string): string {
+  if (remoteInput.startsWith("file://")) {
+    return fileURLToPath(remoteInput);
+  }
+  return path.resolve(remoteInput);
 }
 
 /**
- * Initialise ou met à jour le dépôt via le Git natif du système
+ * Synchronise les fichiers du dépôt central vers le workspace local (Simule le Pull)
  */
 export async function initOrCloneRepository(remoteInput: string): Promise<void> {
-  ensureDirectories();
+  ensureDirectories(WORKSPACE_DIR);
   
   if (!remoteInput || remoteInput.trim() === "") {
     throw new Error("Aucun chemin de dépôt central réseau n'est configuré.");
   }
 
-  // Nettoyer les reliquats de file:// si l'UI en a envoyé
-  const cleanRemotePath = remoteInput.replace(/^file:\/\/\/?/, "").replace(/%20/g, " ");
+  const centralPath = getFsPath(remoteInput);
+  ensureDirectories(centralPath);
 
-  if (!fs.existsSync(cleanRemotePath)) {
-    throw new Error(`Le chemin spécifié est introuvable ou inaccessible : ${cleanRemotePath}`);
+  // Initialisation du Git local s'il n'existe pas pour garder l'arborescence propre
+  const isGitRepo = fs.existsSync(path.join(WORKSPACE_DIR, ".git"));
+  if (!isGitRepo) {
+    await git.init({ fs, dir: WORKSPACE_DIR });
   }
 
-  const isGitRepo = fs.existsSync(path.join(WORKSPACE_DIR, ".git"));
-
-  if (!isGitRepo) {
-    console.log(`Clonage natif depuis : ${cleanRemotePath}`);
-    // Utilisation du Git système pour cloner proprement un chemin local Windows
-    await execAsync(`git clone "${cleanRemotePath}" "${WORKSPACE_DIR}" --depth 1`);
-  } else {
-    // Vérifier et mettre à jour le remote origin si nécessaire
-    try {
-      const { stdout } = await execAsync(`git remote get-url origin`, { cwd: WORKSPACE_DIR });
-      if (stdout.trim() !== cleanRemotePath) {
-        await execAsync(`git remote set-url origin "${cleanRemotePath}"`, { cwd: WORKSPACE_DIR });
+  // PULL SIMULÉ : Copie les fichiers du dépôt central vers le local s'ils sont plus récents
+  const subDirs = ["standards", "profiles"];
+  for (const sub of subDirs) {
+    const centralSub = path.join(centralPath, sub);
+    const localSub = path.join(WORKSPACE_DIR, sub);
+    
+    if (fs.existsSync(centralSub)) {
+      const files = fs.readdirSync(centralSub).filter(f => f.endsWith(".json"));
+      for (const file of files) {
+        const src = path.join(centralSub, file);
+        const dest = path.join(localSub, file);
+        
+        let shouldCopy = true;
+        if (fs.existsSync(dest)) {
+          const srcStat = fs.statSync(src);
+          const destStat = fs.statSync(dest);
+          if (srcStat.mtimeMs <= destStat.mtimeMs) shouldCopy = false;
+        }
+        
+        if (shouldCopy) {
+          fs.copyFileSync(src, dest);
+        }
       }
-    } catch {
-      await execAsync(`git remote add origin "${cleanRemotePath}"`, { cwd: WORKSPACE_DIR });
     }
   }
 }
 
 export async function pullRepository(remoteInput: string): Promise<{ standards: any[]; profiles: any[] }> {
   await initOrCloneRepository(remoteInput);
-  
-  try {
-    // Git pull natif (gère le protocole fichier sans broncher)
-    await execAsync(`git pull origin main`, { cwd: WORKSPACE_DIR });
-  } catch (error) {
-    console.warn("Échec du pull réseau (travail hors-ligne ?) :", error);
-  }
 
   const standards: any[] = [];
   const profiles: any[] = [];
@@ -84,9 +94,12 @@ export async function pullRepository(remoteInput: string): Promise<{ standards: 
   return { standards, profiles };
 }
 
+/**
+ * Pousse le fichier vers le dépôt central commun (Simule le Push réseau)
+ */
 export async function submitProfileToGit(remoteInput: string, username: string, profile: any): Promise<void> {
   await initOrCloneRepository(remoteInput);
-  ensureDirectories();
+  const centralPath = getFsPath(remoteInput);
 
   const profileToSave = {
     ...profile,
@@ -96,38 +109,64 @@ export async function submitProfileToGit(remoteInput: string, username: string, 
   };
 
   const fileName = `profile-${profile.id}.json`;
-  const filePath = path.join(PROFILES_DIR, fileName);
-
-  fs.writeFileSync(filePath, JSON.stringify(profileToSave, null, 2), "utf8");
-
-  const relativePath = path.join("profiles", fileName).replace(/\\/g, "/");
   
-  // Suite de commandes Git natives
-  await execAsync(`git add "${relativePath}"`, { cwd: WORKSPACE_DIR });
-  await execAsync(`git commit -m "Proposal: Profil ${profile.name} par ${username}" --author="${username} <${username}@milbrowser.local>"`, { cwd: WORKSPACE_DIR });
-  await execAsync(`git push origin main`, { cwd: WORKSPACE_DIR });
+  // 1. Écriture locale (Workspace)
+  const localPath = path.join(PROFILES_DIR, fileName);
+  fs.writeFileSync(localPath, JSON.stringify(profileToSave, null, 2), "utf8");
+
+  // Versionning local pour suivi historique
+  try {
+    const relativePath = path.join("profiles", fileName).replace(/\\/g, "/");
+    await git.add({ fs, dir: WORKSPACE_DIR, filepath: relativePath });
+    await git.commit({
+      fs,
+      dir: WORKSPACE_DIR,
+      message: `Proposal: Profil "${profile.name}" soumis par ${username}`,
+      author: { name: username, email: `${username.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
+    });
+  } catch (e) {
+    console.warn("Git commit local ignoré (aucun changement réel)", e);
+  }
+
+  // 2. PUSH SIMULÉ : Copie directe et sécurisée du JSON vers le dépôt central partagé
+  const centralProfilesDir = path.join(centralPath, "profiles");
+  if (!fs.existsSync(centralProfilesDir)) fs.mkdirSync(centralProfilesDir, { recursive: true });
+  
+  const centralDestPath = path.join(centralProfilesDir, fileName);
+  fs.writeFileSync(centralDestPath, JSON.stringify(profileToSave, null, 2), "utf8");
+  console.log(`Fichier synchronisé avec succès vers le dépôt central : ${centralDestPath}`);
 }
 
 export async function approveProfileInGit(remoteInput: string, adminUsername: string, profileId: string): Promise<void> {
   await initOrCloneRepository(remoteInput);
-  ensureDirectories();
+  const centralPath = getFsPath(remoteInput);
 
   const fileName = `profile-${profileId}.json`;
-  const filePath = path.join(PROFILES_DIR, fileName);
+  const localPath = path.join(PROFILES_DIR, fileName);
 
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Impossible de trouver le fichier de proposition pour l'ID : ${profileId}`);
+  if (!fs.existsSync(localPath)) {
+    throw new Error(`Impossible de trouver la proposition locale pour l'ID : ${profileId}`);
   }
 
-  const profile = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  const profile = JSON.parse(fs.readFileSync(localPath, "utf8"));
   profile.status = "approved";
   profile.updatedAt = new Date().toISOString();
 
-  fs.writeFileSync(filePath, JSON.stringify(profile, null, 2), "utf8");
-
-  const relativePath = path.join("profiles", fileName).replace(/\\/g, "/");
+  // 1. Sauvegarde locale
+  fs.writeFileSync(localPath, JSON.stringify(profile, null, 2), "utf8");
   
-  await execAsync(`git add "${relativePath}"`, { cwd: WORKSPACE_DIR });
-  await execAsync(`git commit -m "Approval: Profil ${profile.name} par ${adminUsername}" --author="${adminUsername} <${adminUsername}@milbrowser.local>"`, { cwd: WORKSPACE_DIR });
-  await execAsync(`git push origin main`, { cwd: WORKSPACE_DIR });
+  try {
+    const relativePath = path.join("profiles", fileName).replace(/\\/g, "/");
+    await git.add({ fs, dir: WORKSPACE_DIR, filepath: relativePath });
+    await git.commit({
+      fs,
+      dir: WORKSPACE_DIR,
+      message: `Approval: Profil "${profile.name}" approuvé par l'admin ${adminUsername}`,
+      author: { name: adminUsername, email: `${adminUsername.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
+    });
+  } catch (e) {}
+
+  // 2. Envoi vers le dépôt central
+  const centralDestPath = path.join(centralPath, "profiles", fileName);
+  fs.writeFileSync(centralDestPath, JSON.stringify(profile, null, 2), "utf8");
 }
