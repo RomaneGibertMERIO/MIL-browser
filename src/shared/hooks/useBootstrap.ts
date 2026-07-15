@@ -25,7 +25,7 @@ export function useBootstrap(): void {
       if (window.electronAPI) {
         // Optionnel : Vous pouvez exposer une fonction IPC pour récupérer le vrai nom Windows/macOS.
         // En attendant, on l'initialise proprement.
-        setSystemUsername("Utilisateur Labo");
+        setSystemUsername("LabUser");
       }
 
       // 2. Seed builtin standards (votre logique d'origine)
@@ -43,23 +43,15 @@ export function useBootstrap(): void {
         );
       }
 
-      // 3. Récupération des paramètres locaux et du chemin réseau Git
+      // 3. Récupération des paramètres locaux (on n'essaie plus de lire gitRepoPath ici)
       const settings = await getSettings();
       
-      // Si un chemin réseau est enregistré dans vos settings Dexie, on met à jour le store
-      if (settings.gitRepoPath) {
-        setGitRepoPath(settings.gitRepoPath);
-      }
-
       // 4. Lancement de la synchronisation Git (PULL)
-      // Nous l'exécutons ici afin que l'interface IndexedDB reçoive les dernières modifications du serveur
-      // AVANT que l'écran de chargement ne disparaisse.
       try {
-        console.log("[bootstrap] Initialisation de la synchronisation réseau Git...");
+        console.log("[bootstrap] Init GIT sync...");
         await triggerGitSync();
       } catch (gitErr) {
-        // On ne bloque pas le démarrage de l'app si le réseau est inaccessible (mode hors-ligne)
-        console.warn("[bootstrap] Échec de la synchronisation Git au démarrage (mode hors-ligne actif) :", gitErr);
+        console.warn("[bootstrap] Failed to connect to GIT on starting up (Offline mode ON) :", gitErr);
       }
 
       // 5. Restauration de l'état de navigation (votre logique d'origine)
