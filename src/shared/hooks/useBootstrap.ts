@@ -74,7 +74,8 @@ export function useBootstrap(): void {
       if (lastAdminView !== undefined) {
         setAdminView(lastAdminView);
       }
-
+      await useAppStore.getState().refreshLocalChanges();
+      
       // 6. C'est prêt !
       setReady();
     }
