@@ -153,7 +153,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  /**
+/**
    * PUSH : Soumission d'un lot de modifications locales vers le dépôt Git
    */
   submitCommit: async (_commitMessage, selectedIds) => {
@@ -173,11 +173,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           // Enregistrement dans IndexedDB
           await upsertProfile(profileToSend);
 
-          // Envoi au service Git d'Electron
-          await window.electronAPI.gitSubmitProfile({
-            username: state.systemUsername,
-            profile: profileToSend
-          });
+          // CORRECT : On passe directement l'objet profile comme attendu par CustomElectronAPI
+          await window.electronAPI.gitSubmitProfile(profileToSend);
         }
       }
     }
@@ -186,7 +183,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().triggerGitSync();
   },
 
-  /**
+ /**
    * Validation d'une soumission (Action de l'Administrateur)
    */
   resolveSingleChange: async (_commitId, changeId, action) => {
@@ -194,14 +191,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     
     if (window.electronAPI) {
       if (action === "approve") {
-        // Option A : Si votre d.ts ou preload attend un objet (recommandé pour transmettre l'admin)
-        const result = await window.electronAPI.gitApproveProfile({
-          adminUsername: state.systemUsername,
-          profileId: changeId
-        });
-
-        // Option B : Si votre déclaration d.ts n'accepte qu'une string simple pour l'ID, décommentez la ligne suivante :
-        // const result = await window.electronAPI.gitApproveProfile(changeId);
+        // CORRECT : On passe directement l'ID (string) comme attendu par CustomElectronAPI
+        const result = await window.electronAPI.gitApproveProfile(changeId);
 
         if (result.success) {
           const updatedProfiles = await getAllProfiles();
