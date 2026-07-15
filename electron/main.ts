@@ -79,12 +79,13 @@ ipcMain.handle("git:submit-profile", async (_event, { username, profile }) => {
   }
 });
 
-ipcMain.handle("git:approve-profile", async (_event, { adminUsername, profileId }) => {
+ipcMain.handle("git:approve-profile", async (_event, profileId: string) => { // <-- Reçoit la string directement
   try {
     if (!activeRemotePath) {
       return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
     }
-    await approveProfileInGit(activeRemotePath, adminUsername, profileId);
+    // Utilise le pseudo actif de la session ou un tag Admin par défaut
+    await approveProfileInGit(activeRemotePath, "Administrator", profileId);
     return { success: true };
   } catch (error: any) {
     console.error("Erreur git:approve-profile:", error);
