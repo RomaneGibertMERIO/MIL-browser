@@ -46,49 +46,50 @@ export class AppDatabase extends Dexie {
       settings: "key",
     });
 
-    // ── Enregistrement des Hooks Dexie pour la synchronisation automatique ──
+    // ── Enregistrement des Hooks Dexie optimisés (Évite les lignes en double) ──
 
-    this.profiles.hook("creating", (_primKey, obj) => {
-      // SÉCURITÉ : Ne pas créer de SyncEvent si l'écriture vient de la synchro réseau ou d'un seed
+    this.profiles.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal || obj.source === "builtin") return;
       
-      this.syncEvents.add({
-        id: crypto.randomUUID(),
+      // L'ID du SyncEvent devient l'ID du profil lui-même ! 
+      // S'il existe déjà, .put() va simplement le mettre à jour au lieu de dupliquer la ligne.
+      this.syncEvents.put({
+        id: String(primKey), 
         deviceId: getOrCreateDeviceId(),
         timestamp: Date.now(),
         operation: "upsert",
         entity: "profile",
         payload: obj
-      }).catch(err => console.error("Failed to create SyncEvent (Profile):", err));
+      }).catch(err => console.error("Failed to track local change (Create):", err));
     });
 
-    this.profiles.hook("updating", (mods, _primKey, obj) => {
-      // SÉCURITÉ : Ne pas créer de SyncEvent si l'écriture vient de la synchro réseau ou d'un seed
+    this.profiles.hook("updating", (mods, primKey, obj) => {
       if (this.isSyncingInternal || obj.source === "builtin") return;
       
       const updatedObj = { ...obj, ...mods };
-      this.syncEvents.add({
-        id: crypto.randomUUID(),
+      
+      // On utilise .put() avec l'ID du profil pour écraser l'ancien état de modification locale
+      this.syncEvents.put({
+        id: String(primKey),
         deviceId: getOrCreateDeviceId(),
         timestamp: Date.now(),
         operation: "upsert",
         entity: "profile",
         payload: updatedObj
-      }).catch(err => console.error("Fail to update SyncEvent (Profile):", err));
+      }).catch(err => console.error("Failed to track local change (Update):", err));
     });
 
     this.profiles.hook("deleting", (primKey, obj) => {
-      // SÉCURITÉ : Ne pas créer de SyncEvent si l'écriture vient de la synchro réseau
       if (this.isSyncingInternal || obj.source === "builtin") return;
 
-      this.syncEvents.add({
-        id: crypto.randomUUID(),
+      this.syncEvents.put({
+        id: String(primKey),
         deviceId: getOrCreateDeviceId(),
         timestamp: Date.now(),
         operation: "delete",
         entity: "profile",
-        payload: { id: primKey }
-      }).catch(err => console.error("Failed to delete SyncEvent (Profile):", err));
+        payload: { id: primKey, name: obj.name, standardId: obj.standardId }
+      }).catch(err => console.error("Failed to track local change (Delete):", err));
     });
 
     this.standards.hook("updating", (mods, _primKey, obj) => {
