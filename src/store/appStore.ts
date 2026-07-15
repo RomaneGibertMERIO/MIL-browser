@@ -126,7 +126,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  /**
+/**
    * PULL : Synchronisation bidirectionnelle avec le dépôt Git distant
    */
   triggerGitSync: async () => {
@@ -143,12 +143,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (gitResult.success && gitResult.pulledProfiles && gitResult.pulledStandards) {
       console.log(`Sync Git Réussie. Éléments récupérés : ${gitResult.pulledProfiles.length} profils, ${gitResult.pulledStandards.length} standards.`);
       
-      // 3. Écriture dans IndexedDB locale
-      for (const std of gitResult.pulledStandards) {
-        await upsertStandard(std);
-      }
-      for (const prof of gitResult.pulledProfiles) {
-        await upsertProfile(prof);
+      // DESACTIVER LES HOOKS pour éviter la boucle lors de l'écriture du Pull
+      db.isSyncingInternal = true;
+      try {
+        // 3. Écriture dans IndexedDB locale
+        for (const std of gitResult.pulledStandards) {
+          await upsertStandard(std);
+        }
+        for (const prof of gitResult.pulledProfiles) {
+          await upsertProfile(prof);
+        }
+      } finally {
+        // RÉACTIVER LES HOOKS
+        db.isSyncingInternal = false;
       }
 
       // Reconstruire les propositions d'administration en attente de validation ("pending")
@@ -189,31 +196,39 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Trouver les événements Dexie correspondant aux changements sélectionnés
       const events = await db.syncEvents.where("id").anyOf(selectedIds).toArray();
 
-      for (const event of events) {
-        const payload = event.payload as any;
-        if (event.entity === "profile" && payload) {
-          const profileToSend = {
-            ...payload,
-            author: state.systemUsername,
-            status: "pending" as const
-          };
-          
-          // Sauvegarde locale propre
-          await upsertProfile(profileToSend);
+      // DESACTIVER LES HOOKS pour éviter la boucle lors du passage au statut "pending"
+      db.isSyncingInternal = true;
+      try {
+        for (const event of events) {
+          const payload = event.payload as any;
+          if (event.entity === "profile" && payload) {
+            const profileToSend = {
+              ...payload,
+              author: state.systemUsername,
+              status: "pending" as const
+            };
+            
+            // Sauvegarde locale propre (sans déclencher le hook !)
+            await upsertProfile(profileToSend);
 
-          // Envoi au service Git d'Electron
-          await window.electronAPI.gitSubmitProfile(profileToSend);
+            // Envoi au service Git d'Electron
+            await window.electronAPI.gitSubmitProfile(profileToSend);
+          }
         }
-      }
 
-      // Nettoyer les événements transmis avec succès pour éviter de les re-proposer à l'envoi
-      await db.syncEvents.where("id").anyOf(selectedIds).delete();
+        // Nettoyer les événements transmis avec succès pour éviter de les re-proposer à l'envoi
+        await db.syncEvents.where("id").anyOf(selectedIds).delete();
+      } finally {
+        // RÉACTIVER LES HOOKS
+        db.isSyncingInternal = false;
+      }
     }
 
     // Actualisation de l'UI
     await get().refreshLocalChanges();
     await get().triggerGitSync();
   },
+  
 
   /**
    * Validation d'une soumission par un administrateur
