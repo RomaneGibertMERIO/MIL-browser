@@ -217,4 +217,4 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     await get().triggerGitSync();
   }
-}
+}));
