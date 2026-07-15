@@ -42,7 +42,7 @@ export class AppDatabase extends Dexie {
       settings: "key",
     });
 
-// ── Enregistrement des Hooks Dexie pour la synchronisation automatique ──
+    // ── Enregistrement des Hooks Dexie pour la synchronisation automatique ──
 
     // Hook lors de la création / mise à jour d'un PROFIL (primKey changé en _primKey)
     this.profiles.hook("creating", (_primKey, obj) => {
@@ -103,5 +103,7 @@ export class AppDatabase extends Dexie {
         payload: updatedObj
       }).catch(err => console.error("Failed to update SyncEvent (Standard):", err));
     });
+  } // <-- Ferme le constructeur
+} // <-- Ferme la classe AppDatabase
 
 export const db = new AppDatabase();
