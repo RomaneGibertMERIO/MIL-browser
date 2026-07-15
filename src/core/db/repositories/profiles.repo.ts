@@ -1,13 +1,3 @@
-/**
- * Profile repository.
- *
- * All database reads and writes for Profile entities go through this module.
- * No component or engine accesses the `db.profiles` table directly.
- *
- * Every mutating operation also appends a SyncEvent so the sync engine can
- * push changes to the server without needing to know when writes happened.
- */
-
 import { db } from "../schema";
 import type { Profile } from "../../domain/profile";
 import type { SyncEvent } from "../../domain/sync";
@@ -18,37 +8,39 @@ import { getDeviceId } from "../../utils/deviceId";
 // ---------------------------------------------------------------------------
 
 /**
- * Builds a SyncEvent wrapping a profile mutation and persists it.
- * This is called inside every write operation so no write is ever unlogged.
+ * Enregistre ou met à jour un événement de synchronisation de profil unique.
  */
 async function logProfileEvent(
   operation: SyncEvent["operation"],
-  payload: unknown,
+  payload: any,
 ): Promise<void> {
+  // SÉCURITÉ : Si l'application est en train de synchroniser le réseau,
+  // on ne journalise pas pour éviter les boucles et doublons.
+  if ((db as any).isSyncingInternal) return;
+
+  const entityId = operation === "delete" ? String(payload.id) : String(payload.id);
+
   const event: SyncEvent = {
-    id: crypto.randomUUID(),
+    id: entityId, // L'ID de l'événement est l'ID du profil : écrase le doublon précédent
     deviceId: getDeviceId(),
     timestamp: Date.now(),
     operation,
     entity: "profile",
     payload,
   };
-  await db.syncEvents.add(event);
+  
+  // .put() écrase au lieu d'empiler avec .add()
+  await db.syncEvents.put(event);
 }
 
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
 
-/** Returns all profiles in the database, sorted by updatedAt descending. */
 export async function getAllProfiles(): Promise<Profile[]> {
   return db.profiles.orderBy("updatedAt").reverse().toArray();
 }
 
-/**
- * Returns all profiles belonging to the given standard, ordered by updatedAt
- * descending. This is the primary read path for the Assistant and Browse views.
- */
 export async function getProfilesByStandard(standardId: string): Promise<Profile[]> {
   return db.profiles
     .where("standardId")
@@ -57,18 +49,10 @@ export async function getProfilesByStandard(standardId: string): Promise<Profile
     .sortBy("updatedAt");
 }
 
-/**
- * Returns all profiles whose nodeId exactly matches the given node.
- * Used by the Browse view when displaying profiles for a selected node.
- */
 export async function getProfilesByNodeId(nodeId: string): Promise<Profile[]> {
   return db.profiles.where("nodeId").equals(nodeId).toArray();
 }
 
-/**
- * Returns all profiles whose standardId and nodeId both match.
- * Uses the compound index [standardId+nodeId] for a single-range query.
- */
 export async function getProfilesByStandardAndNode(
   standardId: string,
   nodeId: string,
@@ -79,9 +63,6 @@ export async function getProfilesByStandardAndNode(
     .toArray();
 }
 
-/**
- * Returns a single profile by its id, or undefined if not found.
- */
 export async function getProfileById(id: string): Promise<Profile | undefined> {
   return db.profiles.get(id);
 }
@@ -90,16 +71,10 @@ export async function getProfileById(id: string): Promise<Profile | undefined> {
 // Writes
 // ---------------------------------------------------------------------------
 
-/**
- * Inserts or replaces a profile in the database and logs a sync event.
- * Guards against overwriting a stable builtin seed profile.
- */
 export async function upsertProfile(profile: Profile): Promise<void> {
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
     const existing = await db.profiles.get(profile.id);
     
-    // SÉCURITÉ CRITIQUE : Si le profil existant en base est un "builtin",
-    // on refuse de l'écraser directement (l'UI doit passer par une copie "user").
     if (existing?.source === "builtin") {
       throw new Error(`Cannot overwrite deployment asset profile: ${profile.id}`);
     }
@@ -109,10 +84,6 @@ export async function upsertProfile(profile: Profile): Promise<void> {
   });
 }
 
-/**
- * Installs or refreshes a profile shipped with the application.
- * Deployment assets are not user changes, so this creates no sync event.
- */
 export async function seedBuiltinProfile(profile: Profile): Promise<void> {
   if (profile.source !== "builtin") {
     throw new Error(`Profile "${profile.id}" is not a builtin profile.`);
@@ -127,10 +98,6 @@ export async function seedBuiltinProfile(profile: Profile): Promise<void> {
   });
 }
 
-/**
- * Deletes a profile by id and logs a tombstone sync event.
- * Silently succeeds if the profile does not exist.
- */
 export async function deleteProfile(id: string): Promise<void> {
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
     await db.profiles.delete(id);
@@ -138,24 +105,17 @@ export async function deleteProfile(id: string): Promise<void> {
   });
 }
 
-/**
- * Replaces all user-source profiles for a given standard in a single
- * transaction. Used by the bulk-import flow.
- * Builtin profiles are not affected.
- */
 export async function replaceUserProfiles(
   standardId: string,
   profiles: Profile[],
 ): Promise<void> {
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
-    // Remove all existing user profiles for this standard.
     await db.profiles
       .where("standardId")
       .equals(standardId)
       .and((p) => p.source === "user")
       .delete();
 
-    // Insert the new batch.
     for (const profile of profiles) {
       await db.profiles.put(profile);
       await logProfileEvent("upsert", profile);
