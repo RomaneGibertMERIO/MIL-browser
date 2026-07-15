@@ -22,6 +22,8 @@ import { useStandards } from "../../shared/hooks/useStandards";
 import { Card } from "../../shared/components/ui/Card";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 
+import { saveGitRepoPath } from "../../core/db/repositories/settings.repo";
+
 // ---------------------------------------------------------------------------
 // SettingsPage
 // ---------------------------------------------------------------------------
@@ -48,12 +50,19 @@ export function SettingsPage() {
 
   if (settings === null || standards === undefined) return <LoadingSpinner />;
 
-  // Handler for saving the repository path
+// Handler for saving the repository path
   function handlePathSave(e: FormEvent) {
     e.preventDefault();
-    setGitRepoPath(localPathInput.trim());
-    setPathSaveSuccess(true);
-    setTimeout(() => setPathSaveSuccess(false), 3000);
+    const cleanPath = localPathInput.trim();
+    
+    // 1. Mettre à jour l'état local dans le store Zustand
+    setGitRepoPath(cleanPath);
+    
+    // 2. Persister définitivement le chemin dans IndexedDB
+    void saveGitRepoPath(cleanPath).then(() => {
+      setPathSaveSuccess(true);
+      setTimeout(() => setPathSaveSuccess(false), 3000);
+    });
   }
 
   async function handleExport() {
