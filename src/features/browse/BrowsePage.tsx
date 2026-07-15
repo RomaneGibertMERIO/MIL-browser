@@ -166,19 +166,19 @@ interface ProfileListItemProps {
 }
 
 function ProfileListItem({ profile, onSelect }: ProfileListItemProps) {
-  // Calcul dynamique du badge selon la règle de gestion définie
+  // On se restreint aux variantes standards (blue et gray) acceptées par votre BadgeVariant
   let badgeLabel = "Local";
-  let badgeColor: "gray" | "blue" | "green" | "yellow" = "gray";
+  let badgeColor: "blue" | "gray" = "gray";
 
   if (profile.status === "approved") {
     badgeLabel = "Officiel";
-    badgeColor = "green";
+    badgeColor = "blue"; // Utilise le bleu pour l'officiel
   } else if (profile.status === "pending") {
     badgeLabel = "En attente";
-    badgeColor = "yellow";
+    badgeColor = "gray";
   } else if (profile.source === "builtin") {
     badgeLabel = "Dépôt initial";
-    badgeColor = "blue";
+    badgeColor = "gray";
   }
 
   return (
