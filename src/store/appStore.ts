@@ -105,26 +105,37 @@ export const useAppStore = create<AppState>((set, get) => ({
   /**
    * Lit la table `syncEvents` d'IndexedDB pour alimenter dynamiquement la liste de l'UI
    */
-  refreshLocalChanges: async () => {
-    try {
-      const events = await db.syncEvents.toArray();
-      const changes: MockChangeItem[] = events.map((event) => {
-        const payload = event.payload as any;
-        return {
-          id: event.id,
-          type: event.entity as 'profile' | 'standard',
-          action: event.operation === 'upsert' ? 'Created' : 'Deleted',
-          name: payload?.name || `ID: ${payload?.id || event.id}`,
-          location: payload?.standardId ? `${payload.standardId}` : "Root",
-          proposedData: payload
-        };
-      });
-
-      set({ localStagedChanges: changes });
-    } catch (err) {
-      console.error("Erreur lors de la récupération des changements locaux (IndexedDB) :", err);
-    }
-  },
+   refreshLocalChanges: async () => {
+      try {
+        const events = await db.syncEvents.toArray();
+        const changes: MockChangeItem[] = events.map((event) => {
+          const payload = event.payload as any;
+          const isStandard = event.entity === 'standard';
+          
+          // Extraction modulaire et adaptative des métadonnées selon le type d'entité
+          const name = isStandard 
+            ? (payload?.manifest?.name || payload?.manifest?.id || "Nouveau Standard")
+            : (payload?.name || `Profil ID: ${payload?.id}`);
+            
+          const location = isStandard
+            ? (payload?.manifest?.organization || "Global")
+            : (payload?.standardId ? `${payload.standardId}` : "Root");
+  
+          return {
+            id: event.id,
+            type: event.entity as 'profile' | 'standard',
+            action: event.operation === 'upsert' ? 'Modified' : 'Deleted',
+            name: name,
+            location: location,
+            proposedData: payload
+          };
+        });
+  
+        set({ localStagedChanges: changes });
+      } catch (err) {
+        console.error("Erreur refreshLocalChanges :", err);
+      }
+    },
 
 /**
    * PULL : Synchronisation bidirectionnelle avec le dépôt Git distant
