@@ -11,9 +11,10 @@
     "build:electron": "tsc -p tsconfig.electron.json",
     "electron:build": "npm run build && npm run build:electron && electron-builder"
   },
-  "dependencies": {
+"dependencies": {
     "dexie": "^4.0.10",
     "dexie-react-hooks": "^1.1.7",
+    "isomorphic-git": "^1.25.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.15.4",
