@@ -11,13 +11,7 @@ import { Sidebar } from './app/Sidebar';
 import { LoadingSpinner } from './shared/components/ui/LoadingSpinner';
 import { ErrorBanner } from './shared/components/ui/ErrorBanner';
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      getSystemUsername: () => Promise<string>;
-    };
-  }
-}
+
 
 export default function App() {
   useBootstrap();
