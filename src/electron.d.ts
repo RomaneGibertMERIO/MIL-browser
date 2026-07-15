@@ -7,11 +7,10 @@ export interface CustomElectronAPI {
 }
 
 declare global {
-  // On utilise un type d'intersection direct sur l'objet Window existant
   interface Window {
+    // Rend l'API accessible sans aucun conflit
     electronAPI: CustomElectronAPI;
   }
 }
 
-// Cette ligne force TypeScript à traiter ce fichier comme un module
 export {};
