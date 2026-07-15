@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as git from "isomorphic-git";
+import http from "isomorphic-git/http/node"; // <-- Import du client HTTP requis
 import { app } from "electron";
 
 // Le workspace local dans AppData de l'utilisateur
@@ -38,6 +39,7 @@ export async function initOrCloneRepository(remotePath: string): Promise<void> {
     console.log(`Clonage du dépôt distant depuis : ${remotePath} vers ${WORKSPACE_DIR}`);
     await git.clone({
       fs,
+      http, // <-- Injecté ici
       dir: WORKSPACE_DIR,
       url: remotePath,
       singleBranch: true,
@@ -66,6 +68,7 @@ export async function pullRepository(remotePath: string): Promise<{ standards: a
   try {
     await git.pull({
       fs,
+      http, // <-- Injecté ici
       dir: WORKSPACE_DIR,
       ref: "main",
       singleBranch: true,
@@ -137,6 +140,7 @@ export async function submitProfileToGit(remotePath: string, username: string, p
   console.log("Envoi de la proposition sur le dépôt réseau...");
   await git.push({
     fs,
+    http, // <-- Injecté ici
     dir: WORKSPACE_DIR,
     ref: "main",
     remote: "origin"
@@ -180,6 +184,7 @@ export async function approveProfileInGit(remotePath: string, adminUsername: str
 
   await git.push({
     fs,
+    http, // <-- Injecté ici
     dir: WORKSPACE_DIR,
     ref: "main",
     remote: "origin"
