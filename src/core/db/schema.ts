@@ -42,10 +42,10 @@ export class AppDatabase extends Dexie {
       settings: "key",
     });
 
-    // ── Enregistrement des Hooks Dexie pour la synchronisation automatique ──
+// ── Enregistrement des Hooks Dexie pour la synchronisation automatique ──
 
-    // Hook lors de la création / mise à jour d'un PROFIL
-    this.profiles.hook("creating", (primKey, obj) => {
+    // Hook lors de la création / mise à jour d'un PROFIL (primKey changé en _primKey)
+    this.profiles.hook("creating", (_primKey, obj) => {
       // Ignorer si la source est un seed ou déjà synchronisé
       if (obj.source === "builtin") return;
       
@@ -56,10 +56,11 @@ export class AppDatabase extends Dexie {
         operation: "upsert",
         entity: "profile",
         payload: obj
-      }).catch(err => console.error("Échec de création du SyncEvent (Profile):", err));
+      }).catch(err => console.error("Failed to create SyncEvent (Profile):", err));
     });
 
-    this.profiles.hook("updating", (mods, primKey, obj) => {
+    // primKey changé en _primKey
+    this.profiles.hook("updating", (mods, _primKey, obj) => {
       if (obj.source === "builtin") return;
       
       const updatedObj = { ...obj, ...mods };
@@ -70,10 +71,10 @@ export class AppDatabase extends Dexie {
         operation: "upsert",
         entity: "profile",
         payload: updatedObj
-      }).catch(err => console.error("Échec de mise à jour du SyncEvent (Profile):", err));
+      }).catch(err => console.error("Fail to update SyncEvent (Profile):", err));
     });
 
-    // Hook lors de la suppression d'un PROFIL
+    // Hook lors de la suppression d'un PROFIL (on garde primKey car il est utilisé dans le payload !)
     this.profiles.hook("deleting", (primKey, obj) => {
       if (obj.source === "builtin") return;
 
@@ -84,11 +85,11 @@ export class AppDatabase extends Dexie {
         operation: "delete",
         entity: "profile",
         payload: { id: primKey }
-      }).catch(err => console.error("Échec de suppression du SyncEvent (Profile):", err));
+      }).catch(err => console.error("Failed to delete SyncEvent (Profile):", err));
     });
 
-    // Hook lors de la modification des STANDARDS / Taxonomie
-    this.standards.hook("updating", (mods, primKey, obj) => {
+    // Hook lors de la modification des STANDARDS / Taxonomie (primKey changé en _primKey)
+    this.standards.hook("updating", (mods, _primKey, obj) => {
       // On ne traque pas les modifications des standards intégrés en lecture seule
       if (obj.manifest?.isBuiltin) return;
 
@@ -100,9 +101,7 @@ export class AppDatabase extends Dexie {
         operation: "upsert",
         entity: "standard",
         payload: updatedObj
-      }).catch(err => console.error("Échec de mise à jour du SyncEvent (Standard):", err));
+      }).catch(err => console.error("Failed to update SyncEvent (Standard):", err));
     });
-  }
-}
 
 export const db = new AppDatabase();
