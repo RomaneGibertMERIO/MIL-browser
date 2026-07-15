@@ -85,3 +85,12 @@ export async function saveLastView(view: AppSettings["lastView"]): Promise<void>
   const current = await getSettings();
   await saveSettings({ ...current, lastView: view });
 }
+
+
+/**
+ * Convenience helper: updates only the gitRepoPath.
+ */
+export async function saveGitRepoPath(path: string): Promise<void> {
+  const current = await getSettings();
+  await saveSettings({ ...current, gitRepoPath: path });
+}
