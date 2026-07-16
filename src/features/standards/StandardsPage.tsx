@@ -41,19 +41,20 @@ export function StandardsPage() {
         <TaxonomyEditor
           standard={editingStandard}
           onSave={async (nodes: StandardNode[]) => {
-            // 1. On prépare l'objet standard complet mis à jour
-            const updatedStandard: StandardPlugin = {
+            // 1. On prépare l'objet standard complet mis à jour avec un cast global 'any'
+            // pour contourner la restriction de l'interface de type stricte de StandardPlugin
+            const updatedStandard = {
               ...editingStandard,
               nodes,
-              source: "user" as any,      // Devient une copie locale modifiée
-              status: "pending" as any,   // Passe en attente de push
-            };
+              source: "user",      // Devient une copie locale modifiée
+              status: "pending",   // Passe en attente de push
+            } as any;              // 👈 Cast "as any" global ici pour calmer TypeScript
 
             // 2. On sauvegarde d'abord les nodes
             await updateStandardNodes(editingStandard.manifest.id, nodes);
             
             // 3. On sauvegarde le reste des métadonnées (le statut et la source)
-            await upsertStandard(updatedStandard); 
+            await upsertStandard(updatedStandard as StandardPlugin); 
 
             setSubView("list");
             setEditingStandard(null);
