@@ -31,72 +31,99 @@ export class AppDatabase extends Dexie {
     });
 
     // ── HOOK PROFILES ──
+    // Note: Utilisation de micro-tâches ou setTimeout non bloquant pour soulager le thread d'UI
     this.profiles.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
       
-      this.syncEvents.put({
-        id: String(primKey), 
-        deviceId: getOrCreateDeviceId(),
-        timestamp: Date.now(),
-        operation: "upsert",
-        entity: "profile",
-        payload: obj
-      }).catch(err => console.error("Event error (Profile Create):", err));
+      setTimeout(() => {
+        this.syncEvents.put({
+          id: String(primKey), 
+          deviceId: getOrCreateDeviceId(),
+          timestamp: Date.now(),
+          operation: "upsert",
+          entity: "profile",
+          payload: obj
+        }).catch(err => console.error("Event error (Profile Create):", err));
+      }, 0);
     });
 
     this.profiles.hook("updating", (mods, primKey, obj) => {
       if (this.isSyncingInternal) return;
       
       const updatedObj = { ...obj, ...mods };
-      this.syncEvents.put({
-        id: String(primKey),
-        deviceId: getOrCreateDeviceId(),
-        timestamp: Date.now(),
-        operation: "upsert",
-        entity: "profile",
-        payload: updatedObj
-      }).catch(err => console.error("Event error (Profile Update):", err));
+      setTimeout(() => {
+        this.syncEvents.put({
+          id: String(primKey),
+          deviceId: getOrCreateDeviceId(),
+          timestamp: Date.now(),
+          operation: "upsert",
+          entity: "profile",
+          payload: updatedObj
+        }).catch(err => console.error("Event error (Profile Update):", err));
+      }, 0);
     });
 
     this.profiles.hook("deleting", (primKey, obj) => {
       if (this.isSyncingInternal) return;
 
-      this.syncEvents.put({
-        id: String(primKey),
-        deviceId: getOrCreateDeviceId(),
-        timestamp: Date.now(),
-        operation: "delete",
-        entity: "profile",
-        payload: { id: primKey, name: obj.name, standardId: obj.standardId }
-      }).catch(err => console.error("Event error (Profile Delete):", err));
+      setTimeout(() => {
+        this.syncEvents.put({
+          id: String(primKey),
+          deviceId: getOrCreateDeviceId(),
+          timestamp: Date.now(),
+          operation: "delete",
+          entity: "profile",
+          payload: { id: primKey, name: obj.name, standardId: obj.standardId }
+        }).catch(err => console.error("Event error (Profile Delete):", err));
+      }, 0);
     });
 
     // ── HOOK STANDARDS ──
     this.standards.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
 
-      this.syncEvents.put({
-        id: String(primKey),
-        deviceId: getOrCreateDeviceId(),
-        timestamp: Date.now(),
-        operation: "upsert",
-        entity: "standard",
-        payload: obj
-      }).catch(err => console.error("Event error (Standard Create):", err));
+      setTimeout(() => {
+        this.syncEvents.put({
+          id: String(primKey),
+          deviceId: getOrCreateDeviceId(),
+          timestamp: Date.now(),
+          operation: "upsert",
+          entity: "standard",
+          payload: obj
+        }).catch(err => console.error("Event error (Standard Create):", err));
+      }, 0);
     });
 
     this.standards.hook("updating", (mods, primKey, obj) => {
       if (this.isSyncingInternal) return;
 
       const updatedObj = { ...obj, ...mods };
-      this.syncEvents.put({
-        id: String(primKey),
-        deviceId: getOrCreateDeviceId(),
-        timestamp: Date.now(),
-        operation: "upsert",
-        entity: "standard",
-        payload: updatedObj
-      }).catch(err => console.error("Event error (Standard Update):", err));
+      setTimeout(() => {
+        this.syncEvents.put({
+          id: String(primKey),
+          deviceId: getOrCreateDeviceId(),
+          timestamp: Date.now(),
+          operation: "upsert",
+          entity: "standard",
+          payload: updatedObj
+        }).catch(err => console.error("Event error (Standard Update):", err));
+      }, 0);
+    });
+
+    // Ajout du hook de suppression pour les standards
+    this.standards.hook("deleting", (primKey, obj) => {
+      if (this.isSyncingInternal) return;
+
+      setTimeout(() => {
+        this.syncEvents.put({
+          id: String(primKey),
+          deviceId: getOrCreateDeviceId(),
+          timestamp: Date.now(),
+          operation: "delete",
+          entity: "standard",
+          payload: { id: primKey, name: obj.manifest?.label || primKey }
+        }).catch(err => console.error("Event error (Standard Delete):", err));
+      }, 0);
     });
   }
 }
