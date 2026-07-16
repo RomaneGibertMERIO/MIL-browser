@@ -207,3 +207,84 @@ export async function rejectProfileInGit(remoteInput: string, adminUsername: str
     } catch (e) {}
   }
 }
+
+/**
+ * Pousse un standard vers le dépôt central commun (Simule le Push réseau)
+ */
+export async function submitStandardToGit(remoteInput: string, username: string, standard: any): Promise<void> {
+  await initOrCloneRepository(remoteInput);
+  const centralPath = getFsPath(remoteInput);
+
+  const standardToSave = {
+    ...standard,
+    status: "pending",
+    source: "user",
+    lastModifiedBy: username,
+    updatedAt: new Date().toISOString()
+  };
+
+  const fileName = `standard-${standard.manifest.id}.json`;
+  
+  // 1. Écriture locale (Workspace)
+  const localPath = path.join(STANDARDS_DIR, fileName);
+  fs.writeFileSync(localPath, JSON.stringify(standardToSave, null, 2), "utf8");
+
+  // Versionning local
+  try {
+    const relativePath = path.join("standards", fileName).replace(/\\/g, "/");
+    await git.add({ fs, dir: WORKSPACE_DIR, filepath: relativePath });
+    await git.commit({
+      fs,
+      dir: WORKSPACE_DIR,
+      message: `Proposal: Standard "${standard.manifest.label}" proposé par ${username}`,
+      author: { name: username, email: `${username.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
+    });
+  } catch (e) {
+    console.warn("Git commit local ignoré pour le standard", e);
+  }
+
+  // 2. PUSH SIMULÉ : Copie vers le dépôt central partagé
+  const centralStdsDir = path.join(centralPath, "standards");
+  if (!fs.existsSync(centralStdsDir)) fs.mkdirSync(centralStdsDir, { recursive: true });
+  
+  const centralDestPath = path.join(centralStdsDir, fileName);
+  fs.writeFileSync(centralDestPath, JSON.stringify(standardToSave, null, 2), "utf8");
+  console.log(`Standard synchronisé avec succès vers le dépôt central : ${centralDestPath}`);
+}
+
+/**
+ * Approuve un standard dans le Git
+ */
+export async function approveStandardInGit(remoteInput: string, adminUsername: string, standardId: string): Promise<void> {
+  await initOrCloneRepository(remoteInput);
+  const centralPath = getFsPath(remoteInput);
+
+  const fileName = `standard-${standardId}.json`;
+  const localPath = path.join(STANDARDS_DIR, fileName);
+
+  if (!fs.existsSync(localPath)) {
+    throw new Error(`Impossible de trouver le standard local pour l'ID : ${standardId}`);
+  }
+
+  const standard = JSON.parse(fs.readFileSync(localPath, "utf8"));
+  standard.status = "approved";
+  standard.updatedAt = new Date().toISOString();
+
+  // 1. Sauvegarde locale
+  fs.writeFileSync(localPath, JSON.stringify(standard, null, 2), "utf8");
+  
+  try {
+    const relativePath = path.join("standards", fileName).replace(/\\/g, "/");
+    await git.add({ fs, dir: WORKSPACE_DIR, filepath: relativePath });
+    await git.commit({
+      fs,
+      dir: WORKSPACE_DIR,
+      message: `Approval: Standard "${standard.manifest.label}" approuvé par l'admin ${adminUsername}`,
+      author: { name: adminUsername, email: `${adminUsername.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
+    });
+  } catch (e) {}
+
+  // 2. Envoi vers le dépôt central
+  const centralDestPath = path.join(centralPath, "standards", fileName);
+  fs.writeFileSync(centralDestPath, JSON.stringify(standard, null, 2), "utf8");
+}
