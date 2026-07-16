@@ -1,9 +1,8 @@
 import { useEffect } from "react";
-import { loadBuiltinStandards } from "../../core/engine/standardLoader";
 import { getSettings } from "../../core/db/repositories/settings.repo";
 import { useBootstrapStore } from "../../store/bootstrapStore";
 import { useAppStore } from "../../store/appStore";
-import { loadBuiltinStandards, importSyncedGitData } from "../../core/engine/standardLoader";
+import { loadBuiltinStandards } from "../../core/engine/standardLoader";
 
 /**
  * Runs the bootstrap sequence on mount, injecting Git database synchronization.
@@ -24,12 +23,10 @@ export function useBootstrap(): void {
     async function run(): Promise<void> {
       // 1. Initialisation du nom d'utilisateur système via Electron
       if (window.electronAPI) {
-        // Optionnel : Vous pouvez exposer une fonction IPC pour récupérer le vrai nom Windows/macOS.
-        // En attendant, on l'initialise proprement.
         setSystemUsername("LabUser");
       }
 
-      // 2. Seed builtin standards (votre logique d'origine)
+      // 2. Seed builtin standards (version d'usine)
       const seedResults = await loadBuiltinStandards();
       const seedErrors = seedResults
         .filter((r) => r.status === "error")
@@ -46,30 +43,22 @@ export function useBootstrap(): void {
 
       // 3. Récupération des paramètres locaux
       const settings = await getSettings();
-      if (settings.gitRepoPath) {
-        setGitRepoPath(settings.gitRepoPath);
-      }
       
       // Si un chemin réseau est enregistré dans vos settings Dexie, on met à jour le store
       if (settings.gitRepoPath) {
         setGitRepoPath(settings.gitRepoPath);
       }
       
-      // 4. Lancement de la synchronisation Git (PULL) ET ÉCRITURE EN BASE Dexie
+      // 4. Lancement de la synchronisation Git (PULL)
+      // triggerGitSync gère déjà en interne l'écriture en base IndexedDB
       try {
         console.log("[bootstrap] Init GIT sync...");
-        // 1. Déclenche le pull Git physique
-        const syncResult = await triggerGitSync(); 
-      
-        // 2. Si le pull retourne des données (les fichiers du workspace), on les écrit en base de données Dexie !
-        if (syncResult && (syncResult.standards || syncResult.profiles)) {
-          await importSyncedGitData(syncResult.standards, syncResult.profiles);
-        }
+        await triggerGitSync();
       } catch (gitErr) {
         console.warn("[bootstrap] Failed to connect to GIT on starting up (Offline mode ON) :", gitErr);
       }
-      
-      // 5. Restauration de l'état de navigation (votre logique d'origine)
+
+      // 5. Restauration de l'état de navigation
       if (settings.activeStandardId !== null) {
         setActiveStandard(settings.activeStandardId);
       }
