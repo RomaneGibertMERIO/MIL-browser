@@ -59,7 +59,7 @@ export async function getProfileById(id: string): Promise<Profile | undefined> {
  */
 export async function upsertProfile(profile: Profile): Promise<void> {
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
-    const existing = await db.profiles.get(profile.id);
+    //const existing = await db.profiles.get(profile.id);
     
     // CORRECTION : Uniquement bloquer si le NOUVEAU profil que l'on essaie d'insérer prétend 
     // toujours être un asset d'origine "builtin", ou si on tente d'écraser un builtin sans changer sa source.
