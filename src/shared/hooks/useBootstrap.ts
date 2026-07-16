@@ -3,6 +3,7 @@ import { loadBuiltinStandards } from "../../core/engine/standardLoader";
 import { getSettings } from "../../core/db/repositories/settings.repo";
 import { useBootstrapStore } from "../../store/bootstrapStore";
 import { useAppStore } from "../../store/appStore";
+import { loadBuiltinStandards, importSyncedGitData } from "../../core/engine/standardLoader";
 
 /**
  * Runs the bootstrap sequence on mount, injecting Git database synchronization.
@@ -45,20 +46,29 @@ export function useBootstrap(): void {
 
       // 3. Récupération des paramètres locaux
       const settings = await getSettings();
+      if (settings.gitRepoPath) {
+        setGitRepoPath(settings.gitRepoPath);
+      }
       
       // Si un chemin réseau est enregistré dans vos settings Dexie, on met à jour le store
       if (settings.gitRepoPath) {
         setGitRepoPath(settings.gitRepoPath);
       }
       
-      // 4. Lancement de la synchronisation Git (PULL)
+      // 4. Lancement de la synchronisation Git (PULL) ET ÉCRITURE EN BASE Dexie
       try {
         console.log("[bootstrap] Init GIT sync...");
-        await triggerGitSync();
+        // 1. Déclenche le pull Git physique
+        const syncResult = await triggerGitSync(); 
+      
+        // 2. Si le pull retourne des données (les fichiers du workspace), on les écrit en base de données Dexie !
+        if (syncResult && (syncResult.standards || syncResult.profiles)) {
+          await importSyncedGitData(syncResult.standards, syncResult.profiles);
+        }
       } catch (gitErr) {
         console.warn("[bootstrap] Failed to connect to GIT on starting up (Offline mode ON) :", gitErr);
       }
-
+      
       // 5. Restauration de l'état de navigation (votre logique d'origine)
       if (settings.activeStandardId !== null) {
         setActiveStandard(settings.activeStandardId);
