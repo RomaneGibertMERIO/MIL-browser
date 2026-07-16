@@ -30,10 +30,11 @@ export class AppDatabase extends Dexie {
       settings: "key",
     });
 
-    // ── HOOK PROFILES ──
-    // Note: Utilisation de micro-tâches ou setTimeout non bloquant pour soulager le thread d'UI
+   // ── HOOK PROFILES ──
     this.profiles.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
+      // SÉCURITÉ : Ne pas générer d'événement de synchronisation pour les profils système d'usine
+      if (obj.source === "builtin") return;
       
       setTimeout(() => {
         this.syncEvents.put({
@@ -49,6 +50,8 @@ export class AppDatabase extends Dexie {
 
     this.profiles.hook("updating", (mods, primKey, obj) => {
       if (this.isSyncingInternal) return;
+      // SÉCURITÉ : On ignore les modifications système d'usine
+      if (obj.source === "builtin" && mods.source !== "user") return;
       
       const updatedObj = { ...obj, ...mods };
       setTimeout(() => {
@@ -65,6 +68,8 @@ export class AppDatabase extends Dexie {
 
     this.profiles.hook("deleting", (primKey, obj) => {
       if (this.isSyncingInternal) return;
+      // SÉCURITÉ : Si on supprime un profil d'usine, pas besoin de le synchroniser
+      if (obj.source === "builtin") return;
 
       setTimeout(() => {
         this.syncEvents.put({
@@ -81,6 +86,8 @@ export class AppDatabase extends Dexie {
     // ── HOOK STANDARDS ──
     this.standards.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
+      // SÉCURITÉ : Ne pas synchroniser si le standard est un asset packagé d'origine
+      if (obj.manifest?.isBuiltin) return;
 
       setTimeout(() => {
         this.syncEvents.put({
@@ -96,6 +103,8 @@ export class AppDatabase extends Dexie {
 
     this.standards.hook("updating", (mods, primKey, obj) => {
       if (this.isSyncingInternal) return;
+      // SÉCURITÉ : Ignorer si le standard est d'usine
+      if (obj.manifest?.isBuiltin && mods.manifest?.isBuiltin !== false) return;
 
       const updatedObj = { ...obj, ...mods };
       setTimeout(() => {
