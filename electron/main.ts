@@ -95,20 +95,19 @@ ipcMain.handle("git:approve-profile", async (_event, profileId: string) => { // 
   }
 });
 
+// Dans electron/main.ts
+
 ipcMain.handle("git:submit-standard", async (event, payload) => {
-  const settings = await getSettings(); // Récupère le chemin réseau du dépôt configuré
-  const repoPath = settings.gitRepoPath;
+  const { repoPath, username, standard } = payload;
   if (!repoPath) throw new Error("Aucun dépôt Git configuré.");
 
-  return await submitStandardToGit(repoPath, payload.username, payload.standard);
+  return await submitStandardToGit(repoPath, username, standard);
 });
 
-ipcMain.handle("git:approve-standard", async (event, standardId) => {
-  const settings = await getSettings();
-  const repoPath = settings.gitRepoPath;
+ipcMain.handle("git:approve-standard", async (event, payload) => {
+  const { repoPath, standardId } = payload;
   if (!repoPath) throw new Error("Aucun dépôt Git configuré.");
 
-  // Ici, on récupère le nom de l'admin configuré (ou par défaut "Admin")
   const adminUsername = "Admin"; 
   return await approveStandardInGit(repoPath, adminUsername, standardId);
 });
