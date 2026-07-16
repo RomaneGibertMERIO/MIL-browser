@@ -34,7 +34,7 @@ export class AppDatabase extends Dexie {
     this.profiles.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
       
-      // FIX TS2339: On cast "obj" en tant que Profile pour accéder à "source" en toute sécurité
+      // FIX TS2339: Cast explicite de obj
       const profile = obj as Profile;
       if (profile.source === "builtin") return;
       
@@ -50,11 +50,15 @@ export class AppDatabase extends Dexie {
       }, 0);
     });
 
-    
     this.profiles.hook("updating", (mods, primKey, obj) => {
       if (this.isSyncingInternal) return;
+
+      // FIX TS2339: Cast explicite de obj et mods
+      const profile = obj as Profile;
+      const updatedMods = mods as Partial<Profile>;
+
       // SÉCURITÉ : On ignore les modifications système d'usine
-      if (obj.source === "builtin" && mods.source !== "user") return;
+      if (profile.source === "builtin" && updatedMods.source !== "user") return;
       
       const updatedObj = { ...obj, ...mods };
       setTimeout(() => {
@@ -72,7 +76,7 @@ export class AppDatabase extends Dexie {
     this.profiles.hook("deleting", (primKey, obj) => {
       if (this.isSyncingInternal) return;
 
-      // FIX TS2339: On cast "obj" en tant que Profile pour accéder à ses propriétés
+      // FIX TS2339: Cast explicite de obj
       const profile = obj as Profile;
       if (profile.source === "builtin") return;
 
@@ -88,11 +92,11 @@ export class AppDatabase extends Dexie {
       }, 0);
     });
 
-   // ── HOOK STANDARDS ──
+    // ── HOOK STANDARDS ──
     this.standards.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
       
-      // FIX TS2339: On cast "obj" en tant que StandardPlugin pour accéder à "manifest"
+      // FIX TS2339: Cast explicite de obj
       const standard = obj as StandardPlugin;
       if (standard.manifest?.isBuiltin) return;
 
@@ -111,6 +115,7 @@ export class AppDatabase extends Dexie {
     this.standards.hook("updating", (mods, primKey, obj) => {
       if (this.isSyncingInternal) return;
 
+      // FIX TS2339: Cast explicite de obj et mods
       const standard = obj as StandardPlugin;
       const updatedMods = mods as Partial<StandardPlugin>;
       
@@ -133,6 +138,9 @@ export class AppDatabase extends Dexie {
     this.standards.hook("deleting", (primKey, obj) => {
       if (this.isSyncingInternal) return;
 
+      // FIX TS2339: Cast explicite de obj
+      const standard = obj as StandardPlugin;
+
       setTimeout(() => {
         this.syncEvents.put({
           id: String(primKey),
@@ -140,7 +148,7 @@ export class AppDatabase extends Dexie {
           timestamp: Date.now(),
           operation: "delete",
           entity: "standard",
-          payload: { id: primKey, name: obj.manifest?.label || primKey }
+          payload: { id: primKey, name: standard.manifest?.label || primKey }
         }).catch(err => console.error("Event error (Standard Delete):", err));
       }, 0);
     });
