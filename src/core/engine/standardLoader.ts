@@ -209,3 +209,30 @@ async function migrateExistingProfiles(standard: StandardPlugin): Promise<void> 
     }
   }
 }
+
+/**
+ * Importe ou met à jour dans Dexie les standards et profils synchronisés depuis Git.
+ * Cette fonction convertit les fichiers physiques du dépôt Git en enregistrements BD.
+ */
+export async function importSyncedGitData(standards: any[], profiles: any[]): Promise<void> {
+  try {
+    db.isSyncingInternal = true; // On évite de boucler la création d'événements de sync
+
+    // 1. Importer les standards synchronisés
+    for (const std of standards) {
+      // Si le standard vient du Git, on conserve son statut de synchronisation
+      await upsertStandard(std);
+      console.log(`[Git Sync] Standard importé en base : ${std.manifest.id} (${std.status})`);
+    }
+
+    // 2. Importer les profils synchronisés
+    for (const profile of profiles) {
+      await upsertProfile(profile);
+      console.log(`[Git Sync] Profil importé en base : ${profile.id} (${profile.status})`);
+    }
+  } catch (err) {
+    console.error("Erreur lors de l'importation des fichiers Git synchronisés :", err);
+  } finally {
+    db.isSyncingInternal = false;
+  }
+}
