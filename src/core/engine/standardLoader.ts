@@ -7,6 +7,7 @@
 import { getAllStandards } from "../db/repositories/standards.repo";
 import { z } from "zod";
 
+import { db } from "../db/schema";
 
 import { StandardPluginSchema } from "../domain/standard";
 import { ProfileSchema } from "../domain/profile";
@@ -35,6 +36,9 @@ export interface StandardLoadResult {
  */
 export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
   try {
+    // Désactive temporairement la capture des événements pour le démarrage d'usine
+    db.isSyncingInternal = true;
+
     // 1. Traiter les Standards / Taxonomies
     const standardResults = await seedStandards(builtinDatabase.standards ?? []);
 
@@ -44,6 +48,9 @@ export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {
     return standardResults;
   } catch (err) {
     return [{ id: "global-seed", status: "error", message: `Failed to execute global seed: ${String(err)}` }];
+  } finally {
+    // Réactive impérativement la capture des événements pour l'utilisateur
+    db.isSyncingInternal = false;
   }
 }
 
