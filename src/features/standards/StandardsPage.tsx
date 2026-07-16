@@ -33,14 +33,30 @@ export function StandardsPage() {
 
   if (standards === undefined) return <LoadingSpinner />;
 
-  // ── Taxonomy editor ─────────────────────────────────────────────────────
+// ── Taxonomy editor ─────────────────────────────────────────────────────
   if (subView === "edit-taxonomy" && editingStandard !== null) {
     return (
       <div className="h-full">
         <TaxonomyEditor
           standard={editingStandard}
           onSave={async (nodes: StandardNode[]) => {
+            // 1. On prépare l'objet standard modifié avec son nouveau statut de synchronisation
+            const updatedStandard = {
+              ...editingStandard,
+              nodes,
+              source: "user",      // Devient une copie locale modifiée
+              status: "pending",   // Passe en attente de validation/push
+              lastModifiedBy: "Admin" // Ou le nom de l'utilisateur connecté
+            };
+
+            // 2. On sauvegarde le standard mis à jour en base
+            // Utiliser une méthode upsertStandard globale ou équivalente pour enregistrer l'objet complet
             await updateStandardNodes(editingStandard.manifest.id, nodes);
+            
+            // Si updateStandardNodes ne met à jour que les nodes, il faudra appeler une fonction de ton repository 
+            // pour mettre à jour également les champs status et source, par exemple :
+            // await upsertStandard(updatedStandard); 
+
             setSubView("list");
             setEditingStandard(null);
           }}
