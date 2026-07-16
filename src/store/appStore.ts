@@ -267,25 +267,28 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
           
           // CAS 2 : Traitement et push d'un STANDARD
+          // Dans src/store/appStore.ts (dans la méthode submitCommit)
+          
+          // ...
           else if (event.entity === "standard") {
             const api = window.electronAPI as any;
             
-            // On prépare le standard pour l'envoi
             const standardToSend = {
               ...payload,
               status: "pending" as const,
               lastModifiedBy: state.systemUsername,
               manifest: {
                 ...payload.manifest,
-                isBuiltin: false // 👈 Ce n'est plus un standard figé d'usine
+                isBuiltin: false
               }
             };
-
-            // Sauvegarde de l'état "pending" localement dans Dexie
+          
             await db.standards.put(standardToSend);
             
             if (api.gitSubmitStandard) {
+              // 👈 On envoie le gitRepoPath du store à l'IPC
               await api.gitSubmitStandard({
+                repoPath: state.gitRepoPath,
                 username: state.systemUsername,
                 standard: standardToSend
               });
