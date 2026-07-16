@@ -6,6 +6,7 @@ import {
   pullRepository, 
   submitProfileToGit, 
   submitStandardToGit,
+  approveStandardInGit,
   approveProfileInGit 
 } from "./gitService";
 
