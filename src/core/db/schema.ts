@@ -23,9 +23,10 @@ export class AppDatabase extends Dexie {
   constructor() {
     super("mil_browser_v1");
 
-    this.version(1).stores({
+   this.version(1).stores({
       profiles: "id, nodeId, standardId, updatedAt, source, status, [standardId+nodeId]",
-      standards: "manifest.id, manifest.organization, manifest.isBuiltin",
+      // Mise à jour de l'index pour les standards :
+      standards: "manifest.id, manifest.organization, manifest.isBuiltin, status, source",
       syncEvents: "id, timestamp, entity",
       settings: "key",
     });
@@ -92,13 +93,13 @@ export class AppDatabase extends Dexie {
       }, 0);
     });
 
-    // ── HOOK STANDARDS ──
+// ── HOOK STANDARDS ──
     this.standards.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
       
-      // FIX TS2339: Cast explicite de obj
-      const standard = obj as StandardPlugin;
-      if (standard.manifest?.isBuiltin) return;
+      const standard = obj as any; // Cast temporaire ou utilise StandardPlugin étendu
+      // SÉCURITÉ : On synchronise uniquement si ce n'est pas un import d'usine silencieux
+      if (standard.source === "builtin" && standard.status === "approved") return;
 
       setTimeout(() => {
         this.syncEvents.put({
@@ -115,11 +116,13 @@ export class AppDatabase extends Dexie {
     this.standards.hook("updating", (mods, primKey, obj) => {
       if (this.isSyncingInternal) return;
 
-      // FIX TS2339: Cast explicite de obj et mods
-      const standard = obj as StandardPlugin;
-      const updatedMods = mods as Partial<StandardPlugin>;
+      const standard = obj as any;
+      const updatedMods = mods as any;
       
-      if (standard.manifest?.isBuiltin && updatedMods.manifest?.isBuiltin !== false) return;
+      // SÉCURITÉ : Si c'est une modification système sur un builtin d'usine, on n'envoie rien au Git
+      if (standard.source === "builtin" && updatedMods.source !== "user" && updatedMods.status !== "pending") {
+        return;
+      }
 
       const updatedObj = { ...obj, ...mods };
       setTimeout(() => {
@@ -131,25 +134,6 @@ export class AppDatabase extends Dexie {
           entity: "standard",
           payload: updatedObj
         }).catch(err => console.error("Event error (Standard Update):", err));
-      }, 0);
-    });
-
-    // Ajout du hook de suppression pour les standards
-    this.standards.hook("deleting", (primKey, obj) => {
-      if (this.isSyncingInternal) return;
-
-      // FIX TS2339: Cast explicite de obj
-      const standard = obj as StandardPlugin;
-
-      setTimeout(() => {
-        this.syncEvents.put({
-          id: String(primKey),
-          deviceId: getOrCreateDeviceId(),
-          timestamp: Date.now(),
-          operation: "delete",
-          entity: "standard",
-          payload: { id: primKey, name: standard.manifest?.label || primKey }
-        }).catch(err => console.error("Event error (Standard Delete):", err));
       }, 0);
     });
   }
