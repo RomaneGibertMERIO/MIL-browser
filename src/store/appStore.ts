@@ -103,39 +103,44 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearLocalChanges: () => set({ localStagedChanges: [] }),
 
   /**
-   * Lit la table `syncEvents` d'IndexedDB pour alimenter dynamiquement la liste de l'UI
+   * Lit la table `syncEvents` d'IndexedDB pour alimenter dynamiquement la liste de l'UI.
+   * Regroupe les événements par ID d'entité unique pour éviter les doublons lors des mises à jour successives.
    */
-   refreshLocalChanges: async () => {
-      try {
-        const events = await db.syncEvents.toArray();
-        const changes: MockChangeItem[] = events.map((event) => {
-          const payload = event.payload as any;
-          const isStandard = event.entity === 'standard';
+  refreshLocalChanges: async () => {
+    try {
+      const events = await db.syncEvents.toArray();
+      
+      // Utilisation d'une Map pour écraser les anciennes modifications par la plus récente d'un même ID
+      const aggregatedMap = new Map<string, MockChangeItem>();
+
+      for (const event of events) {
+        const payload = event.payload as any;
+        const isStandard = event.entity === 'standard';
+        
+        const name = isStandard 
+          ? (payload?.manifest?.name || payload?.manifest?.id || "New Standard")
+          : (payload?.name || `Profile ID: ${payload?.id}`);
           
-          // Extraction modulaire et adaptative des métadonnées selon le type d'entité
-          const name = isStandard 
-            ? (payload?.manifest?.name || payload?.manifest?.id || "Nouveau Standard")
-            : (payload?.name || `Profil ID: ${payload?.id}`);
-            
-          const location = isStandard
-            ? (payload?.manifest?.organization || "Global")
-            : (payload?.standardId ? `${payload.standardId}` : "Root");
-  
-          return {
-            id: event.id,
-            type: event.entity as 'profile' | 'standard',
-            action: event.operation === 'upsert' ? 'Modified' : 'Deleted',
-            name: name,
-            location: location,
-            proposedData: payload
-          };
+        const location = isStandard
+          ? (payload?.manifest?.organization || "Global")
+          : (payload?.standardId ? `${payload.standardId}` : "Root");
+
+        // On agrège par l'ID de l'entité elle-même
+        aggregatedMap.set(event.id, {
+          id: event.id, // Correspond à l'ID de l'événement / entité
+          type: event.entity as 'profile' | 'standard',
+          action: event.operation === 'upsert' ? 'Modified' : 'Deleted',
+          name: name,
+          location: location,
+          proposedData: payload
         });
-  
-        set({ localStagedChanges: changes });
-      } catch (err) {
-        console.error("Erreur refreshLocalChanges :", err);
       }
-    },
+
+      set({ localStagedChanges: Array.from(aggregatedMap.values()) });
+    } catch (err) {
+      console.error("Erreur refreshLocalChanges :", err);
+    }
+  },
 
 /**
    * PULL : Synchronisation bidirectionnelle avec le dépôt Git distant
@@ -207,7 +212,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Récupère tous les événements cochés par l'utilisateur
       const events = await db.syncEvents.where("id").anyOf(selectedIds).toArray();
 
-      // DÉSACTIVER LES HOOKS pour éviter les boucles locales pendant les écritures de statut
+      // DÉSACTIVER LES HOOKS pour éviter les boucles infinies de création d'événements de synchro
       (db as any).isSyncingInternal = true;
       try {
         for (const event of events) {
@@ -219,13 +224,13 @@ export const useAppStore = create<AppState>((set, get) => ({
             const profileToSend = {
               ...payload,
               author: state.systemUsername,
-              status: "pending" as const // Passe en attente de validation
+              status: "pending" as const // Devient en attente de validation par l'admin
             };
             
             // Écriture propre en base locale
             await db.profiles.put(profileToSend);
 
-            // Envoi à Electron
+            // CORRECTION DE L'APPEL IPC (On aligne le paramètre unique attendu par preload.ts)
             await window.electronAPI.gitSubmitProfile({
               username: state.systemUsername,
               profile: profileToSend
@@ -234,7 +239,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           
           // CAS 2 : Traitement et push d'un STANDARD
           else if (event.entity === "standard") {
-            const api = window.electronAPI as any; // Transtypage temporaire pour éviter le blocage TS
+            const api = window.electronAPI as any;
             
             if (api.gitSubmitStandard) {
               await api.gitSubmitStandard({
@@ -242,19 +247,15 @@ export const useAppStore = create<AppState>((set, get) => ({
                 standard: payload
               });
             } else {
-              // Si Electron n'a pas encore d'IPC dédiée, on utilise l'API générique de soumission
-              // ou on loggue l'action pour le développement local
               console.log("Envoi du standard via la passerelle de secours :", payload.manifest?.id);
-              
-              if (api.gitSubmitProfile) {
-                // Si votre code Electron utilise la même méthode pour tout centraliser
-                // vous pouvez l'adapter ici, sinon le log suffit pour le moment.
-              }
             }
           }
+        }
 
         // Nettoyage complet des événements transmis avec succès
         await db.syncEvents.where("id").anyOf(selectedIds).delete();
+      } catch (err) {
+        console.error("Erreur durant la soumission du push:", err);
       } finally {
         // RÉACTIVER LES HOOKS
         (db as any).isSyncingInternal = false;
