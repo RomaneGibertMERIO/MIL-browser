@@ -169,20 +169,25 @@ function ProfileListItem({ profile, onSelect }: ProfileListItemProps) {
   let badgeLabel = "Local";
   let badgeColor: "blue" | "gray" = "gray";
 
-  // Tri logique strict des 4 états basé sur les variantes standards de ton Badge ("blue" | "gray")
+  // 1. On vérifie d'abord si le profil est officiellement approuvé
   if (profile.status === "approved") {
     badgeLabel = "Officiel";
-    badgeColor = "blue"; // Bleu pour l'officiel approuvé
-  } else if (profile.status === "pending") {
+    badgeColor = "blue";
+  } 
+  // 2. On vérifie ensuite s'il est en attente de validation
+  else if (profile.status === "pending") {
     badgeLabel = "En attente";
-    badgeColor = "gray"; // Gris pour l'attente (évite l'erreur "yellow" non supportée)
-  } else if (profile.source === "builtin" && (!profile.status || profile.status === "approved")) {
+    badgeColor = "gray";
+  } 
+  // 3. S'il s'agit d'un profil intégré d'origine (builtin)
+  else if (profile.source === "builtin") {
     badgeLabel = "Dépôt initial";
-    badgeColor = "gray"; // Gris pour le builtin d'origine
-  } else {
-    // Profil créé localement ou modifié localement
+    badgeColor = "gray";
+  } 
+  // 4. Par défaut, le profil est considéré comme "Local"
+  else {
     badgeLabel = "Local";
-    badgeColor = "gray"; // Gris (ou "blue" si tu préfères) pour le local
+    badgeColor = "gray";
   }
 
   return (
