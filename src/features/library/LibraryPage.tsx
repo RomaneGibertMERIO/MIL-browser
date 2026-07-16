@@ -35,9 +35,6 @@ export function LibraryPage({ standard }: LibraryPageProps) {
 
   // Récupération de l'action Zustand pour notifier l'UI des modifications locales
   const refreshLocalChanges = useAppStore((state) => state.refreshLocalChanges);
-  
-  // Sélection & Workspace State (le reste de tes states inchangés...)
-  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
  
   // Largeurs dynamiques des panneaux (Drag-to-resize)
   const [leftWidth, setLeftWidth] = useState(288); // 72 en Tailwind = 288px
