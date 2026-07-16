@@ -13,10 +13,12 @@ export async function getBuiltinStandards(): Promise<StandardPlugin[]> {
   return db.standards.where("manifest.isBuiltin").equals(1).toArray();
 }
 
+/**
+ * Insère ou met à jour un standard.
+ * Suppression de la transaction manuelle bloquante pour laisser le hook asynchrone "syncEvents" s'exécuter librement.
+ */
 export async function upsertStandard(standard: StandardPlugin): Promise<void> {
-  await db.transaction("rw", [db.standards, db.syncEvents], async () => {
-    await db.standards.put(standard);
-  });
+  await db.standards.put(standard);
 }
 
 export async function seedBuiltinStandard(standard: StandardPlugin): Promise<void> {
@@ -50,7 +52,7 @@ export async function createStandard(standard: StandardPlugin): Promise<void> {
 
 /**
  * Supprime un standard et tous les profils associés.
- * Les événements de suppression (tombstones) sont automatiquement générés par les hooks Dexie.
+ * Force la récupération et la suppression individuelle des profils pour garantir le déclenchement du hook "deleting".
  */
 export async function deleteStandardAndProfiles(id: string): Promise<void> {
   const standard = await getStandardById(id);
@@ -59,11 +61,17 @@ export async function deleteStandardAndProfiles(id: string): Promise<void> {
     throw new Error(`Cannot delete builtin standard "${id}".`);
   }
 
-  await db.transaction("rw", [db.standards, db.profiles, db.syncEvents], async () => {
-    // 1. Supprime les profils liés (déclenche automatiquement le hook "deleting" de schema.ts)
-    await db.profiles.where("standardId").equals(id).delete();
+  // 1. Récupère toutes les clés des profils associés à ce standard
+  const profileKeys = await db.profiles
+    .where("standardId")
+    .equals(id)
+    .primaryKeys();
 
-    // 2. Supprime le standard (déclenche automatiquement le hook de suppression s'il existe)
-    await db.standards.delete(id);
-  });
+  // 2. On supprime les profils un par un pour déclencher le hook de synchronisation "deleting" de schema.ts
+  if (profileKeys.length > 0) {
+    await Promise.all(profileKeys.map(key => db.profiles.delete(key)));
+  }
+
+  // 3. Supprime le standard (déclenche le hook "deleting" sur standards)
+  await db.standards.delete(id);
 }
