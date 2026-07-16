@@ -5,6 +5,7 @@ import {
   initOrCloneRepository, 
   pullRepository, 
   submitProfileToGit, 
+  submitStandardToGit,
   approveProfileInGit 
 } from "./gitService";
 
@@ -91,6 +92,24 @@ ipcMain.handle("git:approve-profile", async (_event, profileId: string) => { // 
     console.error("Erreur git:approve-profile:", error);
     return { success: false, error: error.message };
   }
+});
+
+ipcMain.handle("git:submit-standard", async (event, payload) => {
+  const settings = await getSettings(); // Récupère le chemin réseau du dépôt configuré
+  const repoPath = settings.gitRepoPath;
+  if (!repoPath) throw new Error("Aucun dépôt Git configuré.");
+
+  return await submitStandardToGit(repoPath, payload.username, payload.standard);
+});
+
+ipcMain.handle("git:approve-standard", async (event, standardId) => {
+  const settings = await getSettings();
+  const repoPath = settings.gitRepoPath;
+  if (!repoPath) throw new Error("Aucun dépôt Git configuré.");
+
+  // Ici, on récupère le nom de l'admin configuré (ou par défaut "Admin")
+  const adminUsername = "Admin"; 
+  return await approveStandardInGit(repoPath, adminUsername, standardId);
 });
 
 app.whenReady().then(createWindow);
