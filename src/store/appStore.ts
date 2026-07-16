@@ -3,6 +3,8 @@ import { upsertProfile, getAllProfiles } from "../core/db/repositories/profiles.
 import { upsertStandard } from "../core/db/repositories/standards.repo";
 import { db } from "../core/db/schema";
 
+import { getAllProfiles } from "../core/db/repositories/profiles.repo";
+
 export type AppMode = "assistant" | "admin";
 export type AdminView = 'browse' | 'library' | 'standards' | 'settings' | 'validations';
 
