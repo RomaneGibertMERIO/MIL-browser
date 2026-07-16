@@ -386,6 +386,8 @@ interface EditorTreeNodeProps {
   depth: number;
 }
 
+// Remplace le rendu ou ajoute ce badge dans le composant d'affichage de ton nœud de taxonomie (EditorTreeNode) :
+
 function EditorTreeNode({
   node,
   selectedId,
@@ -399,79 +401,67 @@ function EditorTreeNode({
   const [expanded, setExpanded] = useState(depth < 2);
   const isSelected = node.id === selectedId;
 
+  // Détermination du badge selon les métadonnées de modification du nœud
+  let badgeLabel = "Builtin";
+  let isModified = node.id.length > 36; // par exemple, les ID générés par crypto.randomUUID (uuid4) indiquent un nœud local ou personnalisé
+  
+  if (node.metadata?.status === "pending") {
+    badgeLabel = "Pending";
+  } else if (node.metadata?.status === "approved") {
+    badgeLabel = "Official";
+  } else if (isModified) {
+    badgeLabel = "Local Node";
+  }
+
   return (
     <div>
       <div
-        className={`flex items-center group transition-colors cursor-pointer ${
+        className={`flex items-center group transition-colors cursor-pointer justify-between pr-3 ${
           isSelected
-            ? "bg-blue-600"
-            : "hover:bg-slate-100"
+            ? "bg-blue-600 text-white"
+            : "hover:bg-slate-100 text-slate-900"
         }`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
       >
-        {/* Expand toggle */}
-        <button
-          onClick={() => setExpanded(v => !v)}
-          className={`flex-shrink-0 w-6 text-center text-sm py-2.5 ${
-            isSelected ? "text-blue-200" : "text-gray-400"
-          }`}
-        >
-          {node.children.length > 0 ? (expanded ? "▾" : "▸") : "·"}
-        </button>
+        <div className="flex items-center flex-1 min-w-0" onClick={() => onSelect(node.id)}>
+          {/* Expand toggle */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded(v => !v);
+            }}
+            className={`flex-shrink-0 w-6 text-center text-sm py-2.5 ${
+              isSelected ? "text-blue-200" : "text-gray-400"
+            }`}
+          >
+            {node.children.length > 0 ? (expanded ? "▾" : "▸") : "·"}
+          </button>
 
-        {/* Label */}
-        <button
-          onClick={() => onSelect(node.id)}
-          className="flex-1 min-w-0 text-left py-2.5 pr-2"
-        >
-          <span className={`font-mono text-xs mr-1.5 ${
-            isSelected ? "text-blue-200" : "text-gray-400"
-          }`}>
-            {node.code}
+          {/* Label du nœud */}
+          <span className="text-xs font-semibold truncate py-2.5">
+            {node.code ? `[${node.code}] ` : ""}{node.label}
           </span>
-          <span className={`text-sm ${
-            isSelected ? "text-white font-medium" : "text-gray-900"
-          }`}>
-            {node.label}
-          </span>
-        </button>
+        </div>
 
-        {/* Action buttons */}
-        <div className={`flex items-center gap-0.5 pr-2 flex-shrink-0 transition-opacity ${
-          isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-        }`}>
-          <button
-            onClick={(e) => { e.stopPropagation(); onMoveUp(node.id); }}
-            title="Move up"
-            className={`p-1.5 rounded text-sm ${
-              isSelected ? "text-blue-200 hover:bg-blue-500" : "text-gray-400 hover:text-gray-700 hover:bg-gray-200"
-            }`}
-          >↑</button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onMoveDown(node.id); }}
-            title="Move down"
-            className={`p-1.5 rounded text-sm ${
-              isSelected ? "text-blue-200 hover:bg-blue-500" : "text-gray-400 hover:text-gray-700 hover:bg-gray-200"
-            }`}
-          >↓</button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onAddChild(node.id); }}
-            title="Add child node"
-            className={`p-1.5 rounded text-sm font-bold ${
-              isSelected ? "text-blue-100 hover:bg-blue-500" : "text-gray-400 hover:text-green-600 hover:bg-green-50"
-            }`}
-          >+</button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(node.id); }}
-            title="Delete node"
-            className={`p-1.5 rounded text-sm ${
-              isSelected ? "text-red-300 hover:bg-red-600" : "text-gray-400 hover:text-red-600 hover:bg-red-50"
-            }`}
-          >✕</button>
+        {/* PASTILLE DE STATUT TAXONOMIQUE */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className={`text-[8px] px-1 py-0.5 rounded uppercase font-extrabold tracking-wider ${
+            badgeLabel === 'Official' 
+              ? 'bg-blue-100 text-blue-800' 
+              : badgeLabel === 'Pending'
+                ? 'bg-amber-100 text-amber-800'
+                : badgeLabel === 'Local Node'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-gray-100 text-gray-500'
+          }`}>
+            {badgeLabel}
+          </span>
         </div>
       </div>
+      
+      {/* Rendu des enfants si étendu */}
       {expanded && node.children.length > 0 && (
-        <div>
+        <div className="border-l border-gray-100 ml-3">
           {node.children.map(child => (
             <EditorTreeNode
               key={child.id}
