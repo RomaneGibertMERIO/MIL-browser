@@ -72,6 +72,7 @@ export class AppDatabase extends Dexie {
     this.profiles.hook("deleting", (primKey, obj) => {
       if (this.isSyncingInternal) return;
 
+      // FIX TS2339: On cast "obj" en tant que Profile pour accéder à ses propriétés
       const profile = obj as Profile;
       if (profile.source === "builtin") return;
 
