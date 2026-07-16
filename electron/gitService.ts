@@ -170,3 +170,40 @@ export async function approveProfileInGit(remoteInput: string, adminUsername: st
   const centralDestPath = path.join(centralPath, "profiles", fileName);
   fs.writeFileSync(centralDestPath, JSON.stringify(profile, null, 2), "utf8");
 }
+
+/**
+ * Refuse un profil proposé. Retire la proposition du dépôt central commun.
+ */
+export async function rejectProfileInGit(remoteInput: string, adminUsername: string, profileId: string): Promise<void> {
+  await initOrCloneRepository(remoteInput);
+  const centralPath = getFsPath(remoteInput);
+
+  const fileName = `profile-${profileId}.json`;
+  const localPath = path.join(PROFILES_DIR, fileName);
+  const centralPathFile = path.join(centralPath, "profiles", fileName);
+
+  // 1. Supprime le fichier du dépôt central (pour qu'il disparaisse de la liste de validation de l'admin)
+  if (fs.existsSync(centralPathFile)) {
+    fs.unlinkSync(centralPathFile);
+    console.log(`Proposition rejetée : Fichier supprimé du dépôt central : ${centralPathFile}`);
+  }
+
+  // 2. Met à jour le statut en local chez l'admin (ou l'utilisateur lors du pull) à "local" pour retravailler dessus
+  if (fs.existsSync(localPath)) {
+    const profile = JSON.parse(fs.readFileSync(localPath, "utf8"));
+    profile.status = "local"; // Repasse en modification locale
+    profile.updatedAt = new Date().toISOString();
+    fs.writeFileSync(localPath, JSON.stringify(profile, null, 2), "utf8");
+
+    try {
+      const relativePath = path.join("profiles", fileName).replace(/\\/g, "/");
+      await git.add({ fs, dir: WORKSPACE_DIR, filepath: relativePath });
+      await git.commit({
+        fs,
+        dir: WORKSPACE_DIR,
+        message: `Reject: Profil "${profile.name}" rejeté par l'admin ${adminUsername}`,
+        author: { name: adminUsername, email: `${adminUsername.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
+      });
+    } catch (e) {}
+  }
+}
