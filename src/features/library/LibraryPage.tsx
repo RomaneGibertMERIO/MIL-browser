@@ -21,6 +21,8 @@ import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
 import { ProfileForm } from "./ProfileForm";
 import { TimeSeriesChart } from "../../shared/components/charts/TimeSeriesChart";
 
+import { useAppStore } from "../../store/appStore"; // <-- Ajuste le chemin relatif si nécessaire
+
 interface LibraryPageProps {
   standard: StandardPlugin;
 }
@@ -31,6 +33,12 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [formKey, setFormKey] = useState(0);
 
+  // Récupération de l'action Zustand pour notifier l'UI des modifications locales
+  const refreshLocalChanges = useAppStore((state) => state.refreshLocalChanges);
+  
+  // Sélection & Workspace State (le reste de tes states inchangés...)
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+ 
   // Largeurs dynamiques des panneaux (Drag-to-resize)
   const [leftWidth, setLeftWidth] = useState(288); // 72 en Tailwind = 288px
   const [rightWidth, setRightWidth] = useState(320); // 80 en Tailwind = 320px
@@ -162,7 +170,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     resetEditorState();
   }
 
-  async function handleSave(draft: ProfileDraft) {
+    async function handleSave(draft: ProfileDraft) {
     const schema = getEffectiveSchema(standard, draft.nodeId);
     const isEditingBuiltin = selectedProfile?.source === "builtin";
     
@@ -182,7 +190,11 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     setValidationErrors([]);
     setSaveStatus("saving");
     
+    // 1. Écriture IndexedDB
     await upsertProfile(profile);
+    
+    // 2. Notification immédiate du Store Zustand pour le badge de synchro
+    await refreshLocalChanges();
     
     // Bypass de sécurité pour recharger proprement le nouveau brouillon de référence
     setPreviewDraft(null); 
@@ -192,7 +204,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     setTimeout(() => setSaveStatus("idle"), 2000);
   }
 
-  async function handleDuplicate(profile: Profile) {
+    async function handleDuplicate(profile: Profile) {
     if (!confirmDiscardIfDirty()) return;
     const copy: Profile = {
       ...profile, id: crypto.randomUUID(),
@@ -200,15 +212,27 @@ export function LibraryPage({ standard }: LibraryPageProps) {
       status: "local", author: profile.author ?? "User",
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
+
+    // 1. Écriture IndexedDB
     await upsertProfile(copy);
+
+    // 2. Notification du Store Zustand
+    await refreshLocalChanges();
+
     setSelectedProfileId(copy.id);
     setIsCreating(false);
     resetEditorState();
   }
 
-  async function handleDeleteConfirm() {
+    async function handleDeleteConfirm() {
     if (deletingId === null) return;
+
+    // 1. Écriture IndexedDB (Suppression)
     await dbDeleteProfile(deletingId);
+
+    // 2. Notification du Store Zustand
+    await refreshLocalChanges();
+
     if (selectedProfileId === deletingId) {
       setSelectedProfileId(null);
       setIsCreating(false);
@@ -243,6 +267,9 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     const result = await importProfilesForStandard(file, standard);
     setImportResult(result);
     
+    // Notification du store
+    await refreshLocalChanges();
+    
     if (result.errors && result.errors.length > 0) {
       alert("⚠️ ERRORS :\n\n" + JSON.stringify(result.errors, null, 2));
     } else {
@@ -255,6 +282,9 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     const result = await importProfilesForStandard(pendingImport.file, standard);
     setImportResult(result);
     setPendingImport(null);
+
+    // Notification du store
+    await refreshLocalChanges();
   }
 
   const showEditor = isCreating || selectedProfile !== null;
