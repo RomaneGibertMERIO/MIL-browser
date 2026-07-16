@@ -12,6 +12,7 @@ import {
   deleteStandardAndProfiles,
   updateStandardNodes,
   createStandard,
+  upsertStandard,
 } from "../../core/db/repositories/standards.repo";
 import { useStandards } from "../../shared/hooks/useStandards";
 import { Badge } from "../../shared/components/ui/Badge";
@@ -40,22 +41,19 @@ export function StandardsPage() {
         <TaxonomyEditor
           standard={editingStandard}
           onSave={async (nodes: StandardNode[]) => {
-            // 1. On prépare l'objet standard modifié avec son nouveau statut de synchronisation
-            const updatedStandard = {
+            // 1. On prépare l'objet standard complet mis à jour
+            const updatedStandard: StandardPlugin = {
               ...editingStandard,
               nodes,
-              source: "user",      // Devient une copie locale modifiée
-              status: "pending",   // Passe en attente de validation/push
-              lastModifiedBy: "Admin" // Ou le nom de l'utilisateur connecté
+              source: "user" as any,      // Devient une copie locale modifiée
+              status: "pending" as any,   // Passe en attente de push
             };
 
-            // 2. On sauvegarde le standard mis à jour en base
-            // Utiliser une méthode upsertStandard globale ou équivalente pour enregistrer l'objet complet
+            // 2. On sauvegarde d'abord les nodes
             await updateStandardNodes(editingStandard.manifest.id, nodes);
             
-            // Si updateStandardNodes ne met à jour que les nodes, il faudra appeler une fonction de ton repository 
-            // pour mettre à jour également les champs status et source, par exemple :
-            // await upsertStandard(updatedStandard); 
+            // 3. On sauvegarde le reste des métadonnées (le statut et la source)
+            await upsertStandard(updatedStandard); 
 
             setSubView("list");
             setEditingStandard(null);
