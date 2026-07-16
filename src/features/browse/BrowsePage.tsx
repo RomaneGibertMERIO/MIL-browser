@@ -160,25 +160,24 @@ export function BrowsePage({ standard, activeNodeId, onNodeSelect }: BrowsePageP
 // ProfileListItem
 // ---------------------------------------------------------------------------
 
-interface ProfileListItemProps {
-  profile: Profile;
-  onSelect: (profile: Profile) => void;
-}
-
 function ProfileListItem({ profile, onSelect }: ProfileListItemProps) {
-  // On se restreint aux variantes standards (blue et gray) acceptées par votre BadgeVariant
   let badgeLabel = "Local";
-  let badgeColor: "blue" | "gray" = "gray";
+  let badgeColor: "blue" | "gray" | "green" | "yellow" = "gray";
 
+  // Tri logique strict des 4 états
   if (profile.status === "approved") {
     badgeLabel = "Officiel";
-    badgeColor = "blue"; // Utilise le bleu pour l'officiel
+    badgeColor = "blue"; // Bleu pour l'officiel approuvé
   } else if (profile.status === "pending") {
     badgeLabel = "En attente";
-    badgeColor = "gray";
-  } else if (profile.source === "builtin") {
+    badgeColor = "yellow" as any; // Jaune/Orange pour l'attente de validation (géré selon les classes Tailwind de ton badge)
+  } else if (profile.source === "builtin" && (!profile.status || profile.status === "approved")) {
     badgeLabel = "Dépôt initial";
-    badgeColor = "gray";
+    badgeColor = "gray"; // Gris pour le builtin non modifié
+  } else {
+    // Profil créé localement ou profil builtin modifié en statut local
+    badgeLabel = "Local";
+    badgeColor = "green" as any; // Vert pour les modifications locales prêtes à être proposées
   }
 
   return (
