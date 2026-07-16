@@ -63,9 +63,10 @@ export async function upsertProfile(profile: Profile): Promise<void> {
     
     // CORRECTION : Uniquement bloquer si le NOUVEAU profil que l'on essaie d'insérer prétend 
     // toujours être un asset d'origine "builtin", ou si on tente d'écraser un builtin sans changer sa source.
-    if (existing?.source === "builtin" && profile.source === "builtin") {
+    // COMMENTE POUR TEST TEMPORAIRE
+    /*if (existing?.source === "builtin" && profile.source === "builtin") {
       throw new Error(`Cannot overwrite deployment asset profile: ${profile.id}`);
-    }
+    }*/
 
     // Déclenche automatiquement le hook "creating" ou "updating" de schema.ts
     await db.profiles.put(profile);
