@@ -142,7 +142,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-/**
+   /**
    * PULL : Synchronisation bidirectionnelle avec le dépôt Git distant
    */
   triggerGitSync: async () => {
@@ -164,7 +164,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       try {
         // 3. Écriture dans IndexedDB locale
         for (const std of gitResult.pulledStandards) {
-          await upsertStandard(std);
+          // IMPORTANT CORRECTION : Un standard tiré du dépôt commun n'est plus un "builtin" d'usine local
+          const adjustedStandard = {
+            ...std,
+            manifest: {
+              ...std.manifest,
+              isBuiltin: false // 👈 Permet de le considérer comme officiel/customisé et évite l'écrasement au bootstrap
+            },
+            status: std.status || "approved"
+          };
+          await upsertStandard(adjustedStandard);
         }
         for (const prof of gitResult.pulledProfiles) {
           await upsertProfile(prof);
@@ -178,20 +187,40 @@ export const useAppStore = create<AppState>((set, get) => ({
       const dbProfiles = await getAllProfiles();
       const pendingProfiles = dbProfiles.filter((p: any) => p.status === "pending");
 
-      const reconstructedCommits: AdminCommitRequest[] = pendingProfiles.map((p: any) => ({
-        id: `commit-${p.id}`,
-        author: p.author || "Collaborateur",
-        date: p.updatedAt ? p.updatedAt.split('T')[0] : new Date().toISOString().split('T')[0],
-        commitMessage: `Proposition de profil : ${p.name}`,
-        changes: [{
-          id: p.id,
-          type: "profile",
-          action: "Created",
-          name: p.name,
-          location: `${p.standardId}`,
-          proposedData: p
-        }]
-      }));
+      // On reconstruit également les standards en attente de validation ("pending")
+      const dbStandards = await db.standards.toArray();
+      const pendingStandards = dbStandards.filter((s: any) => s.status === "pending");
+
+      const reconstructedCommits: AdminCommitRequest[] = [
+        ...pendingProfiles.map((p: any) => ({
+          id: `commit-${p.id}`,
+          author: p.author || "Collaborateur",
+          date: p.updatedAt ? p.updatedAt.split('T')[0] : new Date().toISOString().split('T')[0],
+          commitMessage: `Proposition de profil : ${p.name}`,
+          changes: [{
+            id: p.id,
+            type: "profile" as const,
+            action: "Created" as const,
+            name: p.name,
+            location: `${p.standardId}`,
+            proposedData: p
+          }]
+        })),
+        ...pendingStandards.map((s: any) => ({
+          id: `commit-${s.manifest.id}`,
+          author: s.lastModifiedBy || "Collaborateur",
+          date: s.updatedAt ? s.updatedAt.split('T')[0] : new Date().toISOString().split('T')[0],
+          commitMessage: `Proposition de taxonomie : ${s.manifest.name || s.manifest.id}`,
+          changes: [{
+            id: s.manifest.id,
+            type: "standard" as const,
+            action: "Modified" as const,
+            name: s.manifest.name || s.manifest.id,
+            location: s.manifest.organization || "Global",
+            proposedData: s
+          }]
+        }))
+      ];
 
       set({ pendingCommits: reconstructedCommits });
     } else {
@@ -202,7 +231,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().refreshLocalChanges();
   },
 
-/**
+  /**
    * PUSH : Soumet un commit sur le réseau pour les profils ET les standards sélectionnés
    */
   submitCommit: async (_, selectedIds) => {
@@ -230,7 +259,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             // Écriture propre en base locale
             await db.profiles.put(profileToSend);
 
-            // CORRECTION DE L'APPEL IPC (On aligne le paramètre unique attendu par preload.ts)
+            // Appel IPC
             await window.electronAPI.gitSubmitProfile({
               username: state.systemUsername,
               profile: profileToSend
@@ -241,10 +270,24 @@ export const useAppStore = create<AppState>((set, get) => ({
           else if (event.entity === "standard") {
             const api = window.electronAPI as any;
             
+            // On prépare le standard pour l'envoi
+            const standardToSend = {
+              ...payload,
+              status: "pending" as const,
+              lastModifiedBy: state.systemUsername,
+              manifest: {
+                ...payload.manifest,
+                isBuiltin: false // 👈 Ce n'est plus un standard figé d'usine
+              }
+            };
+
+            // Sauvegarde de l'état "pending" localement dans Dexie
+            await db.standards.put(standardToSend);
+            
             if (api.gitSubmitStandard) {
               await api.gitSubmitStandard({
                 username: state.systemUsername,
-                standard: payload
+                standard: standardToSend
               });
             } else {
               console.log("Envoi du standard via la passerelle de secours :", payload.manifest?.id);
@@ -266,6 +309,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().refreshLocalChanges();
     await get().triggerGitSync();
   },
+
+  
   
   /**
    * Validation / Rejet d'une soumission par un administrateur
