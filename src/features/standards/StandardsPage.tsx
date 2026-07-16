@@ -189,13 +189,34 @@ interface StandardCardProps {
 
 function StandardCard({ standard, onDelete, onEditTaxonomy }: StandardCardProps) {
   const m = standard.manifest;
+
+  // Définition adaptative du statut du standard
+  let badgeLabel = "Local";
+  let badgeColor: "blue" | "gray" = "gray";
+
+  // Si c'est un builtin non altéré (pas de changements en attente ou approuvé tel quel)
+  if (m.isBuiltin) {
+    badgeLabel = "Dépôt initial";
+    badgeColor = "gray";
+  } else if ((standard as any).status === "approved") {
+    badgeLabel = "Officiel";
+    badgeColor = "blue";
+  } else if ((standard as any).status === "pending") {
+    badgeLabel = "En attente";
+    badgeColor = "gray";
+  } else {
+    // Créé ou dérivé localement
+    badgeLabel = "Local";
+    badgeColor = "gray";
+  }
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">
       <div className="flex items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="font-semibold text-sm text-gray-900">{m.label}</span>
-            {m.isBuiltin && <Badge variant="blue">Built-in</Badge>}
+            <Badge variant={badgeColor}>{badgeLabel}</Badge>
             <Badge variant="gray">v{m.version}</Badge>
           </div>
           {m.description !== undefined && (
@@ -211,7 +232,12 @@ function StandardCard({ standard, onDelete, onEditTaxonomy }: StandardCardProps)
             {m.organization !== undefined && (
               <span>Org: <span className="text-gray-600 font-medium">{m.organization}</span></span>
             )}
-            <span className="font-mono">{m.id}</span>
+            <span className="font-mono text-[10px] bg-slate-100 px-1 rounded">{m.id}</span>
+            
+            {/* Affiche le modificateur ou l'auteur si défini */}
+            {(standard as any).lastModifiedBy && (
+              <span className="italic">par {(standard as any).lastModifiedBy}</span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
