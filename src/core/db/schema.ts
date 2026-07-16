@@ -30,11 +30,13 @@ export class AppDatabase extends Dexie {
       settings: "key",
     });
 
-   // ── HOOK PROFILES ──
+    // ── HOOK PROFILES ──
     this.profiles.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
-      // SÉCURITÉ : Ne pas générer d'événement de synchronisation pour les profils système d'usine
-      if (obj.source === "builtin") return;
+      
+      // FIX TS2339: On cast "obj" en tant que Profile pour accéder à "source" en toute sécurité
+      const profile = obj as Profile;
+      if (profile.source === "builtin") return;
       
       setTimeout(() => {
         this.syncEvents.put({
@@ -48,6 +50,7 @@ export class AppDatabase extends Dexie {
       }, 0);
     });
 
+    
     this.profiles.hook("updating", (mods, primKey, obj) => {
       if (this.isSyncingInternal) return;
       // SÉCURITÉ : On ignore les modifications système d'usine
@@ -68,8 +71,9 @@ export class AppDatabase extends Dexie {
 
     this.profiles.hook("deleting", (primKey, obj) => {
       if (this.isSyncingInternal) return;
-      // SÉCURITÉ : Si on supprime un profil d'usine, pas besoin de le synchroniser
-      if (obj.source === "builtin") return;
+
+      const profile = obj as Profile;
+      if (profile.source === "builtin") return;
 
       setTimeout(() => {
         this.syncEvents.put({
@@ -78,16 +82,18 @@ export class AppDatabase extends Dexie {
           timestamp: Date.now(),
           operation: "delete",
           entity: "profile",
-          payload: { id: primKey, name: obj.name, standardId: obj.standardId }
+          payload: { id: primKey, name: profile.name, standardId: profile.standardId }
         }).catch(err => console.error("Event error (Profile Delete):", err));
       }, 0);
     });
 
-    // ── HOOK STANDARDS ──
+   // ── HOOK STANDARDS ──
     this.standards.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
-      // SÉCURITÉ : Ne pas synchroniser si le standard est un asset packagé d'origine
-      if (obj.manifest?.isBuiltin) return;
+      
+      // FIX TS2339: On cast "obj" en tant que StandardPlugin pour accéder à "manifest"
+      const standard = obj as StandardPlugin;
+      if (standard.manifest?.isBuiltin) return;
 
       setTimeout(() => {
         this.syncEvents.put({
@@ -103,8 +109,11 @@ export class AppDatabase extends Dexie {
 
     this.standards.hook("updating", (mods, primKey, obj) => {
       if (this.isSyncingInternal) return;
-      // SÉCURITÉ : Ignorer si le standard est d'usine
-      if (obj.manifest?.isBuiltin && mods.manifest?.isBuiltin !== false) return;
+
+      const standard = obj as StandardPlugin;
+      const updatedMods = mods as Partial<StandardPlugin>;
+      
+      if (standard.manifest?.isBuiltin && updatedMods.manifest?.isBuiltin !== false) return;
 
       const updatedObj = { ...obj, ...mods };
       setTimeout(() => {
