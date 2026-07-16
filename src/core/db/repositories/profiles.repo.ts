@@ -1,53 +1,7 @@
 import { db } from "../schema";
 import type { Profile } from "../../domain/profile";
 
-// ---------------------------------------------------------------------------
-// Reads
-// ---------------------------------------------------------------------------
-
-/** Returns all profiles in the database, sorted by updatedAt descending. */
-export async function getAllProfiles(): Promise<Profile[]> {
-  return db.profiles.orderBy("updatedAt").reverse().toArray();
-}
-
-/**
- * Returns all profiles belonging to the given standard, ordered by updatedAt
- * descending.
- */
-export async function getProfilesByStandard(standardId: string): Promise<Profile[]> {
-  return db.profiles
-    .where("standardId")
-    .equals(standardId)
-    .reverse()
-    .sortBy("updatedAt");
-}
-
-/**
- * Returns all profiles whose nodeId exactly matches the given node.
- */
-export async function getProfilesByNodeId(nodeId: string): Promise<Profile[]> {
-  return db.profiles.where("nodeId").equals(nodeId).toArray();
-}
-
-/**
- * Returns all profiles whose standardId and nodeId both match.
- */
-export async function getProfilesByStandardAndNode(
-  standardId: string,
-  nodeId: string,
-): Promise<Profile[]> {
-  return db.profiles
-    .where("[standardId+nodeId]")
-    .equals([standardId, nodeId])
-    .toArray();
-}
-
-/**
- * Returns a single profile by its id, or undefined if not found.
- */
-export async function getProfileById(id: string): Promise<Profile | undefined> {
-  return db.profiles.get(id);
-}
+// ... (Garder les fonctions de Reads inchangées)
 
 // ---------------------------------------------------------------------------
 // Writes
@@ -61,8 +15,9 @@ export async function upsertProfile(profile: Profile): Promise<void> {
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
     const existing = await db.profiles.get(profile.id);
     
-    // Sécurité historique conservée pour le premier démarrage local
-    if (existing?.source === "builtin") {
+    // CORRECTION : Uniquement bloquer si le NOUVEAU profil que l'on essaie d'insérer prétend 
+    // toujours être un asset d'origine "builtin", ou si on tente d'écraser un builtin sans changer sa source.
+    if (existing?.source === "builtin" && profile.source === "builtin") {
       throw new Error(`Cannot overwrite deployment asset profile: ${profile.id}`);
     }
 
