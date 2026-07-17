@@ -1,7 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-// Dans electron/preloads.ts
-
 contextBridge.exposeInMainWorld("electronAPI", {
   getSystemUsername: () => ipcRenderer.invoke("get-system-username"),
   
@@ -13,7 +11,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     
   gitApproveProfile: (profileId: string) => ipcRenderer.invoke("git:approve-profile", profileId),
 
-  // ⚠️ MIS À JOUR : On inclut repoPath dans le payload
   gitSubmitStandard: (payload: { repoPath: string; username: string; standard: any }) =>
     ipcRenderer.invoke("git:submit-standard", payload),
 
