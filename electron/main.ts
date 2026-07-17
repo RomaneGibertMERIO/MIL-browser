@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain } from "electron";
 import path from "path";
-import os from "os"; // <-- Added for retrieving the real OS username
+import os from "os"; 
+import { fileURLToPath } from "url"; // 🛡️ Requis pour reconstruire les chemins proprement
 import { 
   initOrCloneRepository, 
   pullRepository, 
@@ -10,12 +11,17 @@ import {
   approveProfileInGit 
 } from "./gitService";
 
+// 🛡️ Compatibilité ESM / Production pour les chemins d'accès
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
     webPreferences: {
-      preload: path.join(__dirname, "preloads.js"),
+      // 🛡️ Correction du chemin pour qu'il trouve preloads.js (ou preload.js) tant en dev qu'en prod
+      preload: path.join(__dirname, "preloads.js"), 
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -26,6 +32,7 @@ function createWindow() {
   if (!app.isPackaged) {
     win.loadURL("http://localhost:5173");
   } else {
+    // 🛡️ Assure-toi que le chemin relatif vers dist/index.html reste correct une fois packagé
     win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
 
@@ -35,15 +42,22 @@ function createWindow() {
   });
 }
 
+// App Ready
+app.whenReady().then(createWindow);
 
-// <-- Added IPC handler to expose system username securely to React
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
+});
+
+// ==========================================
+// IPC Handlers (Sécurisés)
+// ==========================================
+
 ipcMain.handle("get-system-username", () => {
   return os.userInfo().username || "Unknown-User";
 });
 
-// Variable globale pour retenir le chemin réseau actif de la session
 let activeRemotePath: string = "";
-
 
 ipcMain.handle("git:set-path", async (_event, repoPath: string) => {
   try {
@@ -87,7 +101,6 @@ ipcMain.handle("git:approve-profile", async (_event, profileId: string) => {
     if (!activeRemotePath) {
       return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
     }
-    // Avec la fonction gitService mise à jour, on récupère le résultat { success: true }
     return await approveProfileInGit(activeRemotePath, "Administrator", profileId);
   } catch (error: any) {
     console.error("Erreur git:approve-profile:", error);
@@ -98,7 +111,6 @@ ipcMain.handle("git:approve-profile", async (_event, profileId: string) => {
 ipcMain.handle("git:submit-standard", async (_event, payload) => {
   try {
     const { repoPath, username, standard } = payload;
-    // On utilise le chemin passé en paramètre, ou le chemin actif par défaut
     const targetPath = repoPath || activeRemotePath;
     
     if (!targetPath) {
@@ -123,7 +135,6 @@ ipcMain.handle("git:approve-standard", async (_event, payload) => {
     }
 
     const adminUsername = "Admin"; 
-    // Appelle la fonction de gitService mise à jour qui renvoie { success: true }
     return await approveStandardInGit(targetPath, adminUsername, standardId);
   } catch (error: any) {
     console.error("Erreur git:approve-standard:", error);
