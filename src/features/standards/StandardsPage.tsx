@@ -35,35 +35,32 @@ export function StandardsPage() {
   if (standards === undefined) return <LoadingSpinner />;
 
 // ── Taxonomy editor ─────────────────────────────────────────────────────
-  if (subView === "edit-taxonomy" && editingStandard !== null) {
-    return (
-      <div className="h-full">
-        <TaxonomyEditor
-          standard={editingStandard}
-          onSave={async (nodes: StandardNode[]) => {
-            // 1. On prépare l'objet standard complet mis à jour avec un cast global 'any'
-            // pour contourner la restriction de l'interface de type stricte de StandardPlugin
-            const updatedStandard = {
-              ...editingStandard,
-              nodes,
-              source: "user",      // Devient une copie locale modifiée
-              status: "pending",   // Passe en attente de push
-            } as any;              // 👈 Cast "as any" global ici pour calmer TypeScript
+if (subView === "edit-taxonomy" && editingStandard !== null) {
+  return (
+    <div className="h-full">
+      <TaxonomyEditor
+        standard={editingStandard}
+        onSave={async (nodes: StandardNode[]) => {
+          // 1. On prépare l'objet standard complet unifié en une seule écriture
+          const updatedStandard = {
+            ...editingStandard,
+            nodes,
+            source: "user",      // Devient une copie locale modifiée
+            status: "pending",   // Passe en attente de push pour la pile Git
+          } as any;              
 
-            // 2. On sauvegarde d'abord les nodes
-            await updateStandardNodes(editingStandard.manifest.id, nodes);
-            
-            // 3. On sauvegarde le reste des métadonnées (le statut et la source)
-            await upsertStandard(updatedStandard as StandardPlugin); 
+          // 2. Une unique opération d'écriture atomique en base de données
+          await upsertStandard(updatedStandard as StandardPlugin); 
 
-            setSubView("list");
-            setEditingStandard(null);
-          }}
-          onCancel={() => { setSubView("list"); setEditingStandard(null); }}
-        />
-      </div>
-    );
-  }
+          // 3. Mise à jour de la liste locale
+          setSubView("list");
+          setEditingStandard(null);
+        }}
+        onCancel={() => { setSubView("list"); setEditingStandard(null); }}
+      />
+    </div>
+  );
+}
 
   // ── Create new standard ─────────────────────────────────────────────────
   if (subView === "create") {
