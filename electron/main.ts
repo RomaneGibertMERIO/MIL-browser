@@ -44,6 +44,7 @@ ipcMain.handle("get-system-username", () => {
 // Variable globale pour retenir le chemin réseau actif de la session
 let activeRemotePath: string = "";
 
+
 ipcMain.handle("git:set-path", async (_event, repoPath: string) => {
   try {
     activeRemotePath = repoPath;
@@ -81,39 +82,51 @@ ipcMain.handle("git:submit-profile", async (_event, { username, profile }) => {
   }
 });
 
-ipcMain.handle("git:approve-profile", async (_event, profileId: string) => { // <-- Reçoit la string directement
+ipcMain.handle("git:approve-profile", async (_event, profileId: string) => {
   try {
     if (!activeRemotePath) {
       return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
     }
-    // Utilise le pseudo actif de la session ou un tag Admin par défaut
-    await approveProfileInGit(activeRemotePath, "Administrator", profileId);
-    return { success: true };
+    // Avec la fonction gitService mise à jour, on récupère le résultat { success: true }
+    return await approveProfileInGit(activeRemotePath, "Administrator", profileId);
   } catch (error: any) {
     console.error("Erreur git:approve-profile:", error);
     return { success: false, error: error.message };
   }
 });
 
-// Dans electron/main.ts
+ipcMain.handle("git:submit-standard", async (_event, payload) => {
+  try {
+    const { repoPath, username, standard } = payload;
+    // On utilise le chemin passé en paramètre, ou le chemin actif par défaut
+    const targetPath = repoPath || activeRemotePath;
+    
+    if (!targetPath) {
+      return { success: false, error: "Aucun dépôt Git configuré." };
+    }
 
-ipcMain.handle("git:submit-standard", async (event, payload) => {
-  const { repoPath, username, standard } = payload;
-  if (!repoPath) throw new Error("Aucun dépôt Git configuré.");
-
-  return await submitStandardToGit(repoPath, username, standard);
+    await submitStandardToGit(targetPath, username, standard);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erreur git:submit-standard:", error);
+    return { success: false, error: error.message };
+  }
 });
 
-ipcMain.handle("git:approve-standard", async (event, payload) => {
-  const { repoPath, standardId } = payload;
-  if (!repoPath) throw new Error("Aucun dépôt Git configuré.");
+ipcMain.handle("git:approve-standard", async (_event, payload) => {
+  try {
+    const { repoPath, standardId } = payload;
+    const targetPath = repoPath || activeRemotePath;
 
-  const adminUsername = "Admin"; 
-  return await approveStandardInGit(repoPath, adminUsername, standardId);
-});
+    if (!targetPath) {
+      return { success: false, error: "Aucun dépôt Git configuré." };
+    }
 
-app.whenReady().then(createWindow);
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+    const adminUsername = "Admin"; 
+    // Appelle la fonction de gitService mise à jour qui renvoie { success: true }
+    return await approveStandardInGit(targetPath, adminUsername, standardId);
+  } catch (error: any) {
+    console.error("Erreur git:approve-standard:", error);
+    return { success: false, error: error.message };
+  }
 });
