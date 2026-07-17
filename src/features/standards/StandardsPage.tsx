@@ -10,7 +10,7 @@ import type { StandardPlugin, StandardNode } from "../../core/domain/standard";
 import { loadStandardFromFile } from "../../core/engine/standardLoader";
 import {
   deleteStandardAndProfiles,
-  updateStandardNodes,
+  //updateStandardNodes,
   createStandard,
   upsertStandard,
 } from "../../core/db/repositories/standards.repo";
