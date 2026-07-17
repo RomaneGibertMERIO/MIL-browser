@@ -23,9 +23,8 @@ export class AppDatabase extends Dexie {
   constructor() {
     super("mil_browser_v1");
 
-   this.version(1).stores({
+    this.version(1).stores({
       profiles: "id, nodeId, standardId, updatedAt, source, status, [standardId+nodeId]",
-      // Mise à jour de l'index pour les standards :
       standards: "manifest.id, manifest.organization, manifest.isBuiltin, status, source",
       syncEvents: "id, timestamp, entity",
       settings: "key",
@@ -35,7 +34,6 @@ export class AppDatabase extends Dexie {
     this.profiles.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
       
-      // FIX TS2339: Cast explicite de obj
       const profile = obj as Profile;
       if (profile.source === "builtin") return;
       
@@ -54,11 +52,9 @@ export class AppDatabase extends Dexie {
     this.profiles.hook("updating", (mods, primKey, obj) => {
       if (this.isSyncingInternal) return;
 
-      // FIX TS2339: Cast explicite de obj et mods
       const profile = obj as Profile;
       const updatedMods = mods as Partial<Profile>;
 
-      // SÉCURITÉ : On ignore les modifications système d'usine
       if (profile.source === "builtin" && updatedMods.source !== "user") return;
       
       const updatedObj = { ...obj, ...mods };
@@ -77,7 +73,6 @@ export class AppDatabase extends Dexie {
     this.profiles.hook("deleting", (primKey, obj) => {
       if (this.isSyncingInternal) return;
 
-      // FIX TS2339: Cast explicite de obj
       const profile = obj as Profile;
       if (profile.source === "builtin") return;
 
@@ -93,13 +88,12 @@ export class AppDatabase extends Dexie {
       }, 0);
     });
 
-// ── HOOK STANDARDS ──
+    // ── HOOK STANDARDS ──
     this.standards.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
       
-      const standard = obj as any; // Cast temporaire ou utilise StandardPlugin étendu
-      // SÉCURITÉ : On synchronise uniquement si ce n'est pas un import d'usine silencieux
-      if (standard.source === "builtin" && standard.status === "approved") return;
+      const standard = obj as any;
+      if (standard.manifest?.isBuiltin && standard.status === "approved") return;
 
       setTimeout(() => {
         this.syncEvents.put({
@@ -119,8 +113,8 @@ export class AppDatabase extends Dexie {
       const standard = obj as any;
       const updatedMods = mods as any;
       
-      // SÉCURITÉ : Si c'est une modification système sur un builtin d'usine, on n'envoie rien au Git
-      if (standard.source === "builtin" && updatedMods.source !== "user" && updatedMods.status !== "pending") {
+      // Si c'est un pur builtin d'usine non modifié (et qu'on ne cherche pas à le passer en local / pending)
+      if (standard.manifest?.isBuiltin && updatedMods.status !== "pending" && updatedMods.status !== "local") {
         return;
       }
 
@@ -134,6 +128,25 @@ export class AppDatabase extends Dexie {
           entity: "standard",
           payload: updatedObj
         }).catch(err => console.error("Event error (Standard Update):", err));
+      }, 0);
+    });
+
+    // AJOUT : Hook deleting pour les standards
+    this.standards.hook("deleting", (primKey, obj) => {
+      if (this.isSyncingInternal) return;
+
+      const standard = obj as any;
+      if (standard.manifest?.isBuiltin) return;
+
+      setTimeout(() => {
+        this.syncEvents.put({
+          id: String(primKey),
+          deviceId: getOrCreateDeviceId(),
+          timestamp: Date.now(),
+          operation: "delete",
+          entity: "standard",
+          payload: { id: primKey, label: standard.manifest?.label }
+        }).catch(err => console.error("Event error (Standard Delete):", err));
       }, 0);
     });
   }
