@@ -164,12 +164,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       try {
         // 3. Écriture dans IndexedDB locale
         for (const std of gitResult.pulledStandards) {
-          // IMPORTANT CORRECTION : Un standard tiré du dépôt commun n'est plus un "builtin" d'usine local
-          const adjustedStandard = {
+          // On ajuste le standard en le castant en "any" pour éviter que le compilateur TS ne bloque sur le champ "status"
+          const adjustedStandard: any = {
             ...std,
             manifest: {
               ...std.manifest,
-              isBuiltin: false // 👈 Permet de le considérer comme officiel/customisé et évite l'écrasement au bootstrap
+              isBuiltin: false
             },
             status: std.status || "approved"
           };
