@@ -267,15 +267,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
           
           // CAS 2 : Traitement et push d'un STANDARD
-          // Dans src/store/appStore.ts (dans la méthode submitCommit)
-          
-          // ...
           else if (event.entity === "standard") {
             const api = window.electronAPI as any;
             
-            const standardToSend = {
+            // On utilise "any" pour éviter l'erreur de propriété manquante/inconnue 'status'
+            const standardToSend: any = {
               ...payload,
-              status: "pending" as const,
+              status: "pending",
               lastModifiedBy: state.systemUsername,
               manifest: {
                 ...payload.manifest,
@@ -286,7 +284,6 @@ export const useAppStore = create<AppState>((set, get) => ({
             await db.standards.put(standardToSend);
             
             if (api.gitSubmitStandard) {
-              // 👈 On envoie le gitRepoPath du store à l'IPC
               await api.gitSubmitStandard({
                 repoPath: state.gitRepoPath,
                 username: state.systemUsername,
@@ -313,9 +310,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().triggerGitSync();
   },
 
-  
-  
-/**
+  /**
    * Validation / Rejet d'une soumission par un administrateur (Profil ou Standard)
    */
   resolveSingleChange: async (commitId, changeId, action) => {
@@ -323,10 +318,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!window.electronAPI) return;
 
     // Étape 1 : On détermine si l'élément à résoudre est un standard ou un profil
-    // On cherche dans les pendingCommits pour trouver le type
     const commit = state.pendingCommits.find(c => c.id === commitId);
     const changeItem = commit?.changes.find(c => c.id === changeId);
-    const entityType = changeItem ? changeItem.type : 'profile'; // fallback par défaut
+    const entityType = changeItem ? changeItem.type : 'profile'; 
 
     if (action === "approve") {
       if (entityType === "profile") {
@@ -356,14 +350,16 @@ export const useAppStore = create<AppState>((set, get) => ({
           try {
             const targetStandard = await db.standards.get(changeId);
             if (targetStandard) {
-              await upsertStandard({
+              // Cast as any pour ajouter dynamiquement la clé "status" sur le standard persisté
+              const approvedStandard: any = {
                 ...targetStandard,
                 status: "approved",
                 manifest: {
                   ...targetStandard.manifest,
                   isBuiltin: false
                 }
-              });
+              };
+              await upsertStandard(approvedStandard);
             }
           } finally {
             (db as any).isSyncingInternal = false;
@@ -393,7 +389,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         } else if (entityType === "standard") {
           const targetStandard = await db.standards.get(changeId);
           if (targetStandard) {
-            const rolledBackStandard = { ...targetStandard, status: "local" as const };
+            // Cast as any pour ajouter dynamiquement la clé "status" lors du rollback
+            const rolledBackStandard: any = { 
+              ...targetStandard, 
+              status: "local" 
+            };
             await upsertStandard(rolledBackStandard);
 
             (db as any).isSyncingInternal = false;
@@ -415,5 +415,4 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Déclenche la synchronisation Git pour actualiser l'état commun
     await get().triggerGitSync();
   }
-
 }));
