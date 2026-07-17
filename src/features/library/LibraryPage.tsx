@@ -54,14 +54,14 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   const importInputRef = useRef<HTMLInputElement>(null);
 
   // Data
-  const rawProfiles = useProfilesByStandard(standard.manifest.id);
+  const rawProfiles = useProfilesByStandard(standard?.manifest?.id);
   const availableProfiles = useMemo(() => rawProfiles ?? [], [rawProfiles]);
   
   const filteredProfiles = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (q === "") return availableProfiles;
     return availableProfiles.filter((p: Profile) =>
-      p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+      p.name?.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q)
     );
   }, [availableProfiles, search]);
   
@@ -81,14 +81,14 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   }, [previewDraft, selectedProfile, standard]);
 
   const previewSchema = useMemo((): ProfileDefinition =>
-    previewDraft ? getEffectiveSchema(standard, previewDraft.nodeId) : standard.profileSchema,
+    previewDraft ? getEffectiveSchema(standard, previewDraft.nodeId) : standard?.profileSchema,
     [previewDraft, standard]
   );
 
   const formInitialDraft = useMemo((): ProfileDraft | null => {
     if (selectedProfile === null) return null;
     const schema = getEffectiveSchema(standard, selectedProfile.nodeId);
-    return profileToDraft(selectedProfile, schema.datasetColumns);
+    return profileToDraft(selectedProfile, schema?.datasetColumns ?? []);
   }, [selectedProfile, standard]);
 
   // Détection des modifications non sauvegardées (Deep Check basique)
@@ -147,6 +147,9 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     setFormKey(k => k + 1);
   }
 
+  // Sécurité supplémentaire au cas où availableProfiles changerait asynchronement 
+  const currentAvailableProfiles = availableProfiles || [];
+
   function selectProfile(profile: Profile) {
     if (!confirmDiscardIfDirty()) return;
     setSelectedProfileId(profile.id);
@@ -167,7 +170,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     resetEditorState();
   }
 
-    async function handleSave(draft: ProfileDraft) {
+  async function handleSave(draft: ProfileDraft) {
     const schema = getEffectiveSchema(standard, draft.nodeId);
     const isEditingBuiltin = selectedProfile?.source === "builtin";
     
@@ -201,7 +204,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     setTimeout(() => setSaveStatus("idle"), 2000);
   }
 
-    async function handleDuplicate(profile: Profile) {
+  async function handleDuplicate(profile: Profile) {
     if (!confirmDiscardIfDirty()) return;
     const copy: Profile = {
       ...profile, id: crypto.randomUUID(),
@@ -221,7 +224,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     resetEditorState();
   }
 
-    async function handleDeleteConfirm() {
+  async function handleDeleteConfirm() {
     if (deletingId === null) return;
 
     // 1. Écriture IndexedDB (Suppression)
@@ -239,7 +242,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   }
 
   async function handleExport() {
-    await exportProfilesForStandard(standard.manifest.id, availableProfiles, standard);
+    await exportProfilesForStandard(standard?.manifest?.id, currentAvailableProfiles, standard);
   }
 
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -251,7 +254,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
       const raw = JSON.parse(text) as Record<string, unknown>;
       const arr = raw["profiles"];
       if (Array.isArray(arr)) {
-        const ids = new Set(availableProfiles.map((p: Profile) => p.id));
+        const ids = new Set(currentAvailableProfiles.map((p: Profile) => p.id));
         let c = 0;
         for (const item of arr) {
           const parsed = ProfileSchema.safeParse(item);
@@ -340,7 +343,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
           {filteredProfiles.length === 0 ? (
             <div className="py-12 px-4 text-center">
               <p className="text-sm text-gray-400">
-                {availableProfiles.length === 0 ? "No profiles yet." : "No profiles match your search."}
+                {currentAvailableProfiles.length === 0 ? "No profiles yet." : "No profiles match your search."}
               </p>
             </div>
           ) : (
@@ -357,7 +360,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
 
         <div className="flex-shrink-0 px-4 py-2 border-t border-gray-100">
           <p className="text-xs text-gray-400">
-            {availableProfiles.length} profiles · {standard.manifest.label}
+            {currentAvailableProfiles.length} profiles · {standard?.manifest?.label}
           </p>
         </div>
       </div>
@@ -459,7 +462,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
       {/* Modals */}
       {deletingId !== null && (
         <DeleteConfirmDialog
-          profileName={availableProfiles.find((p: Profile) => p.id === deletingId)?.name ?? ""}
+          profileName={currentAvailableProfiles.find((p: Profile) => p.id === deletingId)?.name ?? ""}
           onConfirm={() => { void handleDeleteConfirm(); }}
           onCancel={() => setDeletingId(null)}
         />
@@ -476,7 +479,7 @@ export function LibraryPage({ standard }: LibraryPageProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Composants secondaires inchangés (LibraryListItem, PreviewPanel, Dialogs, etc.)
+// Composants secondaires mis à jour de manière robuste
 // ---------------------------------------------------------------------------
 
 function LibraryListItem({ profile, isSelected, onClick }: {
@@ -484,7 +487,7 @@ function LibraryListItem({ profile, isSelected, onClick }: {
   isSelected: boolean;
   onClick: () => void;
 }) {
-  const status = profile.status ?? "local";
+  const status = profile?.status ?? "local";
   const statusConfig = {
     local: { dotColor: "bg-blue-500", textColor: "text-blue-600", label: "Local" },
     pending: { dotColor: "bg-amber-500", textColor: "text-amber-600", label: "Pending" },
@@ -501,19 +504,19 @@ function LibraryListItem({ profile, isSelected, onClick }: {
     >
       <div className="flex items-center justify-between gap-2">
         <p className={`text-sm font-semibold truncate ${isSelected ? "text-blue-700" : "text-gray-900"}`}>
-          {profile.name}
+          {profile?.name}
         </p>
         <span className={`flex items-center gap-1.5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-gray-50 border border-gray-100 ${currentStatus.textColor}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${currentStatus.dotColor}`} />
           {currentStatus.label}
         </span>
       </div>
-      {profile.description !== "" && (
+      {profile?.description && profile.description !== "" && (
         <p className="text-xs text-gray-400 truncate mt-0.5">{profile.description}</p>
       )}
       <div className="flex items-center justify-between mt-1 text-[11px] text-gray-400">
-        <span>{profile.dataset?.length ?? 0} data points</span>
-        {profile.author && profile.author !== "unknown" && (
+        <span>{profile?.dataset?.length ?? 0} data points</span>
+        {profile?.author && profile.author !== "unknown" && (
           <span className="italic">by {profile.author}</span>
         )}
       </div>
@@ -526,23 +529,21 @@ function PreviewPanel({ profile, schema, tab }: {
   schema: ProfileDefinition;
   tab: "chart" | "table" | "fields";
 }) {
-  // 1. Sécurise le premier check de dataset
   if (tab === "chart") {
     return (
       <div className="p-4">
-        {(profile.dataset?.length ?? 0) === 0 ? (
+        {(profile?.dataset?.length ?? 0) === 0 ? (
           <p className="text-xs text-gray-400 text-center py-8">Dataset is empty — add rows to see the chart.</p>
         ) : (
-          <TimeSeriesChart columns={schema?.datasetColumns ?? []} data={profile.dataset ?? []} fields={profile.fields} />
+          <TimeSeriesChart columns={schema?.datasetColumns ?? []} data={profile?.dataset ?? []} fields={profile?.fields} />
         )}
       </div>
     );
   }
 
-  // 2. Sécurise le second check de dataset et de schema
   if (tab === "table") {
     const cols = schema?.datasetColumns?.filter(c => c.axis !== "none") ?? [];
-    if ((profile.dataset?.length ?? 0) === 0) return <p className="text-xs text-gray-400 text-center py-8 px-4">No dataset rows.</p>;
+    if ((profile?.dataset?.length ?? 0) === 0) return <p className="text-xs text-gray-400 text-center py-8 px-4">No dataset rows.</p>;
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
@@ -556,7 +557,7 @@ function PreviewPanel({ profile, schema, tab }: {
             </tr>
           </thead>
           <tbody>
-            {(profile.dataset ?? []).map((row, i) => (
+            {(profile?.dataset ?? []).map((row, i) => (
               <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                 {cols.map(col => (
                   <td key={col.key} className="px-3 py-1.5 font-mono text-gray-700 whitespace-nowrap">
@@ -571,9 +572,8 @@ function PreviewPanel({ profile, schema, tab }: {
     );
   }
 
-  // 3. Sécurise également l'accès aux fields du schéma
   const fieldsWithValues = (schema?.fields ?? []).filter(f => {
-    const v = profile.fields?.[f.key];
+    const v = profile?.fields?.[f.key];
     return v !== null && v !== undefined && v !== "";
   });
   if (fieldsWithValues.length === 0) return <p className="text-xs text-gray-400 text-center py-8 px-4">No metadata fields filled in.</p>;
@@ -582,7 +582,7 @@ function PreviewPanel({ profile, schema, tab }: {
       {fieldsWithValues.map(f => (
         <div key={f.key}>
           <p className="text-xs text-gray-400">{f.label}{f.unit ? ` (${f.unit})` : ""}</p>
-          <p className="text-sm text-gray-800">{String(profile.fields?.[f.key] ?? "")}</p>
+          <p className="text-sm text-gray-800">{String(profile?.fields?.[f.key] ?? "")}</p>
         </div>
       ))}
     </div>
@@ -606,6 +606,24 @@ function DeleteConfirmDialog({ profileName, onConfirm, onCancel }: DeleteConfirm
   );
 }
 
+// Sécurisation sur profile.dataset via le chaînage optionnel `?.` ou fallback `[]`
+function profileToDraft(profile: Profile, columns: StandardPlugin["profileSchema"]["datasetColumns"]): ProfileDraft {
+  const datasetRows = (profile?.dataset ?? []).map((row) => {
+    const stringRow: Record<string, string> = {};
+    for (const col of columns || []) stringRow[col.key] = String(row[col.key] ?? "");
+    return stringRow;
+  });
+  return {
+    name: profile?.name ?? "",
+    description: profile?.description ?? "",
+    nodeId: profile?.nodeId ?? "",
+    standardId: profile?.standardId ?? "",
+    author: profile?.author ?? "unknown",
+    fields: profile?.fields ? { ...profile.fields } : {},
+    datasetRows,
+  };
+}
+
 function ImportOverwriteDialog({ conflictCount, onConfirm, onCancel }: ImportOverwriteDialogProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
@@ -621,23 +639,6 @@ function ImportOverwriteDialog({ conflictCount, onConfirm, onCancel }: ImportOve
       </div>
     </div>
   );
-}
-
-function profileToDraft(profile: Profile, columns: StandardPlugin["profileSchema"]["datasetColumns"]): ProfileDraft {
-  const datasetRows = profile.dataset.map((row) => {
-    const stringRow: Record<string, string> = {};
-    for (const col of columns) stringRow[col.key] = String(row[col.key] ?? "");
-    return stringRow;
-  });
-  return {
-    name: profile.name,
-    description: profile.description,
-    nodeId: profile.nodeId,
-    standardId: profile.standardId,
-    author: profile.author ?? "unknown",
-    fields: { ...profile.fields },
-    datasetRows,
-  };
 }
 
 interface DeleteConfirmDialogProps { profileName: string; onConfirm: () => void; onCancel: () => void; }
