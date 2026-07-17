@@ -4,14 +4,24 @@ import * as git from "isomorphic-git";
 import { app } from "electron";
 import { fileURLToPath } from "url";
 
-const WORKSPACE_DIR = path.join(app.getPath("userData"), "git-workspace");
-const PROFILES_DIR = path.join(WORKSPACE_DIR, "profiles");
-const STANDARDS_DIR = path.join(WORKSPACE_DIR, "standards");
+// 🛡️ Déclarées en variables globales pour être partagées, mais évaluées au bon moment
+let WORKSPACE_DIR: string;
+let PROFILES_DIR: string;
+let STANDARDS_DIR: string;
 
-function ensureDirectories(baseDir: string = WORKSPACE_DIR) {
-  const profs = path.join(baseDir, "profiles");
-  const stds = path.join(baseDir, "standards");
-  if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
+function ensureDirectories(baseDir?: string) {
+  // Initialisation sécurisée uniquement lors du premier appel de fonction
+  if (!WORKSPACE_DIR) {
+    WORKSPACE_DIR = path.join(app.getPath("userData"), "git-workspace");
+    PROFILES_DIR = path.join(WORKSPACE_DIR, "profiles");
+    STANDARDS_DIR = path.join(WORKSPACE_DIR, "standards");
+  }
+
+  const targetBase = baseDir || WORKSPACE_DIR;
+  const profs = path.join(targetBase, "profiles");
+  const stds = path.join(targetBase, "standards");
+  
+  if (!fs.existsSync(targetBase)) fs.mkdirSync(targetBase, { recursive: true });
   if (!fs.existsSync(profs)) fs.mkdirSync(profs, { recursive: true });
   if (!fs.existsSync(stds)) fs.mkdirSync(stds, { recursive: true });
 }
@@ -27,7 +37,7 @@ function getFsPath(remoteInput: string): string {
  * Synchronise les fichiers du dépôt central vers le workspace local (Simule le Pull)
  */
 export async function initOrCloneRepository(remoteInput: string): Promise<void> {
-  ensureDirectories(WORKSPACE_DIR);
+  ensureDirectories();
   
   if (!remoteInput || remoteInput.trim() === "") {
     throw new Error("Aucun chemin de dépôt central réseau n'est configuré.");
@@ -70,6 +80,7 @@ export async function initOrCloneRepository(remoteInput: string): Promise<void> 
 }
 
 export async function pullRepository(remoteInput: string): Promise<{ standards: any[]; profiles: any[] }> {
+  ensureDirectories(); // 🛡️ Sécurise l'accès aux variables globales de chemin
   await initOrCloneRepository(remoteInput);
 
   const standards: any[] = [];
@@ -98,6 +109,7 @@ export async function pullRepository(remoteInput: string): Promise<{ standards: 
  * Pousse le fichier vers le dépôt central commun (Simule le Push réseau)
  */
 export async function submitProfileToGit(remoteInput: string, username: string, profile: any): Promise<void> {
+  ensureDirectories();
   await initOrCloneRepository(remoteInput);
   const centralPath = getFsPath(remoteInput);
 
@@ -139,6 +151,7 @@ export async function submitProfileToGit(remoteInput: string, username: string, 
 
 export async function approveProfileInGit(remoteInput: string, adminUsername: string, profileId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    ensureDirectories();
     await initOrCloneRepository(remoteInput);
     const centralPath = getFsPath(remoteInput);
 
@@ -171,7 +184,7 @@ export async function approveProfileInGit(remoteInput: string, adminUsername: st
     const centralDestPath = path.join(centralPath, "profiles", fileName);
     fs.writeFileSync(centralDestPath, JSON.stringify(profile, null, 2), "utf8");
 
-    return { success: true }; // 👈 Retourne le succès attendu par le store
+    return { success: true };
   } catch (error: any) {
     console.error("Erreur approveProfileInGit:", error);
     return { success: false, error: error.message };
@@ -183,6 +196,7 @@ export async function approveProfileInGit(remoteInput: string, adminUsername: st
  */
 export async function rejectProfileInGit(remoteInput: string, adminUsername: string, profileId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    ensureDirectories();
     await initOrCloneRepository(remoteInput);
     const centralPath = getFsPath(remoteInput);
 
@@ -190,16 +204,16 @@ export async function rejectProfileInGit(remoteInput: string, adminUsername: str
     const localPath = path.join(PROFILES_DIR, fileName);
     const centralPathFile = path.join(centralPath, "profiles", fileName);
 
-    // 1. Supprime le fichier du dépôt central (pour qu'il disparaisse de la liste de validation de l'admin)
+    // 1. Supprime le fichier du dépôt central
     if (fs.existsSync(centralPathFile)) {
       fs.unlinkSync(centralPathFile);
       console.log(`Proposition rejetée : Fichier supprimé du dépôt central : ${centralPathFile}`);
     }
 
-    // 2. Met à jour le statut en local chez l'admin (ou l'utilisateur lors du pull) à "local" pour retravailler dessus
+    // 2. Met à jour le statut en local
     if (fs.existsSync(localPath)) {
       const profile = JSON.parse(fs.readFileSync(localPath, "utf8"));
-      profile.status = "local"; // Repasse en modification locale
+      profile.status = "local";
       profile.updatedAt = new Date().toISOString();
       fs.writeFileSync(localPath, JSON.stringify(profile, null, 2), "utf8");
 
@@ -215,7 +229,7 @@ export async function rejectProfileInGit(remoteInput: string, adminUsername: str
       } catch (e) {}
     }
 
-    return { success: true }; // 👈 Retourne le succès attendu par le store
+    return { success: true };
   } catch (error: any) {
     console.error("Erreur rejectProfileInGit:", error);
     return { success: false, error: error.message };
@@ -227,6 +241,7 @@ export async function rejectProfileInGit(remoteInput: string, adminUsername: str
  */
 export async function approveStandardInGit(remoteInput: string, adminUsername: string, standardId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    ensureDirectories();
     await initOrCloneRepository(remoteInput);
     const centralPath = getFsPath(remoteInput);
 
@@ -259,7 +274,7 @@ export async function approveStandardInGit(remoteInput: string, adminUsername: s
     const centralDestPath = path.join(centralPath, "standards", fileName);
     fs.writeFileSync(centralDestPath, JSON.stringify(standard, null, 2), "utf8");
 
-    return { success: true }; // 👈 Retourne le succès attendu par le store
+    return { success: true };
   } catch (error: any) {
     console.error("Erreur approveStandardInGit:", error);
     return { success: false, error: error.message };
@@ -270,6 +285,7 @@ export async function approveStandardInGit(remoteInput: string, adminUsername: s
  * Pousse un standard vers le dépôt central commun (Simule le Push réseau)
  */
 export async function submitStandardToGit(remoteInput: string, username: string, standard: any): Promise<void> {
+  ensureDirectories();
   await initOrCloneRepository(remoteInput);
   const centralPath = getFsPath(remoteInput);
 
@@ -309,5 +325,3 @@ export async function submitStandardToGit(remoteInput: string, username: string,
   fs.writeFileSync(centralDestPath, JSON.stringify(standardToSave, null, 2), "utf8");
   console.log(`Standard synchronisé avec succès vers le dépôt central : ${centralDestPath}`);
 }
-
-
