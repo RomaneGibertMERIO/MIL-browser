@@ -3,6 +3,7 @@ import { getSettings } from "../../core/db/repositories/settings.repo";
 import { useBootstrapStore } from "../../store/bootstrapStore";
 import { useAppStore } from "../../store/appStore";
 import { loadBuiltinStandards } from "../../core/engine/standardLoader";
+import { db } from "../../core/db/schema";
 
 /**
  * Runs the bootstrap sequence on mount, injecting Git database synchronization.
@@ -26,39 +27,51 @@ export function useBootstrap(): void {
         setSystemUsername("LabUser");
       }
 
-      // 2. Seed builtin standards (version d'usine)
-      const seedResults = await loadBuiltinStandards();
-      const seedErrors = seedResults
-        .filter((r) => r.status === "error")
-        .map((r) => r.message ?? r.id);
-
-      if (seedErrors.length > 0) {
-        console.warn("[bootstrap] Standard seed warnings:", seedErrors);
-      }
-      if (seedResults.length === 0 || seedResults.every((result) => result.status === "error")) {
-        throw new Error(
-          `Built-in standards could not be loaded: ${seedErrors.join("; ") || "no bundled standards found"}`,
-        );
-      }
-
-      // 3. Récupération des paramètres locaux
+      // 2. Récupération des paramètres locaux d'abord
       const settings = await getSettings();
       
       // Si un chemin réseau est enregistré dans vos settings Dexie, on met à jour le store
       if (settings.gitRepoPath) {
         setGitRepoPath(settings.gitRepoPath);
       }
-      
-      // 4. Lancement de la synchronisation Git (PULL)
-      // triggerGitSync gère déjà en interne l'écriture en base IndexedDB
-      try {
-        console.log("[bootstrap] Init GIT sync...");
-        await triggerGitSync();
-      } catch (gitErr) {
-        console.warn("[bootstrap] Failed to connect to GIT on starting up (Offline mode ON) :", gitErr);
+
+      // 3. Vérification de l'état de la base
+      const standardsCount = await db.standards.count();
+      const hasGitConfigured = !!settings.gitRepoPath;
+
+      // 4. Lancement de la synchronisation Git (PULL) si configuré
+      let gitSyncSuccess = false;
+      if (hasGitConfigured) {
+        try {
+          console.log("[bootstrap] Init central GIT sync...");
+          await triggerGitSync();
+          gitSyncSuccess = true;
+        } catch (gitErr) {
+          console.warn("[bootstrap] Failed to connect to Central GIT on starting up (Offline mode ON) :", gitErr);
+        }
       }
 
-      // 5. Restauration de l'état de navigation
+      // 5. Seed builtin standards uniquement s'il n'y a pas de Git opérationnel OU si la base est totalement vide
+      if (!gitSyncSuccess && standardsCount === 0) {
+        console.log("[bootstrap] Empty DB and no Git sync. Loading fallback builtin standards...");
+        const seedResults = await loadBuiltinStandards();
+        const seedErrors = seedResults
+          .filter((r) => r.status === "error")
+          .map((r) => r.message ?? r.id);
+
+        if (seedErrors.length > 0) {
+          console.warn("[bootstrap] Standard seed warnings:", seedErrors);
+        }
+        if (seedResults.length === 0 || seedResults.every((result) => result.status === "error")) {
+          throw new Error(
+            `Built-in standards could not be loaded: ${seedErrors.join("; ") || "no bundled standards found"}`,
+          );
+        }
+      } else {
+        console.log("[bootstrap] Skipped builtin seed (using central Git data or existing cache).");
+      }
+
+      // 6. Restauration de l'état de navigation
       if (settings.activeStandardId !== null) {
         setActiveStandard(settings.activeStandardId);
       }
@@ -75,7 +88,7 @@ export function useBootstrap(): void {
       }
       await useAppStore.getState().refreshLocalChanges();
       
-      // 6. C'est prêt !
+      // 7. C'est prêt !
       setReady();
     }
 
