@@ -15,7 +15,6 @@ export async function getBuiltinStandards(): Promise<StandardPlugin[]> {
 
 /**
  * Insère ou met à jour un standard.
- * Suppression de la transaction manuelle bloquante pour laisser le hook asynchrone "syncEvents" s'exécuter librement.
  */
 export async function upsertStandard(standard: StandardPlugin): Promise<void> {
   await db.standards.put(standard);
@@ -26,33 +25,47 @@ export async function seedBuiltinStandard(standard: StandardPlugin): Promise<voi
     throw new Error(`Standard "${standard.manifest.id}" is not builtin.`);
   }
   const existing = await db.standards.get(standard.manifest.id);
+  // On ne laisse pas le seed écraser une version utilisateur ou modifiée
   if (existing !== undefined && !existing.manifest.isBuiltin) {
     throw new Error(`Conflict with user standard: ${standard.manifest.id}`);
   }
   await db.standards.put(standard);
 }
 
+/**
+ * Met à jour la liste des nœuds de taxonomie d'un standard.
+ * Marque automatiquement le standard en tant que "local" (modifié localement à pousser).
+ */
 export async function updateStandardNodes(standardId: string, nodes: StandardNode[]): Promise<void> {
   const standard = await getStandardById(standardId);
   if (standard === undefined) throw new Error(`Standard "${standardId}" not found.`);
 
-  const updatedStandard: StandardPlugin = {
+  const updatedStandard: any = {
     ...standard,
-    manifest: { ...standard.manifest, isBuiltin: false },
+    manifest: { 
+      ...standard.manifest, 
+      isBuiltin: false 
+    },
+    status: "local", // 👈 Crucial : le standard passe en modification locale à pousser !
     nodes,
   };
+  
   await upsertStandard(updatedStandard);
 }
 
 export async function createStandard(standard: StandardPlugin): Promise<void> {
   const existing = await getStandardById(standard.manifest.id);
   if (existing !== undefined) throw new Error(`Standard "${standard.manifest.id}" already exists.`);
-  await upsertStandard(standard);
+  
+  const newStandard: any = {
+    ...standard,
+    status: "local" // Nouveau standard créé localement
+  };
+  await upsertStandard(newStandard);
 }
 
 /**
  * Supprime un standard et tous les profils associés.
- * Force la récupération et la suppression individuelle des profils pour garantir le déclenchement du hook "deleting".
  */
 export async function deleteStandardAndProfiles(id: string): Promise<void> {
   const standard = await getStandardById(id);
@@ -67,11 +80,11 @@ export async function deleteStandardAndProfiles(id: string): Promise<void> {
     .equals(id)
     .primaryKeys();
 
-  // 2. On supprime les profils un par un pour déclencher le hook de synchronisation "deleting" de schema.ts
+  // 2. Supprime les profils un par un pour déclencher le hook de synchro "deleting"
   if (profileKeys.length > 0) {
     await Promise.all(profileKeys.map(key => db.profiles.delete(key)));
   }
 
-  // 3. Supprime le standard (déclenche le hook "deleting" sur standards)
+  // 3. Supprime le standard (déclenche le hook "deleting" sur la table standards)
   await db.standards.delete(id);
 }
