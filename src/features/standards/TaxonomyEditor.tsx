@@ -179,6 +179,7 @@ export function TaxonomyEditor({ standard, onSave, onCancel }: TaxonomyEditorPro
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
+    console.log("[DEBUG TAXONOMY] Enregistrement des nœuds de taxonomie :", workingNodes);
     try {
       await onSave(workingNodes);
     } catch (err) {
