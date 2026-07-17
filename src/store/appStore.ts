@@ -315,15 +315,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   
   
-  /**
-   * Validation / Rejet d'une soumission par un administrateur
+/**
+   * Validation / Rejet d'une soumission par un administrateur (Profil ou Standard)
    */
-  resolveSingleChange: async (_commitId, changeId, action) => {
-    if (window.electronAPI) {
-      if (action === "approve") {
-        // Envoi direct de changeId (string) pour correspondre à la signature de preload.ts
-        const result = await window.electronAPI.gitApproveProfile(changeId);
+  resolveSingleChange: async (commitId, changeId, action) => {
+    const state = get();
+    if (!window.electronAPI) return;
 
+    // Étape 1 : On détermine si l'élément à résoudre est un standard ou un profil
+    // On cherche dans les pendingCommits pour trouver le type
+    const commit = state.pendingCommits.find(c => c.id === commitId);
+    const changeItem = commit?.changes.find(c => c.id === changeId);
+    const entityType = changeItem ? changeItem.type : 'profile'; // fallback par défaut
+
+    if (action === "approve") {
+      if (entityType === "profile") {
+        const result = await window.electronAPI.gitApproveProfile(changeId);
         if (result.success) {
           (db as any).isSyncingInternal = true;
           try {
@@ -332,27 +339,47 @@ export const useAppStore = create<AppState>((set, get) => ({
             if (targetProfile) {
               await upsertProfile({
                 ...targetProfile,
-                status: "approved" // Passe officiel
+                status: "approved"
               });
             }
           } finally {
             (db as any).isSyncingInternal = false;
           }
         }
-      } else if (action === "reject") {
-        // REJET : Repasse en local chez l'utilisateur et disparaît de chez l'admin
-        (db as any).isSyncingInternal = true;
-        try {
+      } else if (entityType === "standard") {
+        const result = await window.electronAPI.gitApproveStandard({
+          repoPath: state.gitRepoPath,
+          standardId: changeId
+        });
+        if (result.success) {
+          (db as any).isSyncingInternal = true;
+          try {
+            const targetStandard = await db.standards.get(changeId);
+            if (targetStandard) {
+              await upsertStandard({
+                ...targetStandard,
+                status: "approved",
+                manifest: {
+                  ...targetStandard.manifest,
+                  isBuiltin: false
+                }
+              });
+            }
+          } finally {
+            (db as any).isSyncingInternal = false;
+          }
+        }
+      }
+    } else if (action === "reject") {
+      (db as any).isSyncingInternal = true;
+      try {
+        if (entityType === "profile") {
           const updatedProfiles = await getAllProfiles();
           const targetProfile = updatedProfiles.find((p: any) => p.id === changeId);
           if (targetProfile) {
-            const rolledBackProfile = {
-              ...targetProfile,
-              status: "local" as const
-            };
+            const rolledBackProfile = { ...targetProfile, status: "local" as const };
             await upsertProfile(rolledBackProfile);
             
-            // Re-générer un événement local pour qu'il réapparaisse dans la liste à pousser de l'user
             (db as any).isSyncingInternal = false;
             await db.syncEvents.put({
               id: changeId,
@@ -363,13 +390,30 @@ export const useAppStore = create<AppState>((set, get) => ({
               payload: rolledBackProfile
             });
           }
-        } finally {
-          (db as any).isSyncingInternal = false;
+        } else if (entityType === "standard") {
+          const targetStandard = await db.standards.get(changeId);
+          if (targetStandard) {
+            const rolledBackStandard = { ...targetStandard, status: "local" as const };
+            await upsertStandard(rolledBackStandard);
+
+            (db as any).isSyncingInternal = false;
+            await db.syncEvents.put({
+              id: changeId,
+              deviceId: "system",
+              timestamp: Date.now(),
+              operation: "upsert",
+              entity: "standard",
+              payload: rolledBackStandard
+            });
+          }
         }
+      } finally {
+        (db as any).isSyncingInternal = false;
       }
     }
 
-    // Déclenche le pull automatique immédiat pour synchroniser les vues
+    // Déclenche la synchronisation Git pour actualiser l'état commun
     await get().triggerGitSync();
   }
+
 }));
