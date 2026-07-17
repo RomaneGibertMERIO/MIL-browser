@@ -137,74 +137,132 @@ export async function submitProfileToGit(remoteInput: string, username: string, 
   console.log(`Fichier synchronisé avec succès vers le dépôt central : ${centralDestPath}`);
 }
 
-export async function approveProfileInGit(remoteInput: string, adminUsername: string, profileId: string): Promise<void> {
-  await initOrCloneRepository(remoteInput);
-  const centralPath = getFsPath(remoteInput);
-
-  const fileName = `profile-${profileId}.json`;
-  const localPath = path.join(PROFILES_DIR, fileName);
-
-  if (!fs.existsSync(localPath)) {
-    throw new Error(`Impossible de trouver la proposition locale pour l'ID : ${profileId}`);
-  }
-
-  const profile = JSON.parse(fs.readFileSync(localPath, "utf8"));
-  profile.status = "approved";
-  profile.updatedAt = new Date().toISOString();
-
-  // 1. Sauvegarde locale
-  fs.writeFileSync(localPath, JSON.stringify(profile, null, 2), "utf8");
-  
+export async function approveProfileInGit(remoteInput: string, adminUsername: string, profileId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const relativePath = path.join("profiles", fileName).replace(/\\/g, "/");
-    await git.add({ fs, dir: WORKSPACE_DIR, filepath: relativePath });
-    await git.commit({
-      fs,
-      dir: WORKSPACE_DIR,
-      message: `Approval: Profil "${profile.name}" approuvé par l'admin ${adminUsername}`,
-      author: { name: adminUsername, email: `${adminUsername.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
-    });
-  } catch (e) {}
+    await initOrCloneRepository(remoteInput);
+    const centralPath = getFsPath(remoteInput);
 
-  // 2. Envoi vers le dépôt central
-  const centralDestPath = path.join(centralPath, "profiles", fileName);
-  fs.writeFileSync(centralDestPath, JSON.stringify(profile, null, 2), "utf8");
-}
+    const fileName = `profile-${profileId}.json`;
+    const localPath = path.join(PROFILES_DIR, fileName);
 
-/**
- * Refuse un profil proposé. Retire la proposition du dépôt central commun.
- */
-export async function rejectProfileInGit(remoteInput: string, adminUsername: string, profileId: string): Promise<void> {
-  await initOrCloneRepository(remoteInput);
-  const centralPath = getFsPath(remoteInput);
+    if (!fs.existsSync(localPath)) {
+      throw new Error(`Impossible de trouver la proposition locale pour l'ID : ${profileId}`);
+    }
 
-  const fileName = `profile-${profileId}.json`;
-  const localPath = path.join(PROFILES_DIR, fileName);
-  const centralPathFile = path.join(centralPath, "profiles", fileName);
-
-  // 1. Supprime le fichier du dépôt central (pour qu'il disparaisse de la liste de validation de l'admin)
-  if (fs.existsSync(centralPathFile)) {
-    fs.unlinkSync(centralPathFile);
-    console.log(`Proposition rejetée : Fichier supprimé du dépôt central : ${centralPathFile}`);
-  }
-
-  // 2. Met à jour le statut en local chez l'admin (ou l'utilisateur lors du pull) à "local" pour retravailler dessus
-  if (fs.existsSync(localPath)) {
     const profile = JSON.parse(fs.readFileSync(localPath, "utf8"));
-    profile.status = "local"; // Repasse en modification locale
+    profile.status = "approved";
     profile.updatedAt = new Date().toISOString();
-    fs.writeFileSync(localPath, JSON.stringify(profile, null, 2), "utf8");
 
+    // 1. Sauvegarde locale
+    fs.writeFileSync(localPath, JSON.stringify(profile, null, 2), "utf8");
+    
     try {
       const relativePath = path.join("profiles", fileName).replace(/\\/g, "/");
       await git.add({ fs, dir: WORKSPACE_DIR, filepath: relativePath });
       await git.commit({
         fs,
         dir: WORKSPACE_DIR,
-        message: `Reject: Profil "${profile.name}" rejeté par l'admin ${adminUsername}`,
+        message: `Approval: Profil "${profile.name}" approuvé par l'admin ${adminUsername}`,
         author: { name: adminUsername, email: `${adminUsername.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
       });
     } catch (e) {}
+
+    // 2. Envoi vers le dépôt central
+    const centralDestPath = path.join(centralPath, "profiles", fileName);
+    fs.writeFileSync(centralDestPath, JSON.stringify(profile, null, 2), "utf8");
+
+    return { success: true }; // 👈 Retourne le succès attendu par le store
+  } catch (error: any) {
+    console.error("Erreur approveProfileInGit:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Refuse un profil proposé. Retire la proposition du dépôt central commun.
+ */
+export async function rejectProfileInGit(remoteInput: string, adminUsername: string, profileId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await initOrCloneRepository(remoteInput);
+    const centralPath = getFsPath(remoteInput);
+
+    const fileName = `profile-${profileId}.json`;
+    const localPath = path.join(PROFILES_DIR, fileName);
+    const centralPathFile = path.join(centralPath, "profiles", fileName);
+
+    // 1. Supprime le fichier du dépôt central (pour qu'il disparaisse de la liste de validation de l'admin)
+    if (fs.existsSync(centralPathFile)) {
+      fs.unlinkSync(centralPathFile);
+      console.log(`Proposition rejetée : Fichier supprimé du dépôt central : ${centralPathFile}`);
+    }
+
+    // 2. Met à jour le statut en local chez l'admin (ou l'utilisateur lors du pull) à "local" pour retravailler dessus
+    if (fs.existsSync(localPath)) {
+      const profile = JSON.parse(fs.readFileSync(localPath, "utf8"));
+      profile.status = "local"; // Repasse en modification locale
+      profile.updatedAt = new Date().toISOString();
+      fs.writeFileSync(localPath, JSON.stringify(profile, null, 2), "utf8");
+
+      try {
+        const relativePath = path.join("profiles", fileName).replace(/\\/g, "/");
+        await git.add({ fs, dir: WORKSPACE_DIR, filepath: relativePath });
+        await git.commit({
+          fs,
+          dir: WORKSPACE_DIR,
+          message: `Reject: Profil "${profile.name}" rejeté par l'admin ${adminUsername}`,
+          author: { name: adminUsername, email: `${adminUsername.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
+        });
+      } catch (e) {}
+    }
+
+    return { success: true }; // 👈 Retourne le succès attendu par le store
+  } catch (error: any) {
+    console.error("Erreur rejectProfileInGit:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Approuve un standard dans le Git
+ */
+export async function approveStandardInGit(remoteInput: string, adminUsername: string, standardId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await initOrCloneRepository(remoteInput);
+    const centralPath = getFsPath(remoteInput);
+
+    const fileName = `standard-${standardId}.json`;
+    const localPath = path.join(STANDARDS_DIR, fileName);
+
+    if (!fs.existsSync(localPath)) {
+      throw new Error(`Impossible de trouver le standard local pour l'ID : ${standardId}`);
+    }
+
+    const standard = JSON.parse(fs.readFileSync(localPath, "utf8"));
+    standard.status = "approved";
+    standard.updatedAt = new Date().toISOString();
+
+    // 1. Sauvegarde locale
+    fs.writeFileSync(localPath, JSON.stringify(standard, null, 2), "utf8");
+    
+    try {
+      const relativePath = path.join("standards", fileName).replace(/\\/g, "/");
+      await git.add({ fs, dir: WORKSPACE_DIR, filepath: relativePath });
+      await git.commit({
+        fs,
+        dir: WORKSPACE_DIR,
+        message: `Approval: Standard "${standard.manifest.label}" approuvé par l'admin ${adminUsername}`,
+        author: { name: adminUsername, email: `${adminUsername.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
+      });
+    } catch (e) {}
+
+    // 2. Envoi vers le dépôt central
+    const centralDestPath = path.join(centralPath, "standards", fileName);
+    fs.writeFileSync(centralDestPath, JSON.stringify(standard, null, 2), "utf8");
+
+    return { success: true }; // 👈 Retourne le succès attendu par le store
+  } catch (error: any) {
+    console.error("Erreur approveStandardInGit:", error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -252,39 +310,4 @@ export async function submitStandardToGit(remoteInput: string, username: string,
   console.log(`Standard synchronisé avec succès vers le dépôt central : ${centralDestPath}`);
 }
 
-/**
- * Approuve un standard dans le Git
- */
-export async function approveStandardInGit(remoteInput: string, adminUsername: string, standardId: string): Promise<void> {
-  await initOrCloneRepository(remoteInput);
-  const centralPath = getFsPath(remoteInput);
 
-  const fileName = `standard-${standardId}.json`;
-  const localPath = path.join(STANDARDS_DIR, fileName);
-
-  if (!fs.existsSync(localPath)) {
-    throw new Error(`Impossible de trouver le standard local pour l'ID : ${standardId}`);
-  }
-
-  const standard = JSON.parse(fs.readFileSync(localPath, "utf8"));
-  standard.status = "approved";
-  standard.updatedAt = new Date().toISOString();
-
-  // 1. Sauvegarde locale
-  fs.writeFileSync(localPath, JSON.stringify(standard, null, 2), "utf8");
-  
-  try {
-    const relativePath = path.join("standards", fileName).replace(/\\/g, "/");
-    await git.add({ fs, dir: WORKSPACE_DIR, filepath: relativePath });
-    await git.commit({
-      fs,
-      dir: WORKSPACE_DIR,
-      message: `Approval: Standard "${standard.manifest.label}" approuvé par l'admin ${adminUsername}`,
-      author: { name: adminUsername, email: `${adminUsername.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
-    });
-  } catch (e) {}
-
-  // 2. Envoi vers le dépôt central
-  const centralDestPath = path.join(centralPath, "standards", fileName);
-  fs.writeFileSync(centralDestPath, JSON.stringify(standard, null, 2), "utf8");
-}
