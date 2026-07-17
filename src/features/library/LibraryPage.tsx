@@ -512,7 +512,7 @@ function LibraryListItem({ profile, isSelected, onClick }: {
         <p className="text-xs text-gray-400 truncate mt-0.5">{profile.description}</p>
       )}
       <div className="flex items-center justify-between mt-1 text-[11px] text-gray-400">
-        <span>{profile.dataset.length} data points</span>
+        <span>{profile.dataset?.length ?? 0} data points</span>
         {profile.author && profile.author !== "unknown" && (
           <span className="italic">by {profile.author}</span>
         )}
@@ -526,21 +526,23 @@ function PreviewPanel({ profile, schema, tab }: {
   schema: ProfileDefinition;
   tab: "chart" | "table" | "fields";
 }) {
+  // 1. Sécurise le premier check de dataset
   if (tab === "chart") {
     return (
       <div className="p-4">
-        {profile.dataset.length === 0 ? (
+        {(profile.dataset?.length ?? 0) === 0 ? (
           <p className="text-xs text-gray-400 text-center py-8">Dataset is empty — add rows to see the chart.</p>
         ) : (
-          <TimeSeriesChart columns={schema.datasetColumns} data={profile.dataset} fields={profile.fields} />
+          <TimeSeriesChart columns={schema?.datasetColumns ?? []} data={profile.dataset ?? []} fields={profile.fields} />
         )}
       </div>
     );
   }
 
+  // 2. Sécurise le second check de dataset et de schema
   if (tab === "table") {
-    const cols = schema.datasetColumns.filter(c => c.axis !== "none");
-    if (profile.dataset.length === 0) return <p className="text-xs text-gray-400 text-center py-8 px-4">No dataset rows.</p>;
+    const cols = schema?.datasetColumns?.filter(c => c.axis !== "none") ?? [];
+    if ((profile.dataset?.length ?? 0) === 0) return <p className="text-xs text-gray-400 text-center py-8 px-4">No dataset rows.</p>;
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
@@ -554,7 +556,7 @@ function PreviewPanel({ profile, schema, tab }: {
             </tr>
           </thead>
           <tbody>
-            {profile.dataset.map((row, i) => (
+            {(profile.dataset ?? []).map((row, i) => (
               <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                 {cols.map(col => (
                   <td key={col.key} className="px-3 py-1.5 font-mono text-gray-700 whitespace-nowrap">
@@ -569,8 +571,9 @@ function PreviewPanel({ profile, schema, tab }: {
     );
   }
 
-  const fieldsWithValues = schema.fields.filter(f => {
-    const v = profile.fields[f.key];
+  // 3. Sécurise également l'accès aux fields du schéma
+  const fieldsWithValues = (schema?.fields ?? []).filter(f => {
+    const v = profile.fields?.[f.key];
     return v !== null && v !== undefined && v !== "";
   });
   if (fieldsWithValues.length === 0) return <p className="text-xs text-gray-400 text-center py-8 px-4">No metadata fields filled in.</p>;
@@ -579,7 +582,7 @@ function PreviewPanel({ profile, schema, tab }: {
       {fieldsWithValues.map(f => (
         <div key={f.key}>
           <p className="text-xs text-gray-400">{f.label}{f.unit ? ` (${f.unit})` : ""}</p>
-          <p className="text-sm text-gray-800">{String(profile.fields[f.key] ?? "")}</p>
+          <p className="text-sm text-gray-800">{String(profile.fields?.[f.key] ?? "")}</p>
         </div>
       ))}
     </div>
