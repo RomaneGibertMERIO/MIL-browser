@@ -310,7 +310,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().triggerGitSync();
   },
 
-  /**
+ /**
    * Validation / Rejet d'une soumission par un administrateur (Profil ou Standard)
    */
   resolveSingleChange: async (commitId, changeId, action) => {
@@ -325,7 +325,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (action === "approve") {
       if (entityType === "profile") {
         const result = await window.electronAPI.gitApproveProfile(changeId);
-        if (result.success) {
+        // 🛡️ Sécurisé avec ?.
+        if (result?.success) {
           (db as any).isSyncingInternal = true;
           try {
             const updatedProfiles = await getAllProfiles();
@@ -339,13 +340,17 @@ export const useAppStore = create<AppState>((set, get) => ({
           } finally {
             (db as any).isSyncingInternal = false;
           }
+        } else {
+          console.error("❌ Échec de l'approbation du profil via Electron API:", result);
         }
       } else if (entityType === "standard") {
         const result = await window.electronAPI.gitApproveStandard({
           repoPath: state.gitRepoPath,
           standardId: changeId
         });
-        if (result.success) {
+        
+        // 🛡️ Sécurisé avec ?. pour éviter le crash si result est indéfini
+        if (result?.success) {
           (db as any).isSyncingInternal = true;
           try {
             const targetStandard = await db.standards.get(changeId);
@@ -364,6 +369,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           } finally {
             (db as any).isSyncingInternal = false;
           }
+        } else {
+          console.error("❌ Échec de l'approbation du standard via Electron API:", result);
         }
       }
     } else if (action === "reject") {
