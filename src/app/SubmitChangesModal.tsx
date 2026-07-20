@@ -31,7 +31,7 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedIds.length === 0) {
       setError("Please select at least one change to submit.");
@@ -41,6 +41,12 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
       setError("A commit description is required for the audit trail.");
       return;
     }
+
+    // Attente synchrone du traitement du push
+    await submitCommit(commitMessage, selectedIds);
+    onClose();
+    alert("Changes successfully pushed to central repository!");
+  };
 
     submitCommit(commitMessage, selectedIds);
     onClose();
