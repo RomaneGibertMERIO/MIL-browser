@@ -144,3 +144,33 @@ ipcMain.handle("git:approve-standard", async (_event, payload) => {
     return { success: false, error: error.message };
   }
 });
+
+// N'oublie pas d'importer rejectProfileInGit et rejectStandardInGit en haut du fichier depuis ./gitService
+
+ipcMain.handle("git:reject-profile", async (_event, profileId: string) => {
+  try {
+    if (!activeRemotePath) {
+      return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
+    }
+    return await rejectProfileInGit(activeRemotePath, "Administrator", profileId);
+  } catch (error: any) {
+    console.error("Erreur git:reject-profile:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("git:reject-standard", async (_event, payload) => {
+  try {
+    const { repoPath, standardId } = payload;
+    const targetPath = repoPath || activeRemotePath;
+
+    if (!targetPath) {
+      return { success: false, error: "Aucun dépôt Git configuré." };
+    }
+
+    return await rejectStandardInGit(targetPath, "Administrator", standardId);
+  } catch (error: any) {
+    console.error("Erreur git:reject-standard:", error);
+    return { success: false, error: error.message };
+  }
+});
