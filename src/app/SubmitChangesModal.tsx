@@ -9,7 +9,6 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
   const localChanges = useAppStore((s) => s.localStagedChanges);
   const submitCommit = useAppStore((s) => s.submitCommit);
 
-  // CORRECTION : Décoché par défaut (tableau vide initial au lieu d'inclure toutes les clés)
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [commitMessage, setCommitMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +30,7 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
     }
   };
 
-const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedIds.length === 0) {
       setError("Please select at least one change to submit.");
@@ -47,7 +46,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     onClose();
     alert("Changes successfully pushed to central repository!");
   };
-
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-xs p-4">
@@ -119,7 +117,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                             type="checkbox"
                             checked={isChecked}
                             onChange={(e) => {
-                              e.stopPropagation(); // Évite d'interférer avec le clic de prévisualisation
+                              e.stopPropagation();
                               toggleSelect(change.id);
                             }}
                             className="mt-1 h-4 w-4 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
