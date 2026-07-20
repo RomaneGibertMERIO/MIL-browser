@@ -28,7 +28,8 @@ function ensureDirectories(baseDir?: string) {
 
 function getFsPath(remoteInput: string): string {
   if (remoteInput.startsWith("file://")) {
-    return fileURLToPath(remoteInput);
+    // Nettoyage manuel du prefixe file:// sans module ESM
+    return path.resolve(remoteInput.replace(/^file:\/\/\/?/, ""));
   }
   return path.resolve(remoteInput);
 }
