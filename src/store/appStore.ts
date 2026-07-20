@@ -374,7 +374,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         (db as any).isSyncingInternal = false;
       }
     }
-
+    set((state) => ({
+      pendingCommits: state.pendingCommits.filter((c) => c.id !== commitId)
+    }));
+    
     await get().triggerGitSync();
   }
 }));
