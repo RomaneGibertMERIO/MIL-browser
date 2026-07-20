@@ -24,9 +24,9 @@ function createWindow() {
   });
 
   // Activer le raccourci globalement pour ouvrir la console avec F12 ou Ctrl+Shift+I
-  mainWindow.webContents.on("before-input-event", (event, input) => {
+  win.webContents.on("before-input-event", (event: any, input: any) => {
     if (input.key === "F12" || (input.control && input.shift && input.key.toLowerCase() === "i")) {
-      mainWindow.webContents.toggleDevTools();
+      win.webContents.toggleDevTools();
       event.preventDefault();
     }
   });
