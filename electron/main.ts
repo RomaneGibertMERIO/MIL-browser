@@ -1,7 +1,6 @@
 import { app, BrowserWindow, shell, ipcMain } from "electron";
 import path from "path";
 import os from "os"; 
-import { fileURLToPath } from "url"; // 🛡️ Requis pour reconstruire les chemins proprement
 import { 
   initOrCloneRepository, 
   pullRepository, 
@@ -11,28 +10,23 @@ import {
   approveProfileInGit 
 } from "./gitService";
 
-// 🛡️ Compatibilité ESM / Production pour les chemins d'accès
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 function createWindow() {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
     webPreferences: {
-      // 🛡️ Correction du chemin pour qu'il trouve preloads.js (ou preload.js) tant en dev qu'en prod
+      // __dirname pointe vers le dossier compilé (ex: electron-dist/)
       preload: path.join(__dirname, "preloads.js"), 
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
-  if (!app.isPackaged) win.webContents.openDevTools();
-
   if (!app.isPackaged) {
+    win.webContents.openDevTools();
     win.loadURL("http://localhost:5173");
   } else {
-    // 🛡️ Assure-toi que le chemin relatif vers dist/index.html reste correct une fois packagé
+    // En prod, le fichier index.html se trouve dans le dossier dist à la racine
     win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
 
@@ -42,7 +36,7 @@ function createWindow() {
   });
 }
 
-// App Ready
+// Initialisation de l'application
 app.whenReady().then(createWindow);
 
 app.on("window-all-closed", () => {
@@ -50,7 +44,7 @@ app.on("window-all-closed", () => {
 });
 
 // ==========================================
-// IPC Handlers (Sécurisés)
+// IPC Handlers
 // ==========================================
 
 ipcMain.handle("get-system-username", () => {
