@@ -326,3 +326,38 @@ export async function submitStandardToGit(remoteInput: string, username: string,
   fs.writeFileSync(centralDestPath, JSON.stringify(standardToSave, null, 2), "utf8");
   console.log(`Standard synchronisé avec succès vers le dépôt central : ${centralDestPath}`);
 }
+
+
+/**
+ * Refuse un standard proposé. Supprime le fichier du dépôt central et réinitialise en local.
+ */
+export async function rejectStandardInGit(remoteInput: string, adminUsername: string, standardId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    ensureDirectories();
+    await initOrCloneRepository(remoteInput);
+    const centralPath = getFsPath(remoteInput);
+
+    const fileName = `standard-${standardId}.json`;
+    const localPath = path.join(STANDARDS_DIR, fileName);
+    const centralPathFile = path.join(centralPath, "standards", fileName);
+
+    // 1. Supprime le fichier du dépôt central
+    if (fs.existsSync(centralPathFile)) {
+      fs.unlinkSync(centralPathFile);
+      console.log(`Standard rejeté : Supprimé du dépôt central : ${centralPathFile}`);
+    }
+
+    // 2. Met à jour le statut en local
+    if (fs.existsSync(localPath)) {
+      const standard = JSON.parse(fs.readFileSync(localPath, "utf8"));
+      standard.status = "local";
+      standard.updatedAt = new Date().toISOString();
+      fs.writeFileSync(localPath, JSON.stringify(standard, null, 2), "utf8");
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erreur rejectStandardInGit:", error);
+    return { success: false, error: error.message };
+  }
+}
