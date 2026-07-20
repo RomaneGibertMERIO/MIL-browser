@@ -1,6 +1,6 @@
 import { db } from "../schema";
 import type { StandardPlugin, StandardNode } from "../../domain/standard";
-import { useAppStore } from "../../store/appStore";
+import { useAppStore } from "../../../store/appStore";
 
 export async function getAllStandards(): Promise<StandardPlugin[]> {
   return db.standards.toArray();
