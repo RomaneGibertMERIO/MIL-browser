@@ -22,38 +22,23 @@ export function useBootstrap(): void {
     if (ready) return;
 
     async function run(): Promise<void> {
-      // 1. Initialisation du nom d'utilisateur système via Electron
-      if (window.electronAPI) {
+      // 1. Initialisation du nom d'utilisateur système via Electron (Détection sécurisée)
+      const electronBridge = (window as any).electron || (window as any).electronAPI;
+      if (electronBridge) {
         setSystemUsername("LabUser");
       }
 
       // 2. Récupération des paramètres locaux d'abord
       const settings = await getSettings();
       
-      // Si un chemin réseau est enregistré dans vos settings Dexie, on met à jour le store
       if (settings.gitRepoPath) {
         setGitRepoPath(settings.gitRepoPath);
       }
 
-      // 3. Vérification de l'état de la base
+      // 3. Charger les standards BUILTIN si la base est vide (Indépendamment de Git !)
       const standardsCount = await db.standards.count();
-      const hasGitConfigured = !!settings.gitRepoPath;
-
-      // 4. Lancement de la synchronisation Git (PULL) si configuré
-      let gitSyncSuccess = false;
-      if (hasGitConfigured) {
-        try {
-          console.log("[bootstrap] Init central GIT sync...");
-          await triggerGitSync();
-          gitSyncSuccess = true;
-        } catch (gitErr) {
-          console.warn("[bootstrap] Failed to connect to Central GIT on starting up (Offline mode ON) :", gitErr);
-        }
-      }
-
-      // 5. Seed builtin standards uniquement s'il n'y a pas de Git opérationnel OU si la base est totalement vide
-      if (!gitSyncSuccess && standardsCount === 0) {
-        console.log("[bootstrap] Empty DB and no Git sync. Loading fallback builtin standards...");
+      if (standardsCount === 0) {
+        console.log("[bootstrap] Empty DB. Loading fallback builtin standards...");
         const seedResults = await loadBuiltinStandards();
         const seedErrors = seedResults
           .filter((r) => r.status === "error")
@@ -67,11 +52,19 @@ export function useBootstrap(): void {
             `Built-in standards could not be loaded: ${seedErrors.join("; ") || "no bundled standards found"}`,
           );
         }
-      } else {
-        console.log("[bootstrap] Skipped builtin seed (using central Git data or existing cache).");
       }
 
-      // 6. Restauration de l'état de navigation
+      // 4. Lancement de la synchronisation Git (PULL) pour fusionner avec les données réseau
+      if (settings.gitRepoPath) {
+        try {
+          console.log("[bootstrap] Init central GIT sync...");
+          await triggerGitSync();
+        } catch (gitErr) {
+          console.warn("[bootstrap] Failed to connect to Central GIT on starting up (Offline mode ON) :", gitErr);
+        }
+      }
+
+      // 5. Restauration de l'état de navigation
       if (settings.activeStandardId !== null) {
         setActiveStandard(settings.activeStandardId);
       }
@@ -88,7 +81,7 @@ export function useBootstrap(): void {
       }
       await useAppStore.getState().refreshLocalChanges();
       
-      // 7. C'est prêt !
+      // 6. C'est prêt !
       setReady();
     }
 
