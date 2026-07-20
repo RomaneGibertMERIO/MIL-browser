@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-contextBridge.exposeInMainWorld("electronAPI", {
+// 🛡️ Exposition sous le nom exact "electron" attendu par tes stores
+contextBridge.exposeInMainWorld("electron", {
   getSystemUsername: () => ipcRenderer.invoke("get-system-username"),
   
   gitSetRepoPath: (path: string) => ipcRenderer.invoke("git:set-path", path),
