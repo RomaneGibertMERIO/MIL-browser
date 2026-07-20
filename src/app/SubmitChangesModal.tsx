@@ -48,10 +48,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     alert("Changes successfully pushed to central repository!");
   };
 
-    submitCommit(commitMessage, selectedIds);
-    onClose();
-    alert("Changes successfully queued for administrator approval!");
-  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-xs p-4">
