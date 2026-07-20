@@ -12,7 +12,7 @@ export interface ActiveNode {
 }
 
 export interface MockChangeItem {
-  id: string; // Correspondra à l'ID de l'événement de synchro Dexie
+  id: string;
   type: 'standard' | 'taxonomy' | 'profile';
   action: 'Created' | 'Modified' | 'Deleted';
   name: string;
@@ -61,11 +61,13 @@ interface AppState {
   clearLocalChanges: () => void;
   submitCommit: (commitMessage: string, selectedIds: string[]) => Promise<void>;
   
-  // Actions de synchronisation Git / IndexedDB
   refreshLocalChanges: () => Promise<void>;
   triggerGitSync: () => Promise<void>;
   resolveSingleChange: (commitId: string, changeId: string, action: 'approve' | 'reject') => Promise<void>;
 }
+
+// Fonction utilitaire de récupération sécurisée du bridge Electron
+const getElectronBridge = (): any => (window as any).electron || (window as any).electronAPI;
 
 export const useAppStore = create<AppState>((set, get) => ({
   mode: "assistant",
@@ -86,8 +88,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   
   setGitRepoPath: (gitRepoPath) => {
     set({ gitRepoPath });
-    if (window.electronAPI) {
-      window.electronAPI.gitSetRepoPath(gitRepoPath);
+    const api = getElectronBridge();
+    if (api?.gitSetRepoPath) {
+      api.gitSetRepoPath(gitRepoPath);
     }
   },
   
@@ -102,15 +105,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   
   clearLocalChanges: () => set({ localStagedChanges: [] }),
 
-  /**
-   * Lit la table `syncEvents` d'IndexedDB pour alimenter dynamiquement la liste de l'UI.
-   * Regroupe les événements par ID d'entité unique pour éviter les doublons lors des mises à jour successives.
-   */
   refreshLocalChanges: async () => {
     try {
       const events = await db.syncEvents.toArray();
-      
-      // Utilisation d'une Map pour écraser les anciennes modifications par la plus récente d'un même ID
       const aggregatedMap = new Map<string, MockChangeItem>();
 
       for (const event of events) {
@@ -118,16 +115,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         const isStandard = event.entity === 'standard';
         
         const name = isStandard 
-          ? (payload?.manifest?.name || payload?.manifest?.id || "New Standard")
+          ? (payload?.manifest?.name || payload?.manifest?.label || payload?.manifest?.id || "New Standard")
           : (payload?.name || `Profile ID: ${payload?.id}`);
           
         const location = isStandard
           ? (payload?.manifest?.organization || "Global")
           : (payload?.standardId ? `${payload.standardId}` : "Root");
 
-        // On agrège par l'ID de l'entité elle-même
         aggregatedMap.set(event.id, {
-          id: event.id, // Correspond à l'ID de l'événement / entité
+          id: event.id,
           type: event.entity as 'profile' | 'standard',
           action: event.operation === 'upsert' ? 'Modified' : 'Deleted',
           name: name,
@@ -142,29 +138,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-   /**
-   * PULL : Synchronisation bidirectionnelle avec le dépôt Git distant
-   */
   triggerGitSync: async () => {
-    if (!window.electronAPI) return;
+    const api = getElectronBridge();
+    if (!api) return;
     const state = get();
     
-    // 1. Configurer le chemin du dépôt côté Electron
-    await window.electronAPI.gitSetRepoPath(state.gitRepoPath);
+    if (api.gitSetRepoPath) await api.gitSetRepoPath(state.gitRepoPath);
     
-    // 2. Lancer la synchronisation
-    const result = await window.electronAPI.gitSync(state.systemUsername);
+    const result = await api.gitSync(state.systemUsername);
     const gitResult = result as { success: boolean; pulledProfiles?: any[]; pulledStandards?: any[]; error?: string };
     
     if (gitResult.success && gitResult.pulledProfiles && gitResult.pulledStandards) {
-      console.log(`Sync Git Réussie. Éléments récupérés : ${gitResult.pulledProfiles.length} profils, ${gitResult.pulledStandards.length} standards.`);
-      
-      // DESACTIVER LES HOOKS pour éviter la boucle lors de l'écriture du Pull
-      db.isSyncingInternal = true;
+      (db as any).isSyncingInternal = true;
       try {
-        // 3. Écriture dans IndexedDB locale
         for (const std of gitResult.pulledStandards) {
-          // On ajuste le standard en le castant en "any" pour éviter que le compilateur TS ne bloque sur le champ "status"
           const adjustedStandard: any = {
             ...std,
             manifest: {
@@ -179,15 +166,12 @@ export const useAppStore = create<AppState>((set, get) => ({
           await upsertProfile(prof);
         }
       } finally {
-        // RÉACTIVER LES HOOKS
-        db.isSyncingInternal = false;
+        (db as any).isSyncingInternal = false;
       }
 
-      // Reconstruire les propositions d'administration en attente de validation ("pending")
       const dbProfiles = await getAllProfiles();
       const pendingProfiles = dbProfiles.filter((p: any) => p.status === "pending");
 
-      // On reconstruit également les standards en attente de validation ("pending")
       const dbStandards = await db.standards.toArray();
       const pendingStandards = dbStandards.filter((s: any) => s.status === "pending");
 
@@ -223,54 +207,41 @@ export const useAppStore = create<AppState>((set, get) => ({
       ];
 
       set({ pendingCommits: reconstructedCommits });
-    } else {
-      console.warn("La synchronisation Git réseau n'a pas pu être établie. Utilisation de la base locale.", gitResult.error);
     }
 
-    // Rafraîchir les changements locaux à pousser
     await get().refreshLocalChanges();
   },
 
-  /**
-   * PUSH : Soumet un commit sur le réseau pour les profils ET les standards sélectionnés
-   */
   submitCommit: async (_, selectedIds) => {
     const state = get();
+    const api = getElectronBridge();
 
-    if (window.electronAPI) {
-      // Récupère tous les événements cochés par l'utilisateur
+    if (api) {
       const events = await db.syncEvents.where("id").anyOf(selectedIds).toArray();
 
-      // DÉSACTIVER LES HOOKS pour éviter les boucles infinies de création d'événements de synchro
       (db as any).isSyncingInternal = true;
       try {
         for (const event of events) {
           const payload = event.payload as any;
           if (!payload) continue;
 
-          // CAS 1 : Traitement et push d'un PROFIL
           if (event.entity === "profile") {
             const profileToSend = {
               ...payload,
               author: state.systemUsername,
-              status: "pending" as const // Devient en attente de validation par l'admin
+              status: "pending" as const
             };
             
-            // Écriture propre en base locale
             await db.profiles.put(profileToSend);
 
-            // Appel IPC
-            await window.electronAPI.gitSubmitProfile({
-              username: state.systemUsername,
-              profile: profileToSend
-            });
+            if (api.gitSubmitProfile) {
+              await api.gitSubmitProfile({
+                username: state.systemUsername,
+                profile: profileToSend
+              });
+            }
           }
-          
-          // CAS 2 : Traitement et push d'un STANDARD
           else if (event.entity === "standard") {
-            const api = window.electronAPI as any;
-            
-            // On utilise "any" pour éviter l'erreur de propriété manquante/inconnue 'status'
             const standardToSend: any = {
               ...payload,
               status: "pending",
@@ -289,43 +260,35 @@ export const useAppStore = create<AppState>((set, get) => ({
                 username: state.systemUsername,
                 standard: standardToSend
               });
-            } else {
-              console.log("Envoi du standard via la passerelle de secours :", payload.manifest?.id);
             }
           }
         }
 
-        // Nettoyage complet des événements transmis avec succès
+        // Suppression de la file d'attente localstaged
         await db.syncEvents.where("id").anyOf(selectedIds).delete();
       } catch (err) {
         console.error("Erreur durant la soumission du push:", err);
       } finally {
-        // RÉACTIVER LES HOOKS
         (db as any).isSyncingInternal = false;
       }
     }
 
-    // Rafraîchissement complet et immédiat des états de l'UI
     await get().refreshLocalChanges();
     await get().triggerGitSync();
   },
 
- /**
-   * Validation / Rejet d'une soumission par un administrateur (Profil ou Standard)
-   */
   resolveSingleChange: async (commitId, changeId, action) => {
     const state = get();
-    if (!window.electronAPI) return;
+    const api = getElectronBridge();
+    if (!api) return;
 
-    // Étape 1 : On détermine si l'élément à résoudre est un standard ou un profil
     const commit = state.pendingCommits.find(c => c.id === commitId);
     const changeItem = commit?.changes.find(c => c.id === changeId);
     const entityType = changeItem ? changeItem.type : 'profile'; 
 
     if (action === "approve") {
       if (entityType === "profile") {
-        const result = await window.electronAPI.gitApproveProfile(changeId);
-        // 🛡️ Sécurisé avec ?.
+        const result = await api.gitApproveProfile(changeId);
         if (result?.success) {
           (db as any).isSyncingInternal = true;
           try {
@@ -340,22 +303,18 @@ export const useAppStore = create<AppState>((set, get) => ({
           } finally {
             (db as any).isSyncingInternal = false;
           }
-        } else {
-          console.error("❌ Échec de l'approbation du profil via Electron API:", result);
         }
       } else if (entityType === "standard") {
-        const result = await window.electronAPI.gitApproveStandard({
+        const result = await api.gitApproveStandard({
           repoPath: state.gitRepoPath,
           standardId: changeId
         });
         
-        // 🛡️ Sécurisé avec ?. pour éviter le crash si result est indéfini
         if (result?.success) {
           (db as any).isSyncingInternal = true;
           try {
             const targetStandard = await db.standards.get(changeId);
             if (targetStandard) {
-              // Cast as any pour ajouter dynamiquement la clé "status" sur le standard persisté
               const approvedStandard: any = {
                 ...targetStandard,
                 status: "approved",
@@ -369,8 +328,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           } finally {
             (db as any).isSyncingInternal = false;
           }
-        } else {
-          console.error("❌ Échec de l'approbation du standard via Electron API:", result);
         }
       }
     } else if (action === "reject") {
@@ -396,7 +353,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         } else if (entityType === "standard") {
           const targetStandard = await db.standards.get(changeId);
           if (targetStandard) {
-            // Cast as any pour ajouter dynamiquement la clé "status" lors du rollback
             const rolledBackStandard: any = { 
               ...targetStandard, 
               status: "local" 
@@ -419,7 +375,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
 
-    // Déclenche la synchronisation Git pour actualiser l'état commun
     await get().triggerGitSync();
   }
 }));
