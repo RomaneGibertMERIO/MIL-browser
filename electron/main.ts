@@ -17,9 +17,18 @@ function createWindow() {
     webPreferences: {
       // __dirname pointe vers le dossier compilé (ex: electron-dist/)
       preload: path.join(__dirname, "preloads.js"), 
+      devTools: true,
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // Activer le raccourci globalement pour ouvrir la console avec F12 ou Ctrl+Shift+I
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.key === "F12" || (input.control && input.shift && input.key.toLowerCase() === "i")) {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
   });
 
   if (!app.isPackaged) {
