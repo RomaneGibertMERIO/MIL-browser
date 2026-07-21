@@ -90,5 +90,5 @@ export function useBootstrap(): void {
         err instanceof Error ? err.message : "Unknown startup error.";
       setError(message);
     });
-  }, [ready, setReady, setError, setActiveStandard, setAdminView, triggerGitSync, setSystemUsername, setGitRepoPath]);
+  }, [ready]);
 }
