@@ -66,7 +66,6 @@ interface AppState {
   resolveSingleChange: (commitId: string, changeId: string, action: 'approve' | 'reject') => Promise<void>;
 }
 
-// Fonction utilitaire de récupération sécurisée du bridge Electron
 const getElectronBridge = (): any => (window as any).electron || (window as any).electronAPI;
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -160,7 +159,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             },
             status: std.status || "approved"
           };
-          await upsertStandard(adjustedStandard);
+          await upsertStandard(adjustedStandard as any);
         }
         for (const prof of gitResult.pulledProfiles) {
           await upsertProfile(prof);
@@ -264,7 +263,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         }
 
-        // Suppression de la file d'attente localstaged
         await db.syncEvents.where("id").anyOf(selectedIds).delete();
       } catch (err) {
         console.error("Erreur durant la soumission du push:", err);
@@ -323,7 +321,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                   isBuiltin: false,
                 },
               };
-              await upsertStandard(approvedStandard);
+              await upsertStandard(approvedStandard as any);
             }
           } finally {
             (db as any).isSyncingInternal = false;
@@ -355,7 +353,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         try {
           const targetStandard = await db.standards.get(changeId);
           if (targetStandard) {
-            await upsertStandard({ ...targetStandard, status: "local" as const });
+            const rolledBackStandard: any = {
+              ...targetStandard,
+              status: "local"
+            };
+            await upsertStandard(rolledBackStandard as any);
           }
         } finally {
           (db as any).isSyncingInternal = false;
