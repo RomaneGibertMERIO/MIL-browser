@@ -73,7 +73,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   adminView: "browse",
   activeStandardId: null,
   activeNode: null,
-  gitRepoPath: "Z:/mil-git-db.git",
+  gitRepoPath: "Z:/CHANGE_ME",
   systemUsername: "User",
   approvedHistory: [],
   localStagedChanges: [],
