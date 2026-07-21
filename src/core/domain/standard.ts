@@ -256,11 +256,58 @@ export type StandardManifest = z.infer<typeof StandardManifestSchema>;
  * Loaded from public/standards/<id>.json and stored in IndexedDB.
  * No code changes are required to add a new standard — only a new JSON file.
  */
+/**
+ * Statut de validation collaborative d'un standard.
+ * Aligné sur ProfileStatusSchema (core/domain/profile.ts).
+ */
+export const StandardStatusSchema = z.enum(["local", "pending", "approved"]);
+
+export type StandardStatus = z.infer<typeof StandardStatusSchema>;
+
+export const StandardSourceSchema = z.enum(["builtin", "user"]);
+
+export type StandardSource = z.infer<typeof StandardSourceSchema>;
+
 export const StandardPluginSchema = z.object({
   manifest: StandardManifestSchema,
   nodes: z.array(StandardNodeSchema),
   profileSchema: ProfileSchemaSchema,
   migrations: z.array(SchemaMigrationSchema).default([]),
+
+  // ── Champs de synchronisation collaborative ──
+  // Ils DOIVENT être déclarés ici : `.parse()` supprime les clés inconnues, donc
+  // leur absence du schéma faisait perdre le statut à chaque import, seed ou
+  // synchronisation Git — alors même que le schéma Dexie les indexe.
+  // Optionnels (et non `.default()`) pour ne pas rendre obligatoire leur
+  // présence sur les littéraux StandardPlugin construits dans l'UI.
+  status: StandardStatusSchema.optional(),
+  source: StandardSourceSchema.optional(),
+  /** Dernier auteur ayant soumis une modification de ce standard. */
+  lastModifiedBy: z.string().optional(),
+  /** ISO-8601, positionné lors des soumissions/validations Git. */
+  updatedAt: z.string().optional(),
+
+  // ── Retour de validation (voir ProfileSchema pour la sémantique) ──
+  rejectedBy: z.string().optional(),
+  rejectedAt: z.string().optional(),
+  rejectionReason: z.string().optional(),
+
+  /**
+   * Espace de travail auquel appartient cet enregistrement.
+   *
+   * - "local"  : socle d'usine (database.json) ou création faite sans dépôt
+   *              central configuré. Mode autonome, hors réseau.
+   * - "shared" : provient du dépôt central, qui fait alors autorité.
+   *
+   * L'interface n'affiche que l'espace correspondant au mode courant. Absent
+   * = "local", pour que les bases déjà installées restent lisibles.
+   */
+  workspace: z.enum(["local", "shared"]).optional(),
 });
+
+/** Espace de travail d'un standard, avec la valeur de repli historique. */
+export function standardWorkspace(standard: { workspace?: "local" | "shared" }): "local" | "shared" {
+  return standard.workspace ?? "local";
+}
 
 export type StandardPlugin = z.infer<typeof StandardPluginSchema>;

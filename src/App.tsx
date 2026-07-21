@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAppStore, type AdminView } from './store/appStore';
 import { useBootstrapStore } from './store/bootstrapStore';
 import { useBootstrap } from './shared/hooks/useBootstrap';
-import { useStandard } from './shared/hooks/useStandards';
+import { useStandard, useStandards } from './shared/hooks/useStandards';
+import { EmptyWorkspaceNotice } from './shared/components/ui/EmptyWorkspaceNotice';
 import { AssistantPage } from './features/assistant/AssistantPage';
 import { LibraryPage } from './features/library/LibraryPage';
 import { StandardsPage } from "./features/standards/StandardsPage";
@@ -43,25 +44,17 @@ function AdminLayout() {
 
   const gitRepoPath = useAppStore((s) => s.gitRepoPath);
   const systemUsername = useAppStore((s) => s.systemUsername);
-  const setSystemUsername = useAppStore((s) => s.setSystemUsername);
+  const syncError = useAppStore((s) => s.syncError);
+  const setSyncError = useAppStore((s) => s.setSyncError);
+  const repoMode = useAppStore((s) => s.repoMode);
+  const isOffline = useAppStore((s) => s.isOffline);
 
   const standard = useStandard(activeStdId ?? '');
 
-  useEffect(() => {
-    if (window.electronAPI?.getSystemUsername) {
-      window.electronAPI
-        .getSystemUsername()
-        .then((username) => {
-          setSystemUsername(username);
-        })
-        .catch((err) => {
-          console.error("Failed to fetch OS username", err);
-          setSystemUsername("Error-Session");
-        });
-    } else {
-      setSystemUsername("Browser-Session");
-    }
-  }, [setSystemUsername]);
+  // Le nom d'utilisateur OS est désormais résolu une seule fois, dans
+  // useBootstrap. L'effet qui vivait ici testait `window.electronAPI` alors que
+  // le preload exposait `window.electron` : il retombait donc toujours sur
+  // "Browser-Session" et écrasait la valeur correcte.
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -83,13 +76,50 @@ function AdminLayout() {
           </span>
           
           {/* RECONSTRUCTED & ENLARGED SESSION INFO PANEL */}
-          <div className="ml-auto flex items-center pr-2">
+          <div className="ml-auto flex items-center gap-3 pr-2">
+            {/* Quelle source fait autorité : l'information la plus structurante
+                de l'écran, et elle était totalement absente jusqu'ici. */}
+            {repoMode === 'local' ? (
+              <span className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-slate-600 bg-slate-100 border border-slate-300 rounded-md">
+                ⬤ Standalone — built-in standards
+              </span>
+            ) : isOffline ? (
+              <span
+                className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded-md"
+                title="Central repository unreachable — working from the last synchronised state."
+              >
+                ⬤ Offline — last synced data
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 rounded-md">
+                ⬤ Shared repository
+              </span>
+            )}
+
             <div className="text-right border-l-2 border-gray-200 pl-4 py-1">
               <p className="text-sm font-extrabold text-gray-900 tracking-tight">👤 Active Session: {systemUsername}</p>
-              <p className="text-xs text-gray-500 font-bold font-mono mt-0.5">Database Root: {gitRepoPath}</p>
+              <p className="text-xs text-gray-500 font-bold font-mono mt-0.5 max-w-xs truncate" title={gitRepoPath}>
+                {repoMode === 'local' ? 'No central repository configured' : `Database Root: ${gitRepoPath}`}
+              </p>
             </div>
           </div>
         </header>
+
+        {syncError !== null && (
+          <div className="flex-shrink-0 px-6 pt-4">
+            <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3">
+              <div className="flex-1 text-xs font-semibold text-red-700">{syncError}</div>
+              <button
+                type="button"
+                onClick={() => setSyncError(null)}
+                aria-label="Masquer le message d'erreur de synchronisation"
+                className="text-red-400 hover:text-red-600 font-bold leading-none"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
 
         <main className={adminView === 'library' ? 'flex-1 overflow-hidden' : 'flex-1 overflow-y-auto px-6 py-6'}>
           <ContentPane
@@ -109,6 +139,19 @@ interface ContentPaneProps {
 
 function ContentPane({ adminView, standard }: ContentPaneProps) {
   const setMode = useAppStore((s) => s.setMode);
+  const isAdmin = useAppStore((s) => s.isAdmin);
+  const standards = useStandards();
+  const workspaceEmpty = standards !== undefined && standards.length === 0;
+
+  // Second verrou d'affichage : l'onglet est masqué dans la sidebar, mais la
+  // vue peut aussi être restaurée depuis les réglages persistés (lastView).
+  if (adminView === 'validations' && !isAdmin) {
+    return (
+      <div className="flex items-center justify-center h-full text-sm text-gray-400">
+        Cette section est réservée aux administrateurs déclarés dans admins.json.
+      </div>
+    );
+  }
 
   if (adminView === 'browse') {
     return (
@@ -125,6 +168,12 @@ function ContentPane({ adminView, standard }: ContentPaneProps) {
   }
 
   if (adminView === 'library') {
+    // Le diagnostic prime sur "sélectionnez une norme" : la sidebar est vide et
+    // le restera, l'invitation à y choisir quelque chose n'aide pas.
+    // Volontairement PAS appliqué aux onglets Settings et Standards Config, qui
+    // sont précisément ceux permettant de sortir de la situation.
+    if (workspaceEmpty) return <EmptyWorkspaceNotice />;
+
     if (standard === undefined) {
       return (
         <div className="flex items-center justify-center h-full text-sm text-gray-400">
@@ -147,20 +196,38 @@ export function AdminValidationsPage() {
   const approvedHistory = useAppStore((s) => s.approvedHistory);
   const resolveSingleChange = useAppStore((s) => s.resolveSingleChange);
 
-  const [selectedCommitId, setSelectedCommitId] = useState<string | null>(
-    pendingCommits.length > 0 ? pendingCommits[0].id : null
-  );
+  // État de sélection non figé : `pendingCommits` est rempli de façon
+  // asynchrone par triggerGitSync, donc un useState initialisé au montage
+  // restait bloqué sur `null`. On retombe sur le premier commit disponible.
+  const [selectedCommitId, setSelectedCommitId] = useState<string | null>(null);
 
-  const activeCommit = pendingCommits.find((c) => c.id === selectedCommitId);
+  const activeCommit =
+    pendingCommits.find((c) => c.id === selectedCommitId) ?? pendingCommits[0];
 
-  const handleApproveChange = (commitId: string, changeId: string, name: string) => {
-    resolveSingleChange(commitId, changeId, 'approve');
-    alert(`Success: "${name}" has been approved and marked as Official!`);
+  // On attend le résultat réel avant d'annoncer quoi que ce soit : auparavant,
+  // l'alerte de succès s'affichait même quand l'opération Git avait échoué.
+  const handleApproveChange = async (commitId: string, changeId: string, name: string) => {
+    const result = await resolveSingleChange(commitId, changeId, 'approve');
+    if (result.success) {
+      alert(`Success: "${name}" has been approved and marked as Official!`);
+    }
+    // En cas d'échec, le message détaillé est déjà affiché par la bannière
+    // syncError d'AdminLayout, et la proposition reste dans la file.
   };
 
-  const handleRejectChange = (commitId: string, changeId: string, name: string) => {
-    resolveSingleChange(commitId, changeId, 'reject');
-    alert(`Discarded: "${name}" has been rejected and removed.`);
+  const handleRejectChange = async (commitId: string, changeId: string, name: string) => {
+    // Le motif est transmis à l'auteur via le dépôt central : sans lui, la
+    // proposition disparaîtrait sans que personne ne sache pourquoi.
+    const reason = window.prompt(
+      `Motif du refus de "${name}" (transmis à son auteur) :`,
+      "",
+    );
+    if (reason === null) return; // Annulé
+
+    const result = await resolveSingleChange(commitId, changeId, 'reject', reason);
+    if (result.success) {
+      alert(`Discarded: "${name}" has been rejected. Its author will be notified on next sync.`);
+    }
   };
 
   const renderDynamicFields = (data: Record<string, any>) => {

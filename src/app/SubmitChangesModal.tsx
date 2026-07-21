@@ -12,7 +12,8 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [commitMessage, setCommitMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
-  
+  const [submitting, setSubmitting] = useState(false);
+
   // Onglet de prévisualisation des détails de modification
   const [selectedPreviewChange, setSelectedPreviewChange] = useState<MockChangeItem | null>(null);
 
@@ -22,8 +23,10 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
     );
   };
 
+  const allSelected = localChanges.length > 0 && selectedIds.length === localChanges.length;
+
   const handleSelectAll = () => {
-    if (selectedIds.length === localChanges.length) {
+    if (allSelected) {
       setSelectedIds([]);
     } else {
       setSelectedIds(localChanges.map(c => c.id));
@@ -32,6 +35,8 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
     if (selectedIds.length === 0) {
       setError("Please select at least one change to submit.");
       return;
@@ -41,10 +46,25 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
       return;
     }
 
-    // Attente synchrone du traitement du push
-    await submitCommit(commitMessage, selectedIds);
-    onClose();
-    alert("Changes successfully pushed to central repository!");
+    setSubmitting(true);
+    try {
+      // On teste le résultat RÉEL du push. Auparavant, la modale se fermait et
+      // annonçait un succès même quand rien n'avait été envoyé (erreur Git
+      // avalée, ou absence totale de pont Electron en mode navigateur).
+      const result = await submitCommit(commitMessage, selectedIds);
+
+      if (!result.success) {
+        // La modale reste ouverte : la sélection de l'utilisateur est préservée
+        // et les modifications non poussées restent dans le journal local.
+        setError(result.error ?? "Push to the central repository failed.");
+        return;
+      }
+
+      onClose();
+      alert("Changes successfully pushed to central repository!");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -93,7 +113,7 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
                   onClick={handleSelectAll} 
                   className="text-xs text-blue-600 hover:underline font-semibold"
                 >
-                  {selectedIds.length === localChanges.length ? "Deselect All" : "Select All"}
+                  {allSelected ? "Deselect All" : "Select All"}
                 </button>
               </div>
 
@@ -159,9 +179,10 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
+                disabled={submitting}
+                className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
               >
-                Submit to Admin Area
+                {submitting ? "Pushing…" : "Submit to Admin Area"}
               </button>
             </div>
           </form>

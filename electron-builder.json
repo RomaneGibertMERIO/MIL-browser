@@ -8,12 +8,6 @@
     "dist",
     "electron-dist"
   ],
-  "extraResources": [
-    {
-      "from": "src/core/engine/database.json",
-      "to": "database.json"
-    }
-  ],
   "win": {
     "target": ["portable", "nsis"]
   }

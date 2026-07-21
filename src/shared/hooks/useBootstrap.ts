@@ -1,31 +1,49 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { getSettings } from "../../core/db/repositories/settings.repo";
 import { useBootstrapStore } from "../../store/bootstrapStore";
 import { useAppStore } from "../../store/appStore";
 import { loadBuiltinStandards } from "../../core/engine/standardLoader";
 import { db } from "../../core/db/schema";
+import { standardWorkspace } from "../../core/domain/standard";
+import { getElectronBridge } from "../electronBridge";
 
 /**
  * Runs the bootstrap sequence on mount, injecting Git database synchronization.
  */
 export function useBootstrap(): void {
-  const { ready, setReady, setError } = useBootstrapStore();
-  const { 
-    setActiveStandard, 
-    setAdminView, 
-    triggerGitSync, 
-    setSystemUsername, 
-    setGitRepoPath 
-  } = useAppStore();
+  // Sélecteurs ciblés : sans eux, ce hook (appelé depuis App) réabonne toute la
+  // racine à l'intégralité des deux stores, et le moindre `set` re-rend l'arbre.
+  const setReady = useBootstrapStore((s) => s.setReady);
+  const setError = useBootstrapStore((s) => s.setError);
+
+  const setActiveStandard = useAppStore((s) => s.setActiveStandard);
+  const setAdminView = useAppStore((s) => s.setAdminView);
+  const triggerGitSync = useAppStore((s) => s.triggerGitSync);
+  const setSystemUsername = useAppStore((s) => s.setSystemUsername);
+  const setGitRepoPath = useAppStore((s) => s.setGitRepoPath);
+
+  // Garde de ré-entrance. `ready` ne passait à true qu'À LA FIN de run() : sous
+  // <StrictMode>, le double montage relançait donc run() une seconde fois en
+  // parallèle (double seed, double pull Git, écritures Dexie concurrentes).
+  // Un ref survit au démontage/remontage de StrictMode, contrairement à l'état.
+  const startedRef = useRef(false);
 
   useEffect(() => {
-    if (ready) return;
+    if (startedRef.current) return;
+    startedRef.current = true;
 
     async function run(): Promise<void> {
-      // 1. Initialisation du nom d'utilisateur système via Electron (Détection sécurisée)
-      const electronBridge = (window as any).electron || (window as any).electronAPI;
-      if (electronBridge) {
-        setSystemUsername("LabUser");
+      // 1. Initialisation du nom d'utilisateur système via Electron
+      const bridge = getElectronBridge();
+      if (bridge !== null) {
+        try {
+          setSystemUsername(await bridge.getSystemUsername());
+        } catch (err) {
+          console.warn("[bootstrap] Nom d'utilisateur OS indisponible :", err);
+          setSystemUsername("Unknown-User");
+        }
+      } else {
+        setSystemUsername("Browser-Session");
       }
 
       // 2. Récupération des paramètres locaux d'abord
@@ -35,9 +53,15 @@ export function useBootstrap(): void {
         setGitRepoPath(settings.gitRepoPath);
       }
 
-      // 3. Charger les standards BUILTIN si la base est vide (Indépendamment de Git !)
-      const standardsCount = await db.standards.count();
-      if (standardsCount === 0) {
+      // 3. Charger le socle builtin s'il est absent de l'espace autonome.
+      //
+      // On compte les normes de l'espace "local", et non la table entière :
+      // sinon, un poste branché sur un dépôt central (donc avec des normes
+      // "shared" en base) ne réinstallerait jamais le socle, et se retrouverait
+      // sans rien à afficher le jour où le dépôt est retiré des réglages.
+      const allStandards = await db.standards.toArray();
+      const localCount = allStandards.filter((s) => standardWorkspace(s) === "local").length;
+      if (localCount === 0) {
         console.log("[bootstrap] Empty DB. Loading fallback builtin standards...");
         const seedResults = await loadBuiltinStandards();
         const seedErrors = seedResults
@@ -88,7 +112,12 @@ export function useBootstrap(): void {
     run().catch((err: unknown) => {
       const message =
         err instanceof Error ? err.message : "Unknown startup error.";
+      // En cas d'échec, on relâche la garde pour qu'un remontage puisse retenter.
+      startedRef.current = false;
       setError(message);
     });
-  }, [ready]);
+    // Volontairement vide : la séquence de démarrage ne doit tourner qu'une fois
+    // par session, et la garde ci-dessus protège du double montage StrictMode.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }

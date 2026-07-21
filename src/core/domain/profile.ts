@@ -63,7 +63,15 @@ export const ProfileSchema = z.object({
   // Nouveaux champs pour le suivi réseau
   status: ProfileStatusSchema.default("local"),
   author: z.string().default("unknown"),
-  
+
+  // ── Retour de validation ──
+  // Renseignés quand un administrateur refuse la proposition. Le profil
+  // repasse alors en "local" chez son auteur, qui conserve son travail et
+  // peut lire le motif du refus avant de resoumettre.
+  rejectedBy: z.string().optional(),
+  rejectedAt: z.string().optional(),
+  rejectionReason: z.string().optional(),
+
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   fields: z.record(z.unknown()),

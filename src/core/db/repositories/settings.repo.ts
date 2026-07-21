@@ -34,7 +34,11 @@ function buildDefaultSettings(): AppSettings {
       lastSyncAt: null,
       cursor: null,
     },
-    gitRepoPath: "Z:/mil-git-db.git", // <-- Par défaut
+    // Vide par défaut : c'est ce qui distingue le mode autonome (socle builtin)
+    // du mode partagé (le dépôt central fait autorité). Un chemin pré-rempli
+    // plaçait toute installation neuve en mode partagé, vers un lecteur réseau
+    // souvent inexistant.
+    gitRepoPath: "",
   };
 }
 

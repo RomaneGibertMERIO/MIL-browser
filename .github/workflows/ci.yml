@@ -1,0 +1,41 @@
+name: ci
+
+# Vérification rapide sur CHAQUE push et pull request.
+# Ce job ne construit aucun installeur : il ne consomme pas le budget de build
+# electron-builder, mais il attrape les erreurs de compilation et les
+# régressions de logique AVANT qu'un tag ne soit posé.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Ce job ne fait que vérifier : inutile de télécharger le binaire Electron
+      # (~100 Mo). Le paquet et ses types sont installés, ce qui suffit à tsc.
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: npm install
+
+      # database.json fait ~16 Mo et est importé avec resolveJsonModule :
+      # tsc doit en construire le type littéral complet, d'où le heap élargi.
+      - name: Type-check (app + electron)
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test

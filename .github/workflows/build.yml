@@ -22,10 +22,21 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # Garde-fou : on refait tourner tests + type-check avant de consommer
+      # un build electron-builder, qui est la partie coûteuse.
+      - name: Unit tests
+        run: npm test
+
+      # database.json fait ~16 Mo et est importé avec resolveJsonModule :
+      # tsc doit en construire le type littéral complet, d'où le heap élargi.
       - name: Build Vite app
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: npm run build
 
       - name: Build Electron TS
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: npm run build:electron
 
       - name: Build Electron installer

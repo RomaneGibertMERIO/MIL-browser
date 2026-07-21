@@ -25,6 +25,7 @@ import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
 import { useAppStore } from "../../store/appStore";
 import { saveActiveStandard } from "../../core/db/repositories/settings.repo";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
+import { EmptyWorkspaceNotice } from "../../shared/components/ui/EmptyWorkspaceNotice";
 import { Badge } from "../../shared/components/ui/Badge";
 import { ProfileDetail } from "../profile/ProfileDetail";
 import { getEffectiveSchema } from "../../core/engine/profileEngine";
@@ -218,6 +219,10 @@ export function AssistantPage() {
   }
 
   if (standards === undefined) return <LoadingSpinner />;
+
+  // Espace de travail vide : on explique POURQUOI (dépôt injoignable, dépôt
+  // sans norme, ou socle non chargé) au lieu d'afficher une arborescence vide.
+  if (standards.length === 0) return <EmptyWorkspaceNotice />;
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">

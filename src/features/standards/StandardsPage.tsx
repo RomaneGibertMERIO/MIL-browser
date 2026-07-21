@@ -45,9 +45,14 @@ if (subView === "edit-taxonomy" && editingStandard !== null) {
           const updatedStandard = {
             ...editingStandard,
             nodes,
-            source: "user",      // Devient une copie locale modifiée
-            status: "pending",   // Passe en attente de push pour la pile Git
-          } as any;              
+            source: "user",   // Devient une copie locale modifiée
+            // "local" et NON "pending" : le passage en attente de validation
+            // appartient au push (submitCommit), comme pour les profils.
+            // Mettre "pending" ici faisait apparaître l'édition dans la file de
+            // validation de son propre auteur, qui pouvait donc s'auto-valider
+            // sans avoir jamais rien poussé.
+            status: "local",
+          } as any;
 
           // 2. Une unique opération d'écriture atomique en base de données
           await upsertStandard(updatedStandard as StandardPlugin); 

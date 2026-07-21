@@ -1,14 +1,40 @@
 import { app, BrowserWindow, shell, ipcMain } from "electron";
 import path from "path";
 import os from "os"; 
-import { 
-  initOrCloneRepository, 
-  pullRepository, 
-  submitProfileToGit, 
+import {
+  initOrCloneRepository,
+  pullRepository,
+  submitProfileToGit,
   submitStandardToGit,
   approveStandardInGit,
-  approveProfileInGit 
+  approveProfileInGit,
+  rejectProfileInGit,
+  rejectStandardInGit,
+  readAdmins,
+  isAdminUser
 } from "./gitService";
+
+/**
+ * Identité de l'utilisateur, résolue par le processus principal.
+ *
+ * Volontairement NON fournie par le renderer : c'est elle qui sert à la fois
+ * de signature des validations et de clé du contrôle d'accès administrateur.
+ * La faire transiter depuis l'interface la rendrait falsifiable.
+ */
+function currentUser(): string {
+  return os.userInfo().username || "Unknown-User";
+}
+
+/** Refuse l'opération si l'utilisateur courant n'est pas administrateur. */
+function assertAdmin(repoPath: string): { success: false; error: string } | null {
+  if (isAdminUser(repoPath, currentUser())) return null;
+  return {
+    success: false,
+    error:
+      `Compte "${currentUser()}" non autorise a valider. ` +
+      `Les administrateurs sont declares dans admins.json, a la racine du depot central.`,
+  };
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -57,7 +83,23 @@ app.on("window-all-closed", () => {
 // ==========================================
 
 ipcMain.handle("get-system-username", () => {
-  return os.userInfo().username || "Unknown-User";
+  return currentUser();
+});
+
+ipcMain.handle("git:get-admins", async (_event, repoPath?: string) => {
+  const targetPath = repoPath || activeRemotePath;
+  if (!targetPath) {
+    return { success: false, error: "Aucun dépôt Git configuré." };
+  }
+  const admins = readAdmins(targetPath);
+  return {
+    success: true,
+    admins,
+    currentUser: currentUser(),
+    isAdmin: isAdminUser(targetPath, currentUser()),
+    // Vrai quand admins.json est absent/vide : l'accès est alors ouvert à tous.
+    unrestricted: admins.length === 0,
+  };
 });
 
 let activeRemotePath: string = "";
@@ -78,8 +120,16 @@ ipcMain.handle("git:sync", async (_event, username: string) => {
     if (!activeRemotePath) {
       return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
     }
-    const { standards, profiles } = await pullRepository(activeRemotePath);
-    return { success: true, pulledProfiles: profiles, pulledStandards: standards };
+    const { standards, profiles, rejections, admins } = await pullRepository(activeRemotePath);
+    return {
+      success: true,
+      pulledProfiles: profiles,
+      pulledStandards: standards,
+      rejections,
+      admins,
+      currentUser: currentUser(),
+      isAdmin: isAdminUser(activeRemotePath, currentUser()),
+    };
   } catch (error: any) {
     console.error("Erreur git:sync:", error);
     return { success: false, error: error.message };
@@ -104,7 +154,9 @@ ipcMain.handle("git:approve-profile", async (_event, profileId: string) => {
     if (!activeRemotePath) {
       return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
     }
-    return await approveProfileInGit(activeRemotePath, "Administrator", profileId);
+    const denied = assertAdmin(activeRemotePath);
+    if (denied) return denied;
+    return await approveProfileInGit(activeRemotePath, currentUser(), profileId);
   } catch (error: any) {
     console.error("Erreur git:approve-profile:", error);
     return { success: false, error: error.message };
@@ -137,22 +189,24 @@ ipcMain.handle("git:approve-standard", async (_event, payload) => {
       return { success: false, error: "Aucun dépôt Git configuré." };
     }
 
-    const adminUsername = "Admin"; 
-    return await approveStandardInGit(targetPath, adminUsername, standardId);
+    const denied = assertAdmin(targetPath);
+    if (denied) return denied;
+    return await approveStandardInGit(targetPath, currentUser(), standardId);
   } catch (error: any) {
     console.error("Erreur git:approve-standard:", error);
     return { success: false, error: error.message };
   }
 });
 
-// N'oublie pas d'importer rejectProfileInGit et rejectStandardInGit en haut du fichier depuis ./gitService
-
-ipcMain.handle("git:reject-profile", async (_event, profileId: string) => {
+ipcMain.handle("git:reject-profile", async (_event, payload) => {
   try {
+    const { profileId, reason } = payload;
     if (!activeRemotePath) {
       return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
     }
-    return await rejectProfileInGit(activeRemotePath, "Administrator", profileId);
+    const denied = assertAdmin(activeRemotePath);
+    if (denied) return denied;
+    return await rejectProfileInGit(activeRemotePath, currentUser(), profileId, reason ?? "");
   } catch (error: any) {
     console.error("Erreur git:reject-profile:", error);
     return { success: false, error: error.message };
@@ -161,14 +215,16 @@ ipcMain.handle("git:reject-profile", async (_event, profileId: string) => {
 
 ipcMain.handle("git:reject-standard", async (_event, payload) => {
   try {
-    const { repoPath, standardId } = payload;
+    const { repoPath, standardId, reason } = payload;
     const targetPath = repoPath || activeRemotePath;
 
     if (!targetPath) {
       return { success: false, error: "Aucun dépôt Git configuré." };
     }
 
-    return await rejectStandardInGit(targetPath, "Administrator", standardId);
+    const denied = assertAdmin(targetPath);
+    if (denied) return denied;
+    return await rejectStandardInGit(targetPath, currentUser(), standardId, reason ?? "");
   } catch (error: any) {
     console.error("Erreur git:reject-standard:", error);
     return { success: false, error: error.message };

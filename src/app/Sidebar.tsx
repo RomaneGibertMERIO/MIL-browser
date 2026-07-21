@@ -4,10 +4,10 @@ import { useStandards } from "../shared/hooks/useStandards";
 import { saveActiveStandard } from "../core/db/repositories/settings.repo";
 import { SubmitChangesModal } from "./SubmitChangesModal";
 
-const NAV_ITEMS: { view: AdminView; label: string; icon: string }[] = [
+const NAV_ITEMS: { view: AdminView; label: string; icon: string; adminOnly?: boolean }[] = [
   { view: "library",   label: "Library Space",   icon: "◧" },
   { view: "standards", label: "Standards Config", icon: "≡" },
-  { view: "validations", label: "Admin Validations", icon: "🔧" },
+  { view: "validations", label: "Admin Validations", icon: "🔧", adminOnly: true },
   { view: "settings",  label: "Global Settings",  icon: "⚙" },
 ];
 
@@ -20,6 +20,11 @@ export function Sidebar() {
 
   const localChanges    = useAppStore((s) => s.localStagedChanges);
   const pendingCommits  = useAppStore((s) => s.pendingCommits);
+  const isAdmin         = useAppStore((s) => s.isAdmin);
+
+  // L'onglet de validation n'est qu'un confort d'affichage : le refus d'accès
+  // réel est appliqué par le processus principal, à partir du compte système.
+  const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   const [isSyncOpen, setIsSyncOpen] = useState(false);
 
@@ -85,7 +90,7 @@ export function Sidebar() {
 
       {/* NAVIGATION TABS */}
       <nav className="px-3 py-2 space-y-1.5 flex-shrink-0">
-        {NAV_ITEMS.map(({ view, label, icon }) => (
+        {visibleNavItems.map(({ view, label, icon }) => (
           <button
             key={view}
             onClick={() => setAdminView(view)}

@@ -4,7 +4,6 @@
       "module": "CommonJS",
       "moduleResolution": "node",
       "outDir": "electron-dist",
-      "moduleResolution": "node",
       "esModuleInterop": true,
       "strict": true,
       "skipLibCheck": true,

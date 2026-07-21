@@ -1,0 +1,39 @@
+# Dépendances
+node_modules/
+
+# Sorties de build (régénérées par la CI — ne doivent pas être versionnées)
+dist/
+electron-dist/
+release/
+
+# Caches d'outillage
+.vite/
+.vitest/
+coverage/
+*.tsbuildinfo
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Lockfile concurrent : le projet utilise npm
+pnpm-lock.yaml
+yarn.lock
+
+# Environnement local
+.env
+.env.local
+.env.*.local
+
+# Outillage local (Claude Code)
+.claude/
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json

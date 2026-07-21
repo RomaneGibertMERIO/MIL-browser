@@ -30,7 +30,9 @@ export async function seedBuiltinStandard(standard: StandardPlugin): Promise<voi
   if (existing !== undefined && !existing.manifest.isBuiltin) {
     throw new Error(`Conflict with user standard: ${standard.manifest.id}`);
   }
-  await db.standards.put(standard);
+  // Le socle d'usine appartient toujours à l'espace autonome : il ne doit pas
+  // apparaître quand un dépôt central fait autorité.
+  await db.standards.put({ ...standard, workspace: "local" });
 }
 
 /**
@@ -59,7 +61,11 @@ export async function createStandard(standard: StandardPlugin): Promise<void> {
   
   const newStandard: any = {
     ...standard,
-    status: "local"
+    status: "local",
+    // Une norme créée à la main rejoint l'espace de travail courant, sinon
+    // elle serait invisible dès sa création (mode partagé) ou publierait du
+    // travail personnel dans le dépôt d'équipe (mode autonome).
+    workspace: useAppStore.getState().repoMode,
   };
   await upsertStandard(newStandard);
 }
