@@ -8,6 +8,7 @@ import {
   type ElectronBridge,
   type IpcResult,
   type RejectionMarker,
+  type DeletionMarker,
 } from "../shared/electronBridge";
 import { standardWorkspace } from "../core/domain/standard";
 
@@ -219,6 +220,39 @@ async function seedCentralRepositoryFromBuiltin(
   return pushed;
 }
 
+/**
+ * Répercute en base locale les suppressions faites depuis un autre poste.
+ *
+ * Sans cela, supprimer une entité ne la retirait que de la machine qui avait
+ * fait la suppression : partout ailleurs elle restait affichée indéfiniment,
+ * puisqu'un fichier absent du dépôt ne « dit » rien aux autres postes.
+ *
+ * Le garde-fou sur `deletedAt` évite d'effacer une version PLUS RÉCENTE que la
+ * suppression : si quelqu'un a recréé ou modifié l'entité depuis, on la garde.
+ */
+async function applyDeletions(deletions: DeletionMarker[]): Promise<void> {
+  for (const marker of deletions) {
+    try {
+      if (marker.entity === "profile") {
+        const profile = await db.profiles.get(marker.id);
+        if (profile === undefined) continue;
+        if (profile.updatedAt && marker.deletedAt <= profile.updatedAt) continue;
+        await db.profiles.delete(marker.id);
+      } else {
+        const standard: any = await db.standards.get(marker.id);
+        if (standard === undefined) continue;
+        // Une norme d'usine n'est jamais supprimée par un marqueur distant :
+        // elle appartient à l'espace autonome, hors du périmètre du dépôt.
+        if (standardWorkspace(standard) !== "shared") continue;
+        if (standard.updatedAt && marker.deletedAt <= standard.updatedAt) continue;
+        await db.standards.delete(marker.id);
+      }
+    } catch (err) {
+      console.error(`Application de la suppression impossible (${marker.entity} ${marker.id}) :`, err);
+    }
+  }
+}
+
 const NO_BRIDGE_ERROR =
   "Le pont Electron est indisponible : l'application tourne hors de son conteneur de bureau. " +
   "Aucune opération sur le dépôt central n'a été effectuée.";
@@ -249,7 +283,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   setGitRepoPath: (gitRepoPath) => {
     // Le mode découle directement du chemin : renseigné => le dépôt fait foi.
     const repoMode = gitRepoPath.trim() === "" ? "local" : "shared";
+    const previousMode = get().repoMode;
     set({ gitRepoPath, repoMode, isOffline: false });
+
+    // Retour au mode autonome : on réinstalle le socle d'usine. Les normes
+    // builtin que le dépôt central avait remplacées n'existent plus en base
+    // (même clé primaire) ; sans cette réinstallation, l'utilisateur retrouvait
+    // une base quasi vide au lieu de son socle.
+    if (repoMode === "local" && previousMode === "shared") {
+      void import("../core/engine/standardLoader")
+        .then(({ loadBuiltinStandards }) => loadBuiltinStandards())
+        .then(() => get().refreshLocalChanges())
+        .catch((err: unknown) => {
+          set({ syncError: `Restauration du socle impossible : ${String(err)}` });
+        });
+    }
 
     const api = getElectronBridge();
     if (api === null || repoMode === "local") return;
@@ -382,6 +430,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
 
         await applyRejections(gitResult.rejections ?? [], state.systemUsername);
+        await applyDeletions(gitResult.deletions ?? []);
       } finally {
         (db as any).isSyncingInternal = false;
       }
@@ -464,6 +513,27 @@ export const useAppStore = create<AppState>((set, get) => ({
         const label = payload.name ?? payload.manifest?.label ?? event.id;
 
         try {
+          // SUPPRESSION : le payload n'est qu'une pierre tombale ({id, name}),
+          // pas une entité complète. La renvoyer via gitSubmit* la republiait
+          // dans le dépôt central ET la recréait en base locale — la
+          // suppression semblait donc « ne rien faire ».
+          if (event.operation === "delete") {
+            const result = toIpcResult(
+              event.entity === "profile"
+                ? await api.gitDeleteProfile(event.id)
+                : await api.gitDeleteStandard({ repoPath: state.gitRepoPath, standardId: event.id }),
+              "La suppression n'est pas disponible sur ce pont Electron.",
+            );
+
+            if (!result.success) {
+              failures.push(`${label} : ${result.error ?? "refus du dépôt central"}`);
+              continue;
+            }
+
+            pushedEventIds.push(event.id);
+            continue;
+          }
+
           if (event.entity === "profile") {
             const profileToSend = {
               ...payload,

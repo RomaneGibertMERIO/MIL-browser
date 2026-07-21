@@ -23,6 +23,12 @@ const bridge = {
   gitRejectProfile: (payload: { profileId: string; reason: string }) =>
     ipcRenderer.invoke("git:reject-profile", payload),
 
+  gitDeleteProfile: (profileId: string) =>
+    ipcRenderer.invoke("git:delete-profile", profileId),
+
+  gitDeleteStandard: (payload: { repoPath: string; standardId: string }) =>
+    ipcRenderer.invoke("git:delete-standard", payload),
+
   gitGetAdmins: (repoPath?: string) => ipcRenderer.invoke("git:get-admins", repoPath),
 
   gitSubmitStandard: (payload: { repoPath: string; username: string; standard: unknown }) =>

@@ -35,10 +35,23 @@ export interface RejectionMarker {
   reason: string;
 }
 
+/**
+ * Marqueur de suppression. Supprimer le fichier du dépôt central ne suffit pas :
+ * les autres postes gardent l'enregistrement dans leur base locale tant que
+ * rien ne leur signale explicitement sa disparition.
+ */
+export interface DeletionMarker {
+  entity: "profile" | "standard";
+  id: string;
+  deletedBy: string;
+  deletedAt: string;
+}
+
 export interface GitSyncResult extends IpcResult {
   pulledProfiles?: unknown[];
   pulledStandards?: unknown[];
   rejections?: RejectionMarker[];
+  deletions?: DeletionMarker[];
   admins?: string[];
   currentUser?: string;
   isAdmin?: boolean;
@@ -62,6 +75,8 @@ export interface ElectronBridge {
   gitSubmitProfile: (payload: { username: string; profile: unknown }) => Promise<IpcResult>;
   gitApproveProfile: (profileId: string) => Promise<IpcResult>;
   gitRejectProfile: (payload: { profileId: string; reason: string }) => Promise<IpcResult>;
+  gitDeleteProfile: (profileId: string) => Promise<IpcResult>;
+  gitDeleteStandard: (payload: { repoPath: string; standardId: string }) => Promise<IpcResult>;
 
   gitSubmitStandard: (payload: {
     repoPath: string;

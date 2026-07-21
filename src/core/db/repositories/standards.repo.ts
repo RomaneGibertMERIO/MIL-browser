@@ -1,5 +1,5 @@
 import { db } from "../schema";
-import type { StandardPlugin, StandardNode } from "../../domain/standard";
+import { standardWorkspace, type StandardPlugin, type StandardNode } from "../../domain/standard";
 import { useAppStore } from "../../../store/appStore";
 
 export async function getAllStandards(): Promise<StandardPlugin[]> {
@@ -27,7 +27,16 @@ export async function seedBuiltinStandard(standard: StandardPlugin): Promise<voi
     throw new Error(`Standard "${standard.manifest.id}" is not builtin.`);
   }
   const existing = await db.standards.get(standard.manifest.id);
-  if (existing !== undefined && !existing.manifest.isBuiltin) {
+
+  // Un enregistrement de l'espace "shared" n'est qu'un cache du dépôt central :
+  // le réinstaller depuis le socle est sans perte, il sera re-tiré au prochain
+  // branchement. Seule une personnalisation faite en mode autonome est protégée.
+  const existingIsProtected =
+    existing !== undefined &&
+    standardWorkspace(existing) === "local" &&
+    !existing.manifest.isBuiltin;
+
+  if (existingIsProtected) {
     throw new Error(`Conflict with user standard: ${standard.manifest.id}`);
   }
   // Le socle d'usine appartient toujours à l'espace autonome : il ne doit pas

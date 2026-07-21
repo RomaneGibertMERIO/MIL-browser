@@ -143,6 +143,12 @@ export function AssistantPage() {
   const resizingRef = useRef<{ colIdx: number; startX: number; startWidth: number } | null>(null);
   const sideResizingRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
+  // Geste de redimensionnement en cours (voir beginResizeGesture plus bas).
+  const resizeAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    return () => resizeAbortRef.current?.abort();
+  }, []);
+
   useEffect(() => {
     if (columnsRef.current) {
       columnsRef.current.scrollLeft = columnsRef.current.scrollWidth;
@@ -159,47 +165,61 @@ export function AssistantPage() {
     return colWidths[idx] ?? defaultWidth;
   }
 
+  /**
+   * Ouvre un geste de redimensionnement et renvoie son signal d'annulation.
+   *
+   * Voir LibraryPage pour le détail : un `mouseup` survenu hors de la fenêtre
+   * ne se déclenchait jamais, laissant l'écouteur `mousemove` actif à vie.
+   */
+  function beginResizeGesture(): AbortSignal {
+    resizeAbortRef.current?.abort();
+    const controller = new AbortController();
+    resizeAbortRef.current = controller;
+
+    controller.signal.addEventListener("abort", () => {
+      resizingRef.current = null;
+      sideResizingRef.current = null;
+    });
+
+    document.addEventListener("mouseup", () => controller.abort(), { signal: controller.signal });
+    document.addEventListener("mouseleave", () => controller.abort(), { signal: controller.signal });
+
+    return controller.signal;
+  }
+
   function handleResizeStart(e: React.MouseEvent, colIdx: number) {
     e.preventDefault();
     const startWidth = getColWidth(colIdx);
     resizingRef.current = { colIdx, startX: e.clientX, startWidth };
+    const signal = beginResizeGesture();
 
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!resizingRef.current) return;
-      const { colIdx: idx, startX, startWidth: sw } = resizingRef.current;
-      const newWidth = Math.max(120, sw + ev.clientX - startX);
-      setColWidths(prev => ({ ...prev, [idx]: newWidth }));
-    };
-
-    const onMouseUp = () => {
-      resizingRef.current = null;
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
-
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener(
+      "mousemove",
+      (ev: MouseEvent) => {
+        if (ev.buttons === 0) { resizeAbortRef.current?.abort(); return; }
+        if (!resizingRef.current) return;
+        const { colIdx: idx, startX, startWidth: sw } = resizingRef.current;
+        setColWidths(prev => ({ ...prev, [idx]: Math.max(120, sw + ev.clientX - startX) }));
+      },
+      { signal },
+    );
   }
 
   function handleSideResizeStart(e: React.MouseEvent) {
     e.preventDefault();
     sideResizingRef.current = { startX: e.clientX, startWidth: sideWidth };
+    const signal = beginResizeGesture();
 
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!sideResizingRef.current) return;
-      const { startX, startWidth } = sideResizingRef.current;
-      const newWidth = Math.max(280, startWidth - (ev.clientX - startX));
-      setSideWidth(newWidth);
-    };
-
-    const onMouseUp = () => {
-      sideResizingRef.current = null;
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
-
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener(
+      "mousemove",
+      (ev: MouseEvent) => {
+        if (ev.buttons === 0) { resizeAbortRef.current?.abort(); return; }
+        if (!sideResizingRef.current) return;
+        const { startX, startWidth } = sideResizingRef.current;
+        setSideWidth(Math.max(280, startWidth - (ev.clientX - startX)));
+      },
+      { signal },
+    );
   }
 
   function handleStandardChange(id: string) {

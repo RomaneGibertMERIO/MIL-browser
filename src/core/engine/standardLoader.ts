@@ -14,7 +14,7 @@ import { ProfileSchema } from "../domain/profile";
 import { getStandardById, seedBuiltinStandard, upsertStandard } from "../db/repositories/standards.repo";
 import { getProfilesByStandard, seedBuiltinProfile, upsertProfile } from "../db/repositories/profiles.repo";
 import { migrateProfiles } from "./migrationEngine";
-import type { StandardPlugin } from "../domain/standard";
+import { standardWorkspace, type StandardPlugin } from "../domain/standard";
 import builtinDatabase from "./database.json";
 import { assertValidStandard, getProfileIntegrityErrors } from "./dataIntegrity";
 
@@ -98,10 +98,18 @@ async function seedStandards(standardsRaw: unknown[]): Promise<StandardLoadResul
       assertValidStandard(plugin);
       console.log("Validated standard:", plugin.manifest.id);
       const id = plugin.manifest.id;
-      const existing = await getStandardById(id);
-      
-      // Si le standard existe déjà et que l'utilisateur l'a personnalisé (isBuiltin === false)
-      // on ne l'écrase pas avec la version d'usine.
+      const stored = await getStandardById(id);
+
+      // Un enregistrement de l'espace "shared" provient du dépôt central : pour
+      // le semeur, il ne compte PAS comme une version déjà installée du socle.
+      // Sans cette distinction, un poste ayant été branché sur un dépôt Git ne
+      // réinstallait jamais ses normes d'usine en revenant en mode autonome : le
+      // socle était considéré comme "déjà personnalisé" et systématiquement
+      // ignoré, laissant une base quasi vide.
+      const existing =
+        stored !== undefined && standardWorkspace(stored) === "local" ? stored : undefined;
+
+      // Personnalisation faite en mode autonome : on ne l'écrase jamais.
       if (existing !== undefined && !existing.manifest.isBuiltin) {
         results.push({ id, status: "unchanged", message: "User customized version preserved." });
         continue;

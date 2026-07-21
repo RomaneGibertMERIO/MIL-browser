@@ -38,12 +38,29 @@ const ADMINS_FILE = "admins.json";
 /** Marqueurs de refus déposés par l'admin, consommés par les postes clients. */
 const REJECTIONS_SUBDIR = "rejections";
 
+/**
+ * Marqueurs de suppression.
+ *
+ * Supprimer le fichier du dépôt central ne suffit pas à propager une
+ * suppression : les autres postes conservent l'enregistrement dans leur base
+ * locale, et rien ne leur signale sa disparition. Le marqueur porte cette
+ * information, exactement comme pour les refus.
+ */
+const DELETIONS_SUBDIR = "deletions";
+
 export interface RejectionMarker {
   entity: "profile" | "standard";
   id: string;
   rejectedBy: string;
   rejectedAt: string;
   reason: string;
+}
+
+export interface DeletionMarker {
+  entity: "profile" | "standard";
+  id: string;
+  deletedBy: string;
+  deletedAt: string;
 }
 
 export function readAdmins(remoteInput: string): string[] {
@@ -171,9 +188,13 @@ function writeRejectionMarker(centralPath: string, marker: RejectionMarker): voi
   );
 }
 
-export async function pullRepository(
-  remoteInput: string,
-): Promise<{ standards: any[]; profiles: any[]; rejections: RejectionMarker[]; admins: string[] }> {
+export async function pullRepository(remoteInput: string): Promise<{
+  standards: any[];
+  profiles: any[];
+  rejections: RejectionMarker[];
+  deletions: DeletionMarker[];
+  admins: string[];
+}> {
   ensureDirectories(); // 🛡️ Sécurise l'accès aux variables globales de chemin
   await initOrCloneRepository(remoteInput);
 
@@ -200,6 +221,7 @@ export async function pullRepository(
     standards,
     profiles,
     rejections: readRejections(remoteInput),
+    deletions: readDeletions(remoteInput),
     admins: readAdmins(remoteInput),
   };
 }
@@ -211,9 +233,102 @@ export async function pullRepository(
  * resoumis serait de nouveau marqué comme refusé à la synchronisation
  * suivante, puisque le marqueur serait toujours présent.
  */
-function clearRejectionMarker(centralPath: string, entity: "profile" | "standard", id: string): void {
-  const file = path.join(centralPath, REJECTIONS_SUBDIR, `${entity}-${id}.json`);
+function clearMarker(
+  centralPath: string,
+  subDir: string,
+  entity: "profile" | "standard",
+  id: string,
+): void {
+  const file = path.join(centralPath, subDir, `${entity}-${id}.json`);
   if (fs.existsSync(file)) fs.unlinkSync(file);
+}
+
+/**
+ * Efface les marqueurs de refus ET de suppression d'une entité.
+ *
+ * Appelé lors d'une (re)publication : republier annule aussi bien un refus
+ * antérieur qu'une suppression antérieure, sinon les autres postes
+ * re-supprimeraient l'entité aussitôt reçue.
+ *
+ * À ne PAS utiliser depuis la suppression elle-même, qui vient justement
+ * d'écrire son marqueur.
+ */
+function clearRejectionMarker(centralPath: string, entity: "profile" | "standard", id: string): void {
+  clearMarker(centralPath, REJECTIONS_SUBDIR, entity, id);
+  clearMarker(centralPath, DELETIONS_SUBDIR, entity, id);
+}
+
+/** Lit les marqueurs de suppression déposés par les autres postes. */
+export function readDeletions(remoteInput: string): DeletionMarker[] {
+  const dir = path.join(getFsPath(remoteInput), DELETIONS_SUBDIR);
+  if (!fs.existsSync(dir)) return [];
+
+  const markers: DeletionMarker[] = [];
+  for (const file of fs.readdirSync(dir).filter(f => f.endsWith(".json"))) {
+    try {
+      markers.push(JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")));
+    } catch (err) {
+      console.warn(`Marqueur de suppression illisible ignore : ${file}`, err);
+    }
+  }
+  return markers;
+}
+
+/**
+ * Supprime une entité du dépôt central et signale la suppression aux autres
+ * postes via un marqueur.
+ *
+ * Le marqueur est écrit AVANT la suppression : si l'écriture échoue, le fichier
+ * reste en place plutôt que de disparaître sans que personne n'en soit informé.
+ */
+async function deleteEntityFromGit(
+  remoteInput: string,
+  username: string,
+  entity: "profile" | "standard",
+  id: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    ensureDirectories();
+    await initOrCloneRepository(remoteInput);
+    const centralPath = getFsPath(remoteInput);
+
+    const subDir = entity === "profile" ? "profiles" : "standards";
+    const fileName = `${entity}-${id}.json`;
+
+    const markerDir = path.join(centralPath, DELETIONS_SUBDIR);
+    if (!fs.existsSync(markerDir)) fs.mkdirSync(markerDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(markerDir, fileName),
+      JSON.stringify(
+        { entity, id, deletedBy: username, deletedAt: new Date().toISOString() },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const centralFile = path.join(centralPath, subDir, fileName);
+    const localFile = path.join(WORKSPACE_DIR, subDir, fileName);
+    if (fs.existsSync(centralFile)) fs.unlinkSync(centralFile);
+    if (fs.existsSync(localFile)) fs.unlinkSync(localFile);
+
+    // Une entité supprimée n'a plus de refus en attente. On ne touche PAS au
+    // marqueur de suppression écrit juste au-dessus.
+    clearMarker(centralPath, REJECTIONS_SUBDIR, entity, id);
+
+    return { success: true };
+  } catch (error: any) {
+    console.error(`Erreur deleteEntityFromGit (${entity} ${id}) :`, error);
+    return { success: false, error: error.message };
+  }
+}
+
+export function deleteProfileFromGit(remoteInput: string, username: string, profileId: string) {
+  return deleteEntityFromGit(remoteInput, username, "profile", profileId);
+}
+
+export function deleteStandardFromGit(remoteInput: string, username: string, standardId: string) {
+  return deleteEntityFromGit(remoteInput, username, "standard", standardId);
 }
 
 /**

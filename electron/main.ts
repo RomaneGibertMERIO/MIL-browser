@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain } from "electron";
 import path from "path";
-import os from "os"; 
+import os from "os";
+import fs from "fs";
 import {
   initOrCloneRepository,
   pullRepository,
@@ -11,7 +12,9 @@ import {
   rejectProfileInGit,
   rejectStandardInGit,
   readAdmins,
-  isAdminUser
+  isAdminUser,
+  deleteProfileFromGit,
+  deleteStandardFromGit
 } from "./gitService";
 
 /**
@@ -36,6 +39,49 @@ function assertAdmin(repoPath: string): { success: false; error: string } | null
   };
 }
 
+/**
+ * Journalise la console du renderer dans un fichier.
+ *
+ * Sur un poste de laboratoire, ouvrir les DevTools n'est pas toujours possible
+ * ni pratique. Ce journal donne une trace exploitable après coup : sans lui,
+ * un `console.error` survenu en production est définitivement perdu.
+ *
+ * Fichier : %APPDATA%/mil-browser/logs/renderer.log (tronqué à 2 Mo).
+ */
+function attachRendererLog(win: BrowserWindow): void {
+  const logDir = path.join(app.getPath("userData"), "logs");
+  const logFile = path.join(logDir, "renderer.log");
+
+  try {
+    fs.mkdirSync(logDir, { recursive: true });
+    // Rotation naïve : au-delà de 2 Mo on repart de zéro, pour ne jamais
+    // saturer le disque d'un poste laissé allumé des semaines.
+    if (fs.existsSync(logFile) && fs.statSync(logFile).size > 2 * 1024 * 1024) {
+      fs.writeFileSync(logFile, "", "utf8");
+    }
+    fs.appendFileSync(logFile, `\n===== Session ${new Date().toISOString()} =====\n`, "utf8");
+  } catch (err) {
+    console.error("Journal du renderer indisponible :", err);
+    return;
+  }
+
+  const LEVELS = ["VERBOSE", "INFO", "WARN", "ERROR"];
+
+  win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    try {
+      const label = LEVELS[level] ?? String(level);
+      const source = sourceId ? `${sourceId}:${line}` : "";
+      fs.appendFileSync(
+        logFile,
+        `[${new Date().toISOString()}] ${label} ${message}${source ? `  (${source})` : ""}\n`,
+        "utf8",
+      );
+    } catch {
+      // Un échec d'écriture du journal ne doit jamais perturber l'application.
+    }
+  });
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1400,
@@ -49,9 +95,22 @@ function createWindow() {
     },
   });
 
-  // Activer le raccourci globalement pour ouvrir la console avec F12 ou Ctrl+Shift+I
+  attachRendererLog(win);
+
+  // Ouverture de la console avec F12 ou Ctrl+Shift+I.
+  //
+  // `before-input-event` se déclenche pour CHAQUE événement clavier, donc deux
+  // fois par appui (keyDown puis keyUp). Sans le filtre ci-dessous, la console
+  // s'ouvrait puis se refermait immédiatement : le raccourci semblait mort.
+  // En développement le bug passait inaperçu, la console étant ouverte
+  // automatiquement plus bas.
   win.webContents.on("before-input-event", (event: any, input: any) => {
-    if (input.key === "F12" || (input.control && input.shift && input.key.toLowerCase() === "i")) {
+    if (input.type !== "keyDown") return;
+
+    const key = typeof input.key === "string" ? input.key.toLowerCase() : "";
+    const isDevToolsShortcut = key === "f12" || (input.control && input.shift && key === "i");
+
+    if (isDevToolsShortcut) {
       win.webContents.toggleDevTools();
       event.preventDefault();
     }
@@ -120,12 +179,13 @@ ipcMain.handle("git:sync", async (_event, username: string) => {
     if (!activeRemotePath) {
       return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
     }
-    const { standards, profiles, rejections, admins } = await pullRepository(activeRemotePath);
+    const { standards, profiles, rejections, deletions, admins } = await pullRepository(activeRemotePath);
     return {
       success: true,
       pulledProfiles: profiles,
       pulledStandards: standards,
       rejections,
+      deletions,
       admins,
       currentUser: currentUser(),
       isAdmin: isAdminUser(activeRemotePath, currentUser()),
@@ -145,6 +205,32 @@ ipcMain.handle("git:submit-profile", async (_event, { username, profile }) => {
     return { success: true };
   } catch (error: any) {
     console.error("Erreur git:submit-profile:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("git:delete-profile", async (_event, profileId: string) => {
+  try {
+    if (!activeRemotePath) {
+      return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
+    }
+    return await deleteProfileFromGit(activeRemotePath, currentUser(), profileId);
+  } catch (error: any) {
+    console.error("Erreur git:delete-profile:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("git:delete-standard", async (_event, payload) => {
+  try {
+    const { repoPath, standardId } = payload;
+    const targetPath = repoPath || activeRemotePath;
+    if (!targetPath) {
+      return { success: false, error: "Aucun dépôt Git configuré." };
+    }
+    return await deleteStandardFromGit(targetPath, currentUser(), standardId);
+  } catch (error: any) {
+    console.error("Erreur git:delete-standard:", error);
     return { success: false, error: error.message };
   }
 });

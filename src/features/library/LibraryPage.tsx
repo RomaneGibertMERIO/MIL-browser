@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import type { Profile, ProfileDraft } from "../../core/domain/profile";
 import { ProfileSchema } from "../../core/domain/profile";
 import type { StandardPlugin, ProfileDefinition } from "../../core/domain/standard";
@@ -39,6 +39,17 @@ export function LibraryPage({ standard }: LibraryPageProps) {
   // Largeurs dynamiques des panneaux (Drag-to-resize)
   const [leftWidth, setLeftWidth] = useState(288); // 72 en Tailwind = 288px
   const [rightWidth, setRightWidth] = useState(320); // 80 en Tailwind = 320px
+
+  // Geste de redimensionnement en cours. Avorter le contrôleur retire d'un coup
+  // tous les écouteurs du geste, où qu'il se termine.
+  const resizeAbortRef = useRef<AbortController | null>(null);
+
+  // Filet de sécurité : si le composant est démonté pendant un glissement
+  // (changement de vue en pleine action), les écouteurs globaux doivent partir
+  // avec lui, sans quoi ils continuent d'appeler setState sur un composant mort.
+  useEffect(() => {
+    return () => resizeAbortRef.current?.abort();
+  }, []);
 
   // Live preview & validation
   const [previewDraft, setPreviewDraft] = useState<ProfileDraft | null>(null);
@@ -105,39 +116,52 @@ export function LibraryPage({ standard }: LibraryPageProps) {
     return true;
   }
 
-  // Resizer de gauche
-  function startResizeLeft(e: React.MouseEvent) {
+  /**
+   * Redimensionnement d'un panneau latéral.
+   *
+   * Les écouteurs sont retirés via un AbortController plutôt qu'à la main dans
+   * `mouseup`. Motif : si le bouton est relâché HORS de la fenêtre — cas très
+   * fréquent en tirant une poignée jusqu'au bord — l'ancien `mouseup` ne se
+   * déclenchait jamais. L'écouteur `mousemove` restait alors actif à vie et
+   * redimensionnait le panneau à chaque déplacement de souris, rendant
+   * l'interface inutilisable jusqu'au redémarrage.
+   *
+   * `mouseleave` sur le document ferme aussi le geste, et le signal est avorté
+   * au démontage du composant (voir l'effet plus bas).
+   */
+  function startResize(e: React.MouseEvent, side: "left" | "right") {
     e.preventDefault();
+
     const startX = e.clientX;
-    const startWidth = leftWidth;
+    const startWidth = side === "left" ? leftWidth : rightWidth;
+
+    resizeAbortRef.current?.abort();
+    const controller = new AbortController();
+    resizeAbortRef.current = controller;
+    const { signal } = controller;
+
     function doResize(moveEvent: MouseEvent) {
-      const newWidth = startWidth + (moveEvent.clientX - startX);
-      if (newWidth > 200 && newWidth < 500) setLeftWidth(newWidth);
+      // Le bouton n'est plus enfoncé (relâché hors fenêtre) : on arrête.
+      if (moveEvent.buttons === 0) {
+        controller.abort();
+        return;
+      }
+      const delta = moveEvent.clientX - startX;
+      const newWidth = side === "left" ? startWidth + delta : startWidth - delta;
+      const [min, max] = side === "left" ? [200, 500] : [240, 600];
+      if (newWidth > min && newWidth < max) {
+        if (side === "left") setLeftWidth(newWidth);
+        else setRightWidth(newWidth);
+      }
     }
-    function stopResize() {
-      window.removeEventListener("mousemove", doResize);
-      window.removeEventListener("mouseup", stopResize);
-    }
-    window.addEventListener("mousemove", doResize);
-    window.addEventListener("mouseup", stopResize);
+
+    window.addEventListener("mousemove", doResize, { signal });
+    window.addEventListener("mouseup", () => controller.abort(), { signal });
+    document.addEventListener("mouseleave", () => controller.abort(), { signal });
   }
 
-  // Resizer de droite
-  function startResizeRight(e: React.MouseEvent) {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = rightWidth;
-    function doResize(moveEvent: MouseEvent) {
-      const newWidth = startWidth - (moveEvent.clientX - startX);
-      if (newWidth > 240 && newWidth < 600) setRightWidth(newWidth);
-    }
-    function stopResize() {
-      window.removeEventListener("mousemove", doResize);
-      window.removeEventListener("mouseup", stopResize);
-    }
-    window.addEventListener("mousemove", doResize);
-    window.addEventListener("mouseup", stopResize);
-  }
+  const startResizeLeft = (e: React.MouseEvent) => startResize(e, "left");
+  const startResizeRight = (e: React.MouseEvent) => startResize(e, "right");
 
   // Actions
   function resetEditorState() {
