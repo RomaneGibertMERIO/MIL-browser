@@ -29,8 +29,8 @@ function currentUser(): string {
 }
 
 /** Refuse l'opération si l'utilisateur courant n'est pas administrateur. */
-function assertAdmin(repoPath: string): { success: false; error: string } | null {
-  if (isAdminUser(repoPath, currentUser())) return null;
+async function assertAdmin(repoPath: string): Promise<{ success: false; error: string } | null> {
+  if (await isAdminUser(repoPath, currentUser())) return null;
   return {
     success: false,
     error:
@@ -150,12 +150,14 @@ ipcMain.handle("git:get-admins", async (_event, repoPath?: string) => {
   if (!targetPath) {
     return { success: false, error: "Aucun dépôt Git configuré." };
   }
-  const admins = readAdmins(targetPath);
+  const admins = await readAdmins(targetPath);
   return {
     success: true,
     admins,
     currentUser: currentUser(),
-    isAdmin: isAdminUser(targetPath, currentUser()),
+    isAdmin: admins.length === 0 || admins.some(
+      (a) => a.trim().toLowerCase() === currentUser().trim().toLowerCase(),
+    ),
     // Vrai quand admins.json est absent/vide : l'accès est alors ouvert à tous.
     unrestricted: admins.length === 0,
   };
@@ -188,7 +190,7 @@ ipcMain.handle("git:sync", async (_event, username: string) => {
       deletions,
       admins,
       currentUser: currentUser(),
-      isAdmin: isAdminUser(activeRemotePath, currentUser()),
+      isAdmin: await isAdminUser(activeRemotePath, currentUser()),
     };
   } catch (error: any) {
     console.error("Erreur git:sync:", error);
@@ -240,7 +242,7 @@ ipcMain.handle("git:approve-profile", async (_event, profileId: string) => {
     if (!activeRemotePath) {
       return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
     }
-    const denied = assertAdmin(activeRemotePath);
+    const denied = await assertAdmin(activeRemotePath);
     if (denied) return denied;
     return await approveProfileInGit(activeRemotePath, currentUser(), profileId);
   } catch (error: any) {
@@ -275,7 +277,7 @@ ipcMain.handle("git:approve-standard", async (_event, payload) => {
       return { success: false, error: "Aucun dépôt Git configuré." };
     }
 
-    const denied = assertAdmin(targetPath);
+    const denied = await assertAdmin(targetPath);
     if (denied) return denied;
     return await approveStandardInGit(targetPath, currentUser(), standardId);
   } catch (error: any) {
@@ -290,7 +292,7 @@ ipcMain.handle("git:reject-profile", async (_event, payload) => {
     if (!activeRemotePath) {
       return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
     }
-    const denied = assertAdmin(activeRemotePath);
+    const denied = await assertAdmin(activeRemotePath);
     if (denied) return denied;
     return await rejectProfileInGit(activeRemotePath, currentUser(), profileId, reason ?? "");
   } catch (error: any) {
@@ -308,7 +310,7 @@ ipcMain.handle("git:reject-standard", async (_event, payload) => {
       return { success: false, error: "Aucun dépôt Git configuré." };
     }
 
-    const denied = assertAdmin(targetPath);
+    const denied = await assertAdmin(targetPath);
     if (denied) return denied;
     return await rejectStandardInGit(targetPath, currentUser(), standardId, reason ?? "");
   } catch (error: any) {

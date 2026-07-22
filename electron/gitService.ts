@@ -3,12 +3,48 @@ import * as path from "path";
 import * as git from "isomorphic-git";
 import { app } from "electron";
 
+/**
+ * ⚠️ RÈGLE ABSOLUE DE CE MODULE : aucune E/S synchrone.
+ *
+ * Ce service lit et écrit sur un PARTAGE RÉSEAU. Un `readFileSync` ou un
+ * `copyFileSync` sur un lecteur lent ou momentanément injoignable bloque la
+ * boucle d'événements du processus principal — et un processus principal
+ * bloqué ne traite plus les messages de la fenêtre : l'application entière
+ * devient insensible au clavier ET à la souris, jusqu'à expiration du délai
+ * SMB (souvent 30 à 60 secondes). C'était la cause des "zones de saisie
+ * figées" : le symptôme survivait à un rechargement du renderer, précisément
+ * parce qu'il ne venait pas du renderer.
+ *
+ * Toute E/S passe donc par `fsp` (fs.promises). N'introduisez jamais de
+ * variante `...Sync` ici.
+ */
+const fsp = fs.promises;
+
 // 🛡️ Déclarées en variables globales pour être partagées, mais évaluées au bon moment
 let WORKSPACE_DIR: string;
 let PROFILES_DIR: string;
 let STANDARDS_DIR: string;
 
-function ensureDirectories(baseDir?: string) {
+/** Existence d'un chemin, sans jamais bloquer la boucle d'événements. */
+async function exists(target: string): Promise<boolean> {
+  try {
+    await fsp.access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Liste les fichiers .json d'un dossier ; tableau vide s'il est illisible. */
+async function listJson(dir: string): Promise<string[]> {
+  try {
+    return (await fsp.readdir(dir)).filter((f) => f.endsWith(".json"));
+  } catch {
+    return [];
+  }
+}
+
+async function ensureDirectories(baseDir?: string): Promise<void> {
   // Initialisation sécurisée uniquement lors du premier appel de fonction
   if (!WORKSPACE_DIR) {
     WORKSPACE_DIR = path.join(app.getPath("userData"), "git-workspace");
@@ -17,12 +53,10 @@ function ensureDirectories(baseDir?: string) {
   }
 
   const targetBase = baseDir || WORKSPACE_DIR;
-  const profs = path.join(targetBase, "profiles");
-  const stds = path.join(targetBase, "standards");
-  
-  if (!fs.existsSync(targetBase)) fs.mkdirSync(targetBase, { recursive: true });
-  if (!fs.existsSync(profs)) fs.mkdirSync(profs, { recursive: true });
-  if (!fs.existsSync(stds)) fs.mkdirSync(stds, { recursive: true });
+
+  await fsp.mkdir(targetBase, { recursive: true });
+  await fsp.mkdir(path.join(targetBase, "profiles"), { recursive: true });
+  await fsp.mkdir(path.join(targetBase, "standards"), { recursive: true });
 }
 
 /**
@@ -63,23 +97,22 @@ export interface DeletionMarker {
   deletedAt: string;
 }
 
-export function readAdmins(remoteInput: string): string[] {
+export async function readAdmins(remoteInput: string): Promise<string[]> {
   try {
     const file = path.join(getFsPath(remoteInput), ADMINS_FILE);
-    if (!fs.existsSync(file)) return [];
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    const parsed = JSON.parse(await fsp.readFile(file, "utf8"));
     const list = Array.isArray(parsed) ? parsed : parsed?.admins;
     if (!Array.isArray(list)) return [];
     return list.filter((entry: unknown): entry is string => typeof entry === "string");
-  } catch (err) {
-    console.warn("Lecture de admins.json impossible, acces ouvert par defaut :", err);
+  } catch {
+    // Fichier absent, illisible ou partage injoignable : accès ouvert par défaut.
     return [];
   }
 }
 
 /** Comparaison insensible à la casse : les noms de session Windows varient. */
-export function isAdminUser(remoteInput: string, username: string): boolean {
-  const admins = readAdmins(remoteInput);
+export async function isAdminUser(remoteInput: string, username: string): Promise<boolean> {
+  const admins = await readAdmins(remoteInput);
   if (admins.length === 0) return true;
   return admins.some((a) => a.trim().toLowerCase() === username.trim().toLowerCase());
 }
@@ -95,46 +128,77 @@ function getFsPath(remoteInput: string): string {
 /**
  * Synchronise les fichiers du dépôt central vers le workspace local (Simule le Pull)
  */
-export async function initOrCloneRepository(remoteInput: string): Promise<void> {
-  ensureDirectories();
-  
+/**
+ * Sérialise et déduplique les synchronisations.
+ *
+ * `submitCommit` pousse N entités, et chaque envoi relançait une copie
+ * intégrale du dépôt : sur un partage réseau, N synchronisations complètes en
+ * rafale. On réutilise donc la synchronisation en cours, et on n'en relance pas
+ * une si la précédente date de moins de 3 secondes.
+ */
+let syncInFlight: Promise<void> | null = null;
+let lastSyncAt = 0;
+const SYNC_TTL_MS = 3000;
+
+export function initOrCloneRepository(remoteInput: string): Promise<void> {
   if (!remoteInput || remoteInput.trim() === "") {
-    throw new Error("Aucun chemin de dépôt central réseau n'est configuré.");
+    return Promise.reject(new Error("Aucun chemin de dépôt central réseau n'est configuré."));
   }
 
+  if (syncInFlight) return syncInFlight;
+  if (Date.now() - lastSyncAt < SYNC_TTL_MS) return Promise.resolve();
+
+  syncInFlight = doSync(remoteInput).finally(() => {
+    syncInFlight = null;
+    lastSyncAt = Date.now();
+  });
+
+  return syncInFlight;
+}
+
+/** Force une synchronisation, en ignorant le cache court ci-dessus. */
+export function forceSync(remoteInput: string): Promise<void> {
+  lastSyncAt = 0;
+  return initOrCloneRepository(remoteInput);
+}
+
+async function doSync(remoteInput: string): Promise<void> {
+  await ensureDirectories();
+
   const centralPath = getFsPath(remoteInput);
-  ensureDirectories(centralPath);
+  await ensureDirectories(centralPath);
 
   // Initialisation du Git local s'il n'existe pas pour garder l'arborescence propre
-  const isGitRepo = fs.existsSync(path.join(WORKSPACE_DIR, ".git"));
-  if (!isGitRepo) {
+  if (!(await exists(path.join(WORKSPACE_DIR, ".git")))) {
     await git.init({ fs, dir: WORKSPACE_DIR });
   }
 
   // PULL SIMULÉ : Copie les fichiers du dépôt central vers le local s'ils sont plus récents
-  const subDirs = ["standards", "profiles"];
-  for (const sub of subDirs) {
+  for (const sub of ["standards", "profiles"]) {
     const centralSub = path.join(centralPath, sub);
     const localSub = path.join(WORKSPACE_DIR, sub);
 
-    if (!fs.existsSync(centralSub)) continue;
+    if (!(await exists(centralSub))) continue;
 
-    const files = fs.readdirSync(centralSub).filter(f => f.endsWith(".json"));
-    for (const file of files) {
-      const src = path.join(centralSub, file);
-      const dest = path.join(localSub, file);
+    const files = await listJson(centralSub);
 
-      let shouldCopy = true;
-      if (fs.existsSync(dest)) {
-        const srcStat = fs.statSync(src);
-        const destStat = fs.statSync(dest);
-        if (srcStat.mtimeMs <= destStat.mtimeMs) shouldCopy = false;
-      }
+    await Promise.all(
+      files.map(async (file) => {
+        const src = path.join(centralSub, file);
+        const dest = path.join(localSub, file);
 
-      if (shouldCopy) {
-        fs.copyFileSync(src, dest);
-      }
-    }
+        try {
+          const [srcStat, destStat] = await Promise.all([
+            fsp.stat(src),
+            fsp.stat(dest).catch(() => null),
+          ]);
+          if (destStat && srcStat.mtimeMs <= destStat.mtimeMs) return;
+          await fsp.copyFile(src, dest);
+        } catch (err) {
+          console.warn(`Copie impossible pour ${file} :`, err);
+        }
+      }),
+    );
 
     // PURGE : supprime du workspace local ce qui n'existe plus côté central.
     // Sans cela, pullRepository (qui lit le workspace, pas le central) faisait
@@ -146,29 +210,37 @@ export async function initOrCloneRepository(remoteInput: string): Promise<void> 
     if (files.length === 0) continue;
 
     const centralNames = new Set(files);
-    for (const localFile of fs.readdirSync(localSub).filter(f => f.endsWith(".json"))) {
+    for (const localFile of await listJson(localSub)) {
       if (!centralNames.has(localFile)) {
-        fs.unlinkSync(path.join(localSub, localFile));
+        await fsp.unlink(path.join(localSub, localFile)).catch(() => undefined);
         console.log(`Workspace purge : ${localFile} n'existe plus dans le depot central.`);
       }
     }
   }
 }
 
-/** Lit les marqueurs de refus déposés par l'administrateur. */
-export function readRejections(remoteInput: string): RejectionMarker[] {
-  const dir = path.join(getFsPath(remoteInput), REJECTIONS_SUBDIR);
-  if (!fs.existsSync(dir)) return [];
+/** Lit tous les marqueurs JSON d'un sous-dossier du dépôt central. */
+async function readMarkers<T>(remoteInput: string, subDir: string): Promise<T[]> {
+  const dir = path.join(getFsPath(remoteInput), subDir);
+  const files = await listJson(dir);
 
-  const markers: RejectionMarker[] = [];
-  for (const file of fs.readdirSync(dir).filter(f => f.endsWith(".json"))) {
-    try {
-      markers.push(JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")));
-    } catch (err) {
-      console.warn(`Marqueur de refus illisible ignore : ${file}`, err);
-    }
-  }
-  return markers;
+  const parsed = await Promise.all(
+    files.map(async (file) => {
+      try {
+        return JSON.parse(await fsp.readFile(path.join(dir, file), "utf8")) as T;
+      } catch (err) {
+        console.warn(`Marqueur illisible ignore : ${subDir}/${file}`, err);
+        return null;
+      }
+    }),
+  );
+
+  return parsed.filter((m): m is T => m !== null);
+}
+
+/** Lit les marqueurs de refus déposés par l'administrateur. */
+export function readRejections(remoteInput: string): Promise<RejectionMarker[]> {
+  return readMarkers<RejectionMarker>(remoteInput, REJECTIONS_SUBDIR);
 }
 
 /**
@@ -178,10 +250,10 @@ export function readRejections(remoteInput: string): RejectionMarker[] {
  * transporte aucune information : l'auteur ne saurait jamais que sa proposition
  * a été refusée, ni pourquoi.
  */
-function writeRejectionMarker(centralPath: string, marker: RejectionMarker): void {
+async function writeRejectionMarker(centralPath: string, marker: RejectionMarker): Promise<void> {
   const dir = path.join(centralPath, REJECTIONS_SUBDIR);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
+  await fsp.mkdir(dir, { recursive: true });
+  await fsp.writeFile(
     path.join(dir, `${marker.entity}-${marker.id}.json`),
     JSON.stringify(marker, null, 2),
     "utf8",
@@ -195,35 +267,35 @@ export async function pullRepository(remoteInput: string): Promise<{
   deletions: DeletionMarker[];
   admins: string[];
 }> {
-  ensureDirectories(); // 🛡️ Sécurise l'accès aux variables globales de chemin
-  await initOrCloneRepository(remoteInput);
+  await ensureDirectories(); // 🛡️ Sécurise l'accès aux variables globales de chemin
+  await forceSync(remoteInput);
 
-  const standards: any[] = [];
-  const profiles: any[] = [];
-
-  if (fs.existsSync(STANDARDS_DIR)) {
-    const files = fs.readdirSync(STANDARDS_DIR).filter(f => f.endsWith(".json"));
-    for (const file of files) {
-      const data = fs.readFileSync(path.join(STANDARDS_DIR, file), "utf8");
-      standards.push(JSON.parse(data));
-    }
+  // Le workspace est local (userData) : lecture rapide, mais on reste en async
+  // par cohérence et pour ne jamais bloquer sur un disque lent.
+  async function readAll(dir: string): Promise<any[]> {
+    const files = await listJson(dir);
+    const parsed = await Promise.all(
+      files.map(async (file) => {
+        try {
+          return JSON.parse(await fsp.readFile(path.join(dir, file), "utf8"));
+        } catch (err) {
+          console.warn(`Enregistrement illisible ignore : ${file}`, err);
+          return null;
+        }
+      }),
+    );
+    return parsed.filter((entry) => entry !== null);
   }
 
-  if (fs.existsSync(PROFILES_DIR)) {
-    const files = fs.readdirSync(PROFILES_DIR).filter(f => f.endsWith(".json"));
-    for (const file of files) {
-      const data = fs.readFileSync(path.join(PROFILES_DIR, file), "utf8");
-      profiles.push(JSON.parse(data));
-    }
-  }
+  const [standards, profiles, rejections, deletions, admins] = await Promise.all([
+    readAll(STANDARDS_DIR),
+    readAll(PROFILES_DIR),
+    readRejections(remoteInput),
+    readDeletions(remoteInput),
+    readAdmins(remoteInput),
+  ]);
 
-  return {
-    standards,
-    profiles,
-    rejections: readRejections(remoteInput),
-    deletions: readDeletions(remoteInput),
-    admins: readAdmins(remoteInput),
-  };
+  return { standards, profiles, rejections, deletions, admins };
 }
 
 /**
@@ -233,14 +305,14 @@ export async function pullRepository(remoteInput: string): Promise<{
  * resoumis serait de nouveau marqué comme refusé à la synchronisation
  * suivante, puisque le marqueur serait toujours présent.
  */
-function clearMarker(
+async function clearMarker(
   centralPath: string,
   subDir: string,
   entity: "profile" | "standard",
   id: string,
-): void {
+): Promise<void> {
   const file = path.join(centralPath, subDir, `${entity}-${id}.json`);
-  if (fs.existsSync(file)) fs.unlinkSync(file);
+  await fsp.unlink(file).catch(() => undefined);
 }
 
 /**
@@ -253,25 +325,18 @@ function clearMarker(
  * À ne PAS utiliser depuis la suppression elle-même, qui vient justement
  * d'écrire son marqueur.
  */
-function clearRejectionMarker(centralPath: string, entity: "profile" | "standard", id: string): void {
-  clearMarker(centralPath, REJECTIONS_SUBDIR, entity, id);
-  clearMarker(centralPath, DELETIONS_SUBDIR, entity, id);
+async function clearRejectionMarker(
+  centralPath: string,
+  entity: "profile" | "standard",
+  id: string,
+): Promise<void> {
+  await clearMarker(centralPath, REJECTIONS_SUBDIR, entity, id);
+  await clearMarker(centralPath, DELETIONS_SUBDIR, entity, id);
 }
 
 /** Lit les marqueurs de suppression déposés par les autres postes. */
-export function readDeletions(remoteInput: string): DeletionMarker[] {
-  const dir = path.join(getFsPath(remoteInput), DELETIONS_SUBDIR);
-  if (!fs.existsSync(dir)) return [];
-
-  const markers: DeletionMarker[] = [];
-  for (const file of fs.readdirSync(dir).filter(f => f.endsWith(".json"))) {
-    try {
-      markers.push(JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")));
-    } catch (err) {
-      console.warn(`Marqueur de suppression illisible ignore : ${file}`, err);
-    }
-  }
-  return markers;
+export function readDeletions(remoteInput: string): Promise<DeletionMarker[]> {
+  return readMarkers<DeletionMarker>(remoteInput, DELETIONS_SUBDIR);
 }
 
 /**
@@ -288,7 +353,7 @@ async function deleteEntityFromGit(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    ensureDirectories();
+    await ensureDirectories();
     await initOrCloneRepository(remoteInput);
     const centralPath = getFsPath(remoteInput);
 
@@ -296,8 +361,8 @@ async function deleteEntityFromGit(
     const fileName = `${entity}-${id}.json`;
 
     const markerDir = path.join(centralPath, DELETIONS_SUBDIR);
-    if (!fs.existsSync(markerDir)) fs.mkdirSync(markerDir, { recursive: true });
-    fs.writeFileSync(
+    await fsp.mkdir(markerDir, { recursive: true });
+    await fsp.writeFile(
       path.join(markerDir, fileName),
       JSON.stringify(
         { entity, id, deletedBy: username, deletedAt: new Date().toISOString() },
@@ -309,12 +374,12 @@ async function deleteEntityFromGit(
 
     const centralFile = path.join(centralPath, subDir, fileName);
     const localFile = path.join(WORKSPACE_DIR, subDir, fileName);
-    if (fs.existsSync(centralFile)) fs.unlinkSync(centralFile);
-    if (fs.existsSync(localFile)) fs.unlinkSync(localFile);
+    await fsp.unlink(centralFile).catch(() => undefined);
+    await fsp.unlink(localFile).catch(() => undefined);
 
     // Une entité supprimée n'a plus de refus en attente. On ne touche PAS au
     // marqueur de suppression écrit juste au-dessus.
-    clearMarker(centralPath, REJECTIONS_SUBDIR, entity, id);
+    await clearMarker(centralPath, REJECTIONS_SUBDIR, entity, id);
 
     return { success: true };
   } catch (error: any) {
@@ -335,7 +400,7 @@ export function deleteStandardFromGit(remoteInput: string, username: string, sta
  * Pousse le fichier vers le dépôt central commun (Simule le Push réseau)
  */
 export async function submitProfileToGit(remoteInput: string, username: string, profile: any): Promise<void> {
-  ensureDirectories();
+  await ensureDirectories();
   await initOrCloneRepository(remoteInput);
   const centralPath = getFsPath(remoteInput);
 
@@ -350,7 +415,7 @@ export async function submitProfileToGit(remoteInput: string, username: string, 
   
   // 1. Écriture locale (Workspace)
   const localPath = path.join(PROFILES_DIR, fileName);
-  fs.writeFileSync(localPath, JSON.stringify(profileToSave, null, 2), "utf8");
+  await fsp.writeFile(localPath, JSON.stringify(profileToSave, null, 2), "utf8");
 
   // Versionning local pour suivi historique
   try {
@@ -368,36 +433,36 @@ export async function submitProfileToGit(remoteInput: string, username: string, 
 
   // 2. PUSH SIMULÉ : Copie directe et sécurisée du JSON vers le dépôt central partagé
   const centralProfilesDir = path.join(centralPath, "profiles");
-  if (!fs.existsSync(centralProfilesDir)) fs.mkdirSync(centralProfilesDir, { recursive: true });
-  
+  await fsp.mkdir(centralProfilesDir, { recursive: true });
+
   const centralDestPath = path.join(centralProfilesDir, fileName);
-  fs.writeFileSync(centralDestPath, JSON.stringify(profileToSave, null, 2), "utf8");
+  await fsp.writeFile(centralDestPath, JSON.stringify(profileToSave, null, 2), "utf8");
 
   // Resoumission : le refus précédent ne s'applique plus.
-  clearRejectionMarker(centralPath, "profile", profile.id);
+  await clearRejectionMarker(centralPath, "profile", profile.id);
 
   console.log(`Fichier synchronisé avec succès vers le dépôt central : ${centralDestPath}`);
 }
 
 export async function approveProfileInGit(remoteInput: string, adminUsername: string, profileId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    ensureDirectories();
+    await ensureDirectories();
     await initOrCloneRepository(remoteInput);
     const centralPath = getFsPath(remoteInput);
 
     const fileName = `profile-${profileId}.json`;
     const localPath = path.join(PROFILES_DIR, fileName);
 
-    if (!fs.existsSync(localPath)) {
+    if (!(await exists(localPath))) {
       throw new Error(`Impossible de trouver la proposition locale pour l'ID : ${profileId}`);
     }
 
-    const profile = JSON.parse(fs.readFileSync(localPath, "utf8"));
+    const profile = JSON.parse(await fsp.readFile(localPath, "utf8"));
     profile.status = "approved";
     profile.updatedAt = new Date().toISOString();
 
     // 1. Sauvegarde locale
-    fs.writeFileSync(localPath, JSON.stringify(profile, null, 2), "utf8");
+    await fsp.writeFile(localPath, JSON.stringify(profile, null, 2), "utf8");
     
     try {
       const relativePath = path.join("profiles", fileName).replace(/\\/g, "/");
@@ -412,7 +477,8 @@ export async function approveProfileInGit(remoteInput: string, adminUsername: st
 
     // 2. Envoi vers le dépôt central
     const centralDestPath = path.join(centralPath, "profiles", fileName);
-    fs.writeFileSync(centralDestPath, JSON.stringify(profile, null, 2), "utf8");
+    await fsp.mkdir(path.dirname(centralDestPath), { recursive: true });
+    await fsp.writeFile(centralDestPath, JSON.stringify(profile, null, 2), "utf8");
 
     return { success: true };
   } catch (error: any) {
@@ -431,7 +497,7 @@ export async function rejectProfileInGit(
   reason: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    ensureDirectories();
+    await ensureDirectories();
     await initOrCloneRepository(remoteInput);
     const centralPath = getFsPath(remoteInput);
 
@@ -441,7 +507,7 @@ export async function rejectProfileInGit(
 
     // 1. Marqueur de refus AVANT suppression : si l'écriture échoue, la
     //    proposition reste en place plutôt que de disparaître sans trace.
-    writeRejectionMarker(centralPath, {
+    await writeRejectionMarker(centralPath, {
       entity: "profile",
       id: profileId,
       rejectedBy: adminUsername,
@@ -450,8 +516,8 @@ export async function rejectProfileInGit(
     });
 
     // 2. Retire la proposition du dépôt central et du workspace local
-    if (fs.existsSync(centralPathFile)) fs.unlinkSync(centralPathFile);
-    if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+    await fsp.unlink(centralPathFile).catch(() => undefined);
+    await fsp.unlink(localPath).catch(() => undefined);
 
     return { success: true };
   } catch (error: any) {
@@ -465,23 +531,23 @@ export async function rejectProfileInGit(
  */
 export async function approveStandardInGit(remoteInput: string, adminUsername: string, standardId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    ensureDirectories();
+    await ensureDirectories();
     await initOrCloneRepository(remoteInput);
     const centralPath = getFsPath(remoteInput);
 
     const fileName = `standard-${standardId}.json`;
     const localPath = path.join(STANDARDS_DIR, fileName);
 
-    if (!fs.existsSync(localPath)) {
+    if (!(await exists(localPath))) {
       throw new Error(`Impossible de trouver le standard local pour l'ID : ${standardId}`);
     }
 
-    const standard = JSON.parse(fs.readFileSync(localPath, "utf8"));
+    const standard = JSON.parse(await fsp.readFile(localPath, "utf8"));
     standard.status = "approved";
     standard.updatedAt = new Date().toISOString();
 
     // 1. Sauvegarde locale
-    fs.writeFileSync(localPath, JSON.stringify(standard, null, 2), "utf8");
+    await fsp.writeFile(localPath, JSON.stringify(standard, null, 2), "utf8");
     
     try {
       const relativePath = path.join("standards", fileName).replace(/\\/g, "/");
@@ -496,7 +562,8 @@ export async function approveStandardInGit(remoteInput: string, adminUsername: s
 
     // 2. Envoi vers le dépôt central
     const centralDestPath = path.join(centralPath, "standards", fileName);
-    fs.writeFileSync(centralDestPath, JSON.stringify(standard, null, 2), "utf8");
+    await fsp.mkdir(path.dirname(centralDestPath), { recursive: true });
+    await fsp.writeFile(centralDestPath, JSON.stringify(standard, null, 2), "utf8");
 
     return { success: true };
   } catch (error: any) {
@@ -509,7 +576,7 @@ export async function approveStandardInGit(remoteInput: string, adminUsername: s
  * Pousse un standard vers le dépôt central commun (Simule le Push réseau)
  */
 export async function submitStandardToGit(remoteInput: string, username: string, standard: any): Promise<void> {
-  ensureDirectories();
+  await ensureDirectories();
   await initOrCloneRepository(remoteInput);
   const centralPath = getFsPath(remoteInput);
 
@@ -525,7 +592,7 @@ export async function submitStandardToGit(remoteInput: string, username: string,
   
   // 1. Écriture locale (Workspace)
   const localPath = path.join(STANDARDS_DIR, fileName);
-  fs.writeFileSync(localPath, JSON.stringify(standardToSave, null, 2), "utf8");
+  await fsp.writeFile(localPath, JSON.stringify(standardToSave, null, 2), "utf8");
 
   // Versionning local
   try {
@@ -543,12 +610,12 @@ export async function submitStandardToGit(remoteInput: string, username: string,
 
   // 2. PUSH SIMULÉ : Copie vers le dépôt central partagé
   const centralStdsDir = path.join(centralPath, "standards");
-  if (!fs.existsSync(centralStdsDir)) fs.mkdirSync(centralStdsDir, { recursive: true });
-  
-  const centralDestPath = path.join(centralStdsDir, fileName);
-  fs.writeFileSync(centralDestPath, JSON.stringify(standardToSave, null, 2), "utf8");
+  await fsp.mkdir(centralStdsDir, { recursive: true });
 
-  clearRejectionMarker(centralPath, "standard", standard.manifest.id);
+  const centralDestPath = path.join(centralStdsDir, fileName);
+  await fsp.writeFile(centralDestPath, JSON.stringify(standardToSave, null, 2), "utf8");
+
+  await clearRejectionMarker(centralPath, "standard", standard.manifest.id);
 
   console.log(`Standard synchronisé avec succès vers le dépôt central : ${centralDestPath}`);
 }
@@ -564,7 +631,7 @@ export async function rejectStandardInGit(
   reason: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    ensureDirectories();
+    await ensureDirectories();
     await initOrCloneRepository(remoteInput);
     const centralPath = getFsPath(remoteInput);
 
@@ -572,7 +639,7 @@ export async function rejectStandardInGit(
     const localPath = path.join(STANDARDS_DIR, fileName);
     const centralPathFile = path.join(centralPath, "standards", fileName);
 
-    writeRejectionMarker(centralPath, {
+    await writeRejectionMarker(centralPath, {
       entity: "standard",
       id: standardId,
       rejectedBy: adminUsername,
@@ -580,8 +647,8 @@ export async function rejectStandardInGit(
       reason,
     });
 
-    if (fs.existsSync(centralPathFile)) fs.unlinkSync(centralPathFile);
-    if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+    await fsp.unlink(centralPathFile).catch(() => undefined);
+    await fsp.unlink(localPath).catch(() => undefined);
 
     return { success: true };
   } catch (error: any) {
