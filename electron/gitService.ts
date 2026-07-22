@@ -235,7 +235,16 @@ async function readMarkers<T>(remoteInput: string, subDir: string): Promise<T[]>
     }),
   );
 
-  return parsed.filter((m): m is T => m !== null);
+  // Boucle explicite plutôt qu'un `filter` avec prédicat de type : sur un
+  // générique non contraint, Promise.all produit `(Awaited<T> | null)[]`, et
+  // TypeScript ne sait pas réduire `Awaited<T>` à `T`. Un prédicat `m is T`
+  // est alors rejeté (« A type predicate's type must be assignable to its
+  // parameter's type »).
+  const markers: T[] = [];
+  for (const entry of parsed) {
+    if (entry !== null) markers.push(entry as T);
+  }
+  return markers;
 }
 
 /** Lit les marqueurs de refus déposés par l'administrateur. */
