@@ -201,6 +201,12 @@ export function AdminValidationsPage() {
   // restait bloqué sur `null`. On retombe sur le premier commit disponible.
   const [selectedCommitId, setSelectedCommitId] = useState<string | null>(null);
 
+  // Cible du refus en cours. Remplace window.prompt(), qu'Electron interdit
+  // ("prompt() is and will not be supported") : on affiche une vraie modale.
+  const [rejectTarget, setRejectTarget] = useState<
+    { commitId: string; changeId: string; name: string } | null
+  >(null);
+
   const activeCommit =
     pendingCommits.find((c) => c.id === selectedCommitId) ?? pendingCommits[0];
 
@@ -215,14 +221,10 @@ export function AdminValidationsPage() {
     // syncError d'AdminLayout, et la proposition reste dans la file.
   };
 
-  const handleRejectChange = async (commitId: string, changeId: string, name: string) => {
-    // Le motif est transmis à l'auteur via le dépôt central : sans lui, la
-    // proposition disparaîtrait sans que personne ne sache pourquoi.
-    const reason = window.prompt(
-      `Motif du refus de "${name}" (transmis à son auteur) :`,
-      "",
-    );
-    if (reason === null) return; // Annulé
+  const confirmReject = async (reason: string) => {
+    if (rejectTarget === null) return;
+    const { commitId, changeId, name } = rejectTarget;
+    setRejectTarget(null);
 
     const result = await resolveSingleChange(commitId, changeId, 'reject', reason);
     if (result.success) {
@@ -429,7 +431,7 @@ export function AdminValidationsPage() {
                         
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => handleRejectChange(activeCommit.id, change.id, change.name)}
+                            onClick={() => setRejectTarget({ commitId: activeCommit.id, changeId: change.id, name: change.name })}
                             className="px-3.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-all active:scale-[0.98]"
                           >
                             Reject ❌
@@ -497,6 +499,75 @@ export function AdminValidationsPage() {
           </div>
         </div>
       )}
+
+      {rejectTarget !== null && (
+        <RejectReasonModal
+          name={rejectTarget.name}
+          onCancel={() => setRejectTarget(null)}
+          onConfirm={confirmReject}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Boîte de dialogue de saisie du motif de refus.
+ *
+ * Remplace window.prompt(), qu'Electron bloque en production. Le motif est
+ * transmis à l'auteur de la proposition via le dépôt central.
+ */
+function RejectReasonModal({
+  name,
+  onCancel,
+  onConfirm,
+}: {
+  name: string;
+  onCancel: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl border border-gray-200">
+        <div className="p-4 border-b border-gray-100">
+          <h3 className="font-bold text-gray-900">Rejeter la proposition</h3>
+          <p className="text-xs text-gray-500 mt-0.5 truncate" title={name}>{name}</p>
+        </div>
+
+        <div className="p-4">
+          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+            Motif du refus (transmis à l'auteur)
+          </label>
+          <textarea
+            autoFocus
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={4}
+            placeholder="Expliquez pourquoi cette proposition est refusée…"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 p-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(reason.trim())}
+            disabled={reason.trim() === ""}
+            className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:bg-red-300 disabled:cursor-not-allowed"
+          >
+            Confirmer le refus
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
