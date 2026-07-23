@@ -16,6 +16,7 @@ import {
 } from "../../core/db/repositories/standards.repo";
 import { useStandards } from "../../shared/hooks/useStandards";
 import { Badge } from "../../shared/components/ui/Badge";
+import { statusStyle } from "../../shared/profileStatus";
 import { EmptyState } from "../../shared/components/ui/EmptyState";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 import { ErrorBanner } from "../../shared/components/ui/ErrorBanner";
@@ -209,25 +210,13 @@ interface StandardCardProps {
 function StandardCard({ standard, onDelete, onEditTaxonomy }: StandardCardProps) {
   const m = standard.manifest;
 
-  // Définition adaptative du statut du standard
-  let badgeLabel = "Local";
-  let badgeColor: "blue" | "gray" = "gray";
-
-  // Si c'est un builtin non altéré (pas de changements en attente ou approuvé tel quel)
-  if (m.isBuiltin) {
-    badgeLabel = "Dépôt initial";
-    badgeColor = "gray";
-  } else if ((standard as any).status === "approved") {
-    badgeLabel = "Officiel";
-    badgeColor = "blue";
-  } else if ((standard as any).status === "pending") {
-    badgeLabel = "En attente";
-    badgeColor = "gray";
-  } else {
-    // Créé ou dérivé localement, pas encore poussé vers le dépôt central.
-    badgeLabel = "Local · non poussé";
-    badgeColor = "gray";
-  }
+  // Built-in factory standards are labelled as such; everything else follows the
+  // shared status palette (local = yellow, pending = orange, official = green).
+  const status = (standard as any).status as string | undefined;
+  const s = statusStyle(status);
+  const badge = m.isBuiltin
+    ? { label: "Built-in", variant: "gray" as const }
+    : { label: s.label, variant: s.variant };
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -235,7 +224,7 @@ function StandardCard({ standard, onDelete, onEditTaxonomy }: StandardCardProps)
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="font-semibold text-sm text-gray-900">{m.label}</span>
-            <Badge variant={badgeColor}>{badgeLabel}</Badge>
+            <Badge variant={badge.variant}>{badge.label}</Badge>
             <Badge variant="gray">v{m.version}</Badge>
           </div>
           {m.description !== undefined && (

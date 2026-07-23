@@ -20,6 +20,8 @@ import {
 import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
 import { ProfileForm } from "./ProfileForm";
 import { TimeSeriesChart } from "../../shared/components/charts/TimeSeriesChart";
+import { Badge } from "../../shared/components/ui/Badge";
+import { statusStyle } from "../../shared/profileStatus";
 
 import { useAppStore } from "../../store/appStore"; // <-- Ajuste le chemin relatif si nécessaire
 
@@ -511,13 +513,7 @@ function LibraryListItem({ profile, isSelected, onClick }: {
   isSelected: boolean;
   onClick: () => void;
 }) {
-  const status = profile?.status ?? "local";
-  const statusConfig = {
-    local: { dotColor: "bg-blue-500", textColor: "text-blue-600", label: "Local" },
-    pending: { dotColor: "bg-amber-500", textColor: "text-amber-600", label: "Pending" },
-    approved: { dotColor: "bg-green-500", textColor: "text-green-600", label: "Official" },
-  };
-  const currentStatus = statusConfig[status] ?? statusConfig.local;
+  const s = statusStyle(profile?.status);
 
   return (
     <button
@@ -530,9 +526,9 @@ function LibraryListItem({ profile, isSelected, onClick }: {
         <p className={`text-sm font-semibold truncate ${isSelected ? "text-blue-700" : "text-gray-900"}`}>
           {profile?.name}
         </p>
-        <span className={`flex items-center gap-1.5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-gray-50 border border-gray-100 ${currentStatus.textColor}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${currentStatus.dotColor}`} />
-          {currentStatus.label}
+        <span className="flex items-center gap-1.5 flex-shrink-0">
+          <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+          <Badge variant={s.variant}>{s.label}</Badge>
         </span>
       </div>
       {profile?.description && profile.description !== "" && (

@@ -1,34 +1,47 @@
 /**
- * Étiquette de statut d'un profil, partagée entre l'édition et le browser.
+ * Single source of truth for status → label + color, shared by every screen
+ * (Browser, Edit, Library, Standards, Taxonomy, Sync, Admin).
  *
- * Historique du bug corrigé : le browser étiquetait les profils selon leur
- * `source` (builtin/user) — l'ancien modèle à deux états — tandis que l'édition
- * les étiquette selon leur `status` (local/pending/approved). Un profil
- * approuvé s'affichait donc « Official » à l'édition mais « User » au browser.
- *
- * On centralise ici pour que les deux vues restent cohérentes. La sémantique
- * est celle du cycle de validation (statut), pas celle de la provenance.
+ * See docs/UI-UX-SPEC.md §8. Historically each screen hard-coded its own badge
+ * colors (Local was blue here, amber there; Pending grey vs amber; Official
+ * green vs blue vs emerald). Everything now routes through `statusStyle`:
+ *   local    → yellow
+ *   pending  → orange
+ *   approved → green  (labelled "Official")
  */
 
-export type BadgeVariant = "blue" | "gray" | "green" | "red";
+import type { BadgeVariant } from "./components/ui/Badge";
+
+export type { BadgeVariant };
+
+export interface StatusStyle {
+  /** Human label, English. */
+  label: string;
+  /** Badge color variant. */
+  variant: BadgeVariant;
+  /** Tailwind background class for a small status dot. */
+  dot: string;
+}
+
+export function statusStyle(status: string | undefined): StatusStyle {
+  switch (status) {
+    case "approved":
+      return { label: "Official", variant: "green", dot: "bg-green-500" };
+    case "pending":
+      return { label: "Pending", variant: "orange", dot: "bg-orange-500" };
+    case "local":
+    default:
+      return { label: "Local", variant: "yellow", dot: "bg-yellow-500" };
+  }
+}
 
 export interface StatusLabel {
   label: string;
   variant: BadgeVariant;
 }
 
-/**
- * Traduit le statut d'un profil en libellé + couleur.
- * Aligné sur les libellés de LibraryPage (Local / Pending / Official).
- */
+/** Back-compat helper (label + variant only). Prefer `statusStyle`. */
 export function profileStatusLabel(status: string | undefined): StatusLabel {
-  switch (status) {
-    case "approved":
-      return { label: "Official", variant: "green" };
-    case "pending":
-      return { label: "Pending", variant: "gray" };
-    case "local":
-    default:
-      return { label: "Local", variant: "blue" };
-  }
+  const s = statusStyle(status);
+  return { label: s.label, variant: s.variant };
 }

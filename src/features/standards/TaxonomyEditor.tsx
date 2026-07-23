@@ -25,6 +25,8 @@ import type { ProfileDefinition } from "../../core/domain/standard";
 import { buildTree } from "../../core/engine/treeBuilder";
 import type { TaxonomyNodeItem } from "../../core/domain/tree";
 import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
+import { Badge } from "../../shared/components/ui/Badge";
+import { statusStyle } from "../../shared/profileStatus";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -403,17 +405,15 @@ function EditorTreeNode({
   const [expanded, setExpanded] = useState(depth < 2);
   const isSelected = node.id === selectedId;
 
-  // Détermination du badge selon les métadonnées de modification du nœud
-  let badgeLabel = "Builtin";
-  let isModified = node.id.length > 36; // par exemple, les ID générés par crypto.randomUUID (uuid4) indiquent un nœud local ou personnalisé
-  
-  if (node.metadata?.status === "pending") {
-    badgeLabel = "Pending";
-  } else if (node.metadata?.status === "approved") {
-    badgeLabel = "Official";
-  } else if (isModified) {
-    badgeLabel = "Local Node";
-  }
+  // Node status → shared palette. A generated (UUID) id means the node was
+  // created/customised locally. (The previous `id.length > 36` heuristic was
+  // always false — a UUID v4 is exactly 36 chars.)
+  const metaStatus = (node.metadata as any)?.status as string | undefined;
+  const isGenerated = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(node.id);
+  const effectiveStatus = metaStatus ?? (isGenerated ? "local" : undefined);
+  const badge = effectiveStatus
+    ? statusStyle(effectiveStatus)
+    : { label: "Built-in", variant: "gray" as const, dot: "bg-gray-400" };
 
   return (
     <div>
@@ -445,19 +445,9 @@ function EditorTreeNode({
           </span>
         </div>
 
-        {/* PASTILLE DE STATUT TAXONOMIQUE */}
+        {/* Taxonomy node status */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <span className={`text-[8px] px-1 py-0.5 rounded uppercase font-extrabold tracking-wider ${
-            badgeLabel === 'Official' 
-              ? 'bg-blue-100 text-blue-800' 
-              : badgeLabel === 'Pending'
-                ? 'bg-amber-100 text-amber-800'
-                : badgeLabel === 'Local Node'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-gray-100 text-gray-500'
-          }`}>
-            {badgeLabel}
-          </span>
+          <Badge variant={badge.variant}>{badge.label}</Badge>
         </div>
       </div>
       
