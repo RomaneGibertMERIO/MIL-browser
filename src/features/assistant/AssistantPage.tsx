@@ -5,18 +5,18 @@
  *
  * Disposition
  * ───────────
- *   ┌─ MILLER (gauche) ─────────────┬─slider─┬─ PROFILS + INFOS (droite) ──────┐
- *   │ [Normes][Méthodes][Zones]…    │        │ [Profils][Informations][épingle]│
- *   └────────────────────────────────┴────────┴──────────────────────────────────┘
+ *   ┌─ MILLER (gauche) ───────────────────────┬─slider─┬─ INFOS + ÉPINGLES ─┐
+ *   │ [Normes][Méthodes][Zones][Profils]       │        │ [Informations][pin]│
+ *   └──────────────────────────────────────────┴────────┴──────────────────────┘
  *
  * Dimensionnement (voulu) :
- * - Aucune poignée par colonne. Les colonnes du Miller ont TOUTES la même
- *   largeur, pilotée par la largeur globale du Miller (flexbox).
- * - Un SEUL slider collectif déplace la frontière : avantage au Miller ou à la
- *   zone profils/infos. Les deux restent toujours collés, aucun ne disparaît.
- * - La zone droite (profils + informations + épingles) suit la même règle :
- *   largeur égale par défaut. Chaque épingle peut toutefois être redimensionnée
- *   individuellement, repliée (cachée) ou retirée.
+ * - MILLER (normes + nœuds + PROFILS) : aucune poignée par colonne. Toutes les
+ *   colonnes ont la même largeur, pilotée par la largeur globale du Miller.
+ * - Un SEUL slider collectif déplace la frontière Miller / zone droite.
+ * - ZONE DROITE (informations + épingles) : largeur égale par défaut. On
+ *   redistribue la largeur ENTRE panneaux via des séparateurs (le total reste
+ *   constant, pas de débordement). Chaque épingle peut aussi être repliée ou
+ *   retirée.
  */
 
 import React, { useState, useMemo, useRef, useEffect } from "react";
@@ -35,11 +35,12 @@ import { profileStatusLabel } from "../../shared/profileStatus";
 import { ProfileDetail } from "../profile/ProfileDetail";
 import { getEffectiveSchema } from "../../core/engine/profileEngine";
 
-const MIN_MILLER = 320;      // largeur mini de la zone Miller
-const MIN_RIGHT = 340;       // largeur mini de la zone profils/infos
-const COL_MIN = 130;         // largeur mini d'une colonne (déclenche le scroll si trop de colonnes)
-const PANEL_MIN = 240;       // largeur mini d'un panneau de la zone droite
-const COLLAPSED_W = 40;      // largeur d'une épingle repliée
+const MIN_MILLER = 320;
+const MIN_RIGHT = 340;
+const COL_MIN = 130;      // largeur mini d'une colonne du Miller
+const PANEL_MIN = 260;    // largeur mini d'un panneau de la zone droite
+const COLLAPSED_W = 40;   // largeur d'une épingle repliée
+const SPLITTER_W = 6;     // largeur d'un séparateur interne de la zone droite
 
 // ---------------------------------------------------------------------------
 // Helpers taxonomie
@@ -88,9 +89,11 @@ export function AssistantPage() {
   const [selectedPath, setSelectedPath]           = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [pinned, setPinned]                       = useState<Profile[]>([]);
-  const [pinWidths, setPinWidths]                 = useState<Record<string, number>>({});
   const [collapsedPins, setCollapsedPins]         = useState<Set<string>>(new Set());
   const [rightWidth, setRightWidth]               = useState(520);
+  // Poids relatifs des panneaux de la zone droite ("info" + id des épingles).
+  // Absent = 1 (largeur égale). On redistribue, donc le total reste constant.
+  const [weights, setWeights]                     = useState<Record<string, number>>({});
 
   const standard = useMemo(
     () => standards?.find(s => s.manifest.id === activeStdId) ?? null,
@@ -119,8 +122,6 @@ export function AssistantPage() {
     [nodeProfiles, selectedProfileId],
   );
 
-  // Schéma résolu depuis LA norme du profil (pas forcément l'active) : permet de
-  // comparer des profils épinglés de normes différentes.
   const schemaForProfile = useMemo(() => {
     const byId = new Map<string, StandardPlugin>((standards ?? []).map(s => [s.manifest.id, s]));
     return (profile: Profile) => {
@@ -142,8 +143,6 @@ export function AssistantPage() {
     setSelectedProfileId(null);
   }, [activeStdId]);
 
-  // Un `mouseup` hors fenêtre ne se déclenche jamais : on ferme le geste via un
-  // AbortController (mouseup, mouseleave, bouton relâché). Voir LibraryPage.
   function beginGesture(onMove: (ev: MouseEvent) => void): void {
     resizeAbortRef.current?.abort();
     const controller = new AbortController();
@@ -157,32 +156,43 @@ export function AssistantPage() {
     document.addEventListener("mouseleave", () => controller.abort(), { signal });
   }
 
-  // Slider collectif : déplace la frontière Miller / zone droite.
+  // Slider collectif : frontière Miller / zone droite.
   function startCollectiveResize(e: React.MouseEvent) {
     e.preventDefault();
     const startX = e.clientX;
     const startW = rightWidth;
     beginGesture((ev) => {
       const maxRight = Math.max(MIN_RIGHT, window.innerWidth - MIN_MILLER);
-      const next = startW - (ev.clientX - startX); // la zone droite est à droite
+      const next = startW - (ev.clientX - startX);
       setRightWidth(Math.min(maxRight, Math.max(MIN_RIGHT, next)));
     });
   }
 
-  // Redimensionnement individuel d'une épingle.
-  function startPinResize(e: React.MouseEvent, pinId: string, currentWidth: number) {
+  const weightOf = (id: string) => weights[id] ?? 1;
+
+  // Séparateur interne : redistribue la largeur entre deux panneaux adjacents.
+  // Le total (rightWidth) ne change pas : on ne fait que déplacer du poids.
+  function startPanelResize(e: React.MouseEvent, leftId: string, rightId: string, expandedIds: string[]) {
     e.preventDefault();
-    e.stopPropagation();
     const startX = e.clientX;
+    const collapsedCount = pinned.length - (expandedIds.length - 1); // -1 : "info" n'est pas une épingle
+    const available = rightWidth - collapsedCount * COLLAPSED_W - (expandedIds.length - 1) * SPLITTER_W;
+    const totalWeight = expandedIds.reduce((sum, id) => sum + weightOf(id), 0);
+    const pxPerWeight = available > 0 && totalWeight > 0 ? available / totalWeight : 1;
+    const minWeight = PANEL_MIN / pxPerWeight;
+    const wL0 = weightOf(leftId);
+    const wR0 = weightOf(rightId);
+
     beginGesture((ev) => {
-      setPinWidths(prev => ({ ...prev, [pinId]: Math.max(PANEL_MIN, currentWidth + ev.clientX - startX) }));
+      const dW = (ev.clientX - startX) / pxPerWeight;
+      let wL = wL0 + dW;
+      wL = Math.max(minWeight, Math.min(wL0 + wR0 - minWeight, wL));
+      const wR = wL0 + wR0 - wL;
+      setWeights(prev => ({ ...prev, [leftId]: wL, [rightId]: wR }));
     });
   }
 
-  function selectStandard(id: string) {
-    setActiveStd(id);
-    void saveActiveStandard(id);
-  }
+  function selectStandard(id: string) { setActiveStd(id); void saveActiveStandard(id); }
   function selectNode(colIdx: number, nodeId: string) {
     setSelectedPath(prev => [...prev.slice(0, colIdx), nodeId]);
     setSelectedProfileId(null);
@@ -203,6 +213,10 @@ export function AssistantPage() {
 
   if (standards === undefined) return <LoadingSpinner />;
   if (standards.length === 0) return <EmptyWorkspaceNotice />;
+
+  // Panneaux étendus de la zone droite, dans l'ordre : Informations puis épingles.
+  const expandedPins = pinned.filter(p => !collapsedPins.has(p.id));
+  const expandedIds = ["info", ...expandedPins.map(p => p.id)];
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
@@ -230,20 +244,15 @@ export function AssistantPage() {
         </button>
       </header>
 
-      {/* ── Corps : Miller | slider | zone droite ──────────────────────── */}
+      {/* ── Corps ──────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* MILLER — colonnes à largeur égale (flex-1), pilotées par la largeur globale */}
+        {/* MILLER — normes + nœuds + PROFILS, colonnes à largeur égale */}
         <div className="flex-1 min-w-0" style={{ minWidth: MIN_MILLER }}>
           <div ref={millerRef} className="flex h-full overflow-x-auto overflow-y-hidden">
             <MillerColumn heading="Standards" tone="std">
               {standards.map(s => (
-                <StandardRow
-                  key={s.manifest.id}
-                  standard={s}
-                  selected={s.manifest.id === activeStdId}
-                  onSelect={() => selectStandard(s.manifest.id)}
-                />
+                <StandardRow key={s.manifest.id} standard={s} selected={s.manifest.id === activeStdId} onSelect={() => selectStandard(s.manifest.id)} />
               ))}
             </MillerColumn>
 
@@ -252,15 +261,28 @@ export function AssistantPage() {
                 {colNodes.length === 0
                   ? <p className="text-xs text-gray-400 text-center px-3 py-6">No items</p>
                   : colNodes.map(node => (
-                    <NodeRow
-                      key={node.id}
-                      node={node}
-                      selected={node.id === (selectedPath[colIdx] ?? null)}
-                      onSelect={() => selectNode(colIdx, node.id)}
-                    />
+                    <NodeRow key={node.id} node={node} selected={node.id === (selectedPath[colIdx] ?? null)} onSelect={() => selectNode(colIdx, node.id)} />
                   ))}
               </MillerColumn>
             ))}
+
+            {/* Colonne des profils du nœud sélectionné — DANS le Miller */}
+            {standard != null && selectedNode != null && (
+              <MillerColumn heading={`Profils${nodeProfiles.length ? ` (${nodeProfiles.length})` : ""}`}>
+                {nodeProfiles.length === 0
+                  ? <p className="text-xs text-gray-400 text-center px-3 py-6 italic">Aucun profil sur ce nœud.</p>
+                  : nodeProfiles.map(p => (
+                    <ProfileRow
+                      key={p.id}
+                      profile={p}
+                      selected={p.id === selectedProfileId}
+                      pinned={isPinned(p.id)}
+                      onSelect={() => setSelectedProfileId(p.id)}
+                      onTogglePin={() => togglePin(p)}
+                    />
+                  ))}
+              </MillerColumn>
+            )}
 
             {standard == null && (
               <div className="flex-1 flex items-center justify-center text-sm text-gray-400 px-8 text-center">
@@ -270,69 +292,57 @@ export function AssistantPage() {
           </div>
         </div>
 
-        {/* SLIDER COLLECTIF — toujours accessible */}
+        {/* SLIDER COLLECTIF */}
         <div
           onMouseDown={startCollectiveResize}
-          title="Redimensionner Miller / profils"
+          title="Redimensionner Miller / informations"
           className="flex-shrink-0 w-1.5 cursor-col-resize bg-gray-200 hover:bg-blue-400 transition-colors"
         />
 
-        {/* ZONE DROITE — profils + informations + épingles */}
-        <div className="flex-shrink-0 flex bg-white overflow-x-auto" style={{ width: rightWidth }}>
-          {/* Profils du nœud sélectionné */}
-          {standard != null && selectedNode != null && (
-            <RightPanel minWidth={PANEL_MIN} heading={`Profils${nodeProfiles.length ? ` (${nodeProfiles.length})` : ""}`}>
-              {nodeProfiles.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center px-3 py-6 italic">Aucun profil sur ce nœud.</p>
-              ) : (
-                nodeProfiles.map(p => (
-                  <ProfileRow
-                    key={p.id}
-                    profile={p}
-                    selected={p.id === selectedProfileId}
-                    pinned={isPinned(p.id)}
-                    onSelect={() => setSelectedProfileId(p.id)}
-                    onTogglePin={() => togglePin(p)}
-                  />
-                ))
-              )}
-            </RightPanel>
-          )}
-
-          {/* Informations : nœud ou carte du profil sélectionné */}
-          <RightPanel minWidth={PANEL_MIN} heading="Informations">
-            <DetailBody
-              node={selectedNode}
-              profile={selectedProfile}
-              schema={selectedProfile ? schemaForProfile(selectedProfile) : null}
-              pinned={selectedProfile ? isPinned(selectedProfile.id) : false}
-              onTogglePin={togglePin}
-              onClearProfile={() => setSelectedProfileId(null)}
-            />
-          </RightPanel>
-
-          {/* Épingles de comparaison */}
-          {pinned.map(p => {
-            const collapsed = collapsedPins.has(p.id);
-            const width = pinWidths[p.id];
-            if (collapsed) {
-              return (
-                <CollapsedPin key={p.id} name={p.name} onExpand={() => toggleCollapse(p.id)} onUnpin={() => togglePin(p)} />
-              );
-            }
-            return (
-              <PinnedPanel
-                key={p.id}
-                profile={p}
-                schema={schemaForProfile(p)}
-                standardLabel={standards.find(s => s.manifest.id === p.standardId)?.manifest.label ?? p.standardId}
-                width={width}
-                onCollapse={() => toggleCollapse(p.id)}
-                onUnpin={() => togglePin(p)}
-                onResizeStart={e => startPinResize(e, p.id, width ?? PANEL_MIN + 120)}
+        {/* ZONE DROITE — informations + épingles (redistribution par séparateurs) */}
+        <div className="flex-shrink-0 flex bg-white overflow-hidden" style={{ width: rightWidth }}>
+          {/* Informations */}
+          <WeightedPanel weight={weightOf("info")}>
+            <PanelHeader>Informations</PanelHeader>
+            <div className="flex-1 overflow-y-auto">
+              <DetailBody
+                node={selectedNode}
+                profile={selectedProfile}
+                schema={selectedProfile ? schemaForProfile(selectedProfile) : null}
+                pinned={selectedProfile ? isPinned(selectedProfile.id) : false}
+                onTogglePin={togglePin}
+                onClearProfile={() => setSelectedProfileId(null)}
               />
+            </div>
+          </WeightedPanel>
+
+          {/* Épingles étendues (avec séparateur redistributeur avant chacune) */}
+          {expandedPins.map((p, i) => {
+            const prevId = expandedIds[i]; // panneau étendu précédent (info ou épingle)
+            return (
+              <React.Fragment key={p.id}>
+                <div
+                  onMouseDown={e => startPanelResize(e, prevId!, p.id, expandedIds)}
+                  className="flex-shrink-0 cursor-col-resize bg-gray-100 hover:bg-blue-400 transition-colors"
+                  style={{ width: SPLITTER_W }}
+                />
+                <WeightedPanel weight={weightOf(p.id)}>
+                  <PinnedPanel
+                    profile={p}
+                    schema={schemaForProfile(p)}
+                    standardLabel={standards.find(s => s.manifest.id === p.standardId)?.manifest.label ?? p.standardId}
+                    onCollapse={() => toggleCollapse(p.id)}
+                    onUnpin={() => togglePin(p)}
+                  />
+                </WeightedPanel>
+              </React.Fragment>
             );
           })}
+
+          {/* Épingles repliées : fine barre en bout de zone */}
+          {pinned.filter(p => collapsedPins.has(p.id)).map(p => (
+            <CollapsedPin key={p.id} name={p.name} onExpand={() => toggleCollapse(p.id)} onUnpin={() => togglePin(p)} />
+          ))}
         </div>
       </div>
     </div>
@@ -340,38 +350,30 @@ export function AssistantPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Colonnes du Miller — flex-1 (largeur égale) + min-width (scroll si trop deep)
+// Colonnes du Miller — flex-1 (largeur égale) + min-width
 // ---------------------------------------------------------------------------
 
-function MillerColumn({ heading, tone, children }: {
-  heading: string;
-  tone?: "std";
-  children: React.ReactNode;
-}) {
+function MillerColumn({ heading, tone, children }: { heading: string; tone?: "std"; children: React.ReactNode }) {
   return (
-    <div
-      className={`flex-1 flex flex-col border-r border-gray-200 ${tone === "std" ? "bg-gray-50/60" : "bg-white"}`}
-      style={{ minWidth: COL_MIN }}
-    >
-      <div className="flex-shrink-0 px-3 py-2 border-b border-gray-100">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{heading}</p>
-      </div>
+    <div className={`flex-1 flex flex-col border-r border-gray-200 ${tone === "std" ? "bg-gray-50/60" : "bg-white"}`} style={{ minWidth: COL_MIN }}>
+      <PanelHeader>{heading}</PanelHeader>
       <div className="flex-1 overflow-y-auto py-1">{children}</div>
     </div>
   );
 }
 
-function StandardRow({ standard, selected, onSelect }: {
-  standard: StandardPlugin; selected: boolean; onSelect: () => void;
-}) {
+function PanelHeader({ children }: { children: React.ReactNode }) {
   return (
-    <button
-      onClick={onSelect}
-      title={standard.manifest.label}
-      className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
-        selected ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-white"
-      }`}
-    >
+    <div className="flex-shrink-0 px-3 py-2 border-b border-gray-100">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{children}</p>
+    </div>
+  );
+}
+
+function StandardRow({ standard, selected, onSelect }: { standard: StandardPlugin; selected: boolean; onSelect: () => void }) {
+  return (
+    <button onClick={onSelect} title={standard.manifest.label}
+      className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${selected ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-white"}`}>
       <span className="flex-1 min-w-0">
         <span className="block text-sm font-medium leading-snug truncate">{standard.manifest.label}</span>
         <span className={`block text-xs truncate ${selected ? "text-blue-200" : "text-gray-400"}`}>{standard.manifest.organization}</span>
@@ -381,51 +383,17 @@ function StandardRow({ standard, selected, onSelect }: {
   );
 }
 
-function NodeRow({ node, selected, onSelect }: {
-  node: TaxonomyNodeItem; selected: boolean; onSelect: () => void;
-}) {
+function NodeRow({ node, selected, onSelect }: { node: TaxonomyNodeItem; selected: boolean; onSelect: () => void }) {
   return (
-    <button
-      onClick={onSelect}
-      title={node.label}
-      className={`w-full text-left px-3 py-2 flex items-start gap-2 transition-colors ${
-        selected ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"
-      }`}
-    >
-      <span className={`flex-shrink-0 w-1.5 h-1.5 rounded-full mt-1.5 ${
-        node.hasProfiles ? (selected ? "bg-blue-200" : "bg-blue-400") : "bg-transparent"
-      }`} />
+    <button onClick={onSelect} title={node.label}
+      className={`w-full text-left px-3 py-2 flex items-start gap-2 transition-colors ${selected ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
+      <span className={`flex-shrink-0 w-1.5 h-1.5 rounded-full mt-1.5 ${node.hasProfiles ? (selected ? "bg-blue-200" : "bg-blue-400") : "bg-transparent"}`} />
       <span className="flex-1 min-w-0">
         <span className={`block text-xs font-mono leading-tight ${selected ? "text-blue-200" : "text-gray-400"}`}>{node.code}</span>
         <span className="block text-sm leading-snug">{node.label}</span>
       </span>
       {node.children.length > 0 && <Chevron selected={selected} />}
     </button>
-  );
-}
-
-function Chevron({ selected }: { selected: boolean }) {
-  return (
-    <svg className={`flex-shrink-0 w-3 h-3 mt-1 ${selected ? "text-blue-200" : "text-gray-300"}`} viewBox="0 0 16 16" fill="currentColor">
-      <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
-    </svg>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Zone droite : panneaux à largeur égale (flex-1)
-// ---------------------------------------------------------------------------
-
-function RightPanel({ heading, minWidth, children }: {
-  heading: string; minWidth: number; children: React.ReactNode;
-}) {
-  return (
-    <div className="flex-1 flex flex-col border-l border-gray-100 first:border-l-0" style={{ minWidth }}>
-      <div className="flex-shrink-0 px-3 py-2 border-b border-gray-100">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{heading}</p>
-      </div>
-      <div className="flex-1 overflow-y-auto">{children}</div>
-    </div>
   );
 }
 
@@ -443,16 +411,32 @@ function ProfileRow({ profile, selected, pinned, onSelect, onTogglePin }: {
             <span className="text-xs text-gray-400">{profile.dataset.length} pts</span>
           </div>
         </button>
-        <button
-          onClick={onTogglePin}
-          title={pinned ? "Retirer de la comparaison" : "Épingler pour comparer"}
-          className={`flex-shrink-0 text-sm leading-none px-1.5 py-1 rounded transition-colors ${
-            pinned ? "text-blue-600 bg-blue-100" : "text-gray-300 hover:text-blue-600 hover:bg-blue-50"
-          }`}
-        >
+        <button onClick={onTogglePin} title={pinned ? "Retirer de la comparaison" : "Épingler pour comparer"}
+          className={`flex-shrink-0 text-sm leading-none px-1.5 py-1 rounded transition-colors ${pinned ? "text-blue-600 bg-blue-100" : "text-gray-300 hover:text-blue-600 hover:bg-blue-50"}`}>
           📌
         </button>
       </div>
+    </div>
+  );
+}
+
+function Chevron({ selected }: { selected: boolean }) {
+  return (
+    <svg className={`flex-shrink-0 w-3 h-3 mt-1 ${selected ? "text-blue-200" : "text-gray-300"}`} viewBox="0 0 16 16" fill="currentColor">
+      <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Zone droite
+// ---------------------------------------------------------------------------
+
+/** Panneau à poids (flex-grow) : largeur = weight / somme des poids. */
+function WeightedPanel({ weight, children }: { weight: number; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col min-w-0 overflow-hidden" style={{ flexGrow: weight, flexBasis: 0, minWidth: PANEL_MIN }}>
+      {children}
     </div>
   );
 }
@@ -469,12 +453,8 @@ function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile
     return (
       <div>
         <div className="px-5 pt-4 flex justify-end">
-          <button
-            onClick={() => onTogglePin(profile)}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
-              pinned ? "text-blue-700 bg-blue-50 border-blue-200" : "text-gray-600 border-gray-200 hover:bg-gray-50"
-            }`}
-          >
+          <button onClick={() => onTogglePin(profile)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${pinned ? "text-blue-700 bg-blue-50 border-blue-200" : "text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
             📌 {pinned ? "Épinglé" : "Épingler pour comparer"}
           </button>
         </div>
@@ -522,24 +502,15 @@ function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile
   );
 }
 
-// ---------------------------------------------------------------------------
-// Épingles
-// ---------------------------------------------------------------------------
-
-function PinnedPanel({ profile, schema, standardLabel, width, onCollapse, onUnpin, onResizeStart }: {
+function PinnedPanel({ profile, schema, standardLabel, onCollapse, onUnpin }: {
   profile: Profile;
   schema: React.ComponentProps<typeof ProfileDetail>["schema"] | null;
   standardLabel: string;
-  width: number | undefined;
   onCollapse: () => void;
   onUnpin: () => void;
-  onResizeStart: (e: React.MouseEvent) => void;
 }) {
-  // Largeur : égale par défaut (flex-1), ou fixe si redimensionnée.
-  const style = width !== undefined ? { width } : undefined;
-  const cls = width !== undefined ? "flex-shrink-0" : "flex-1";
   return (
-    <div className={`${cls} relative border-l-2 border-blue-200 bg-white overflow-y-auto`} style={{ minWidth: PANEL_MIN, ...style }}>
+    <div className="h-full border-l-2 border-blue-200 bg-white overflow-y-auto">
       <div className="sticky top-0 z-10 px-4 py-2 bg-blue-50 border-b border-blue-100 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider truncate">Comparaison · {standardLabel}</p>
@@ -555,22 +526,15 @@ function PinnedPanel({ profile, schema, standardLabel, width, onCollapse, onUnpi
           ? <ProfileDetail profile={profile} schema={schema} />
           : <p className="text-xs text-gray-400 italic">Schéma introuvable (norme non chargée).</p>}
       </div>
-      {/* Poignée de redimensionnement individuel */}
-      <div onMouseDown={onResizeStart} className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-400 z-20" />
     </div>
   );
 }
 
-function CollapsedPin({ name, onExpand, onUnpin }: { name: string; onExpand: () => void; onUnpin: () => void; }) {
+function CollapsedPin({ name, onExpand, onUnpin }: { name: string; onExpand: () => void; onUnpin: () => void }) {
   return (
     <div className="flex-shrink-0 flex flex-col items-center border-l-2 border-blue-200 bg-blue-50/50" style={{ width: COLLAPSED_W }}>
       <button onClick={onExpand} title="Déplier" className="mt-2 text-gray-500 hover:text-blue-600 text-sm">▸</button>
-      <button
-        onClick={onExpand}
-        title={name}
-        className="flex-1 text-[11px] font-semibold text-gray-500 hover:text-blue-600 py-2"
-        style={{ writingMode: "vertical-rl" }}
-      >
+      <button onClick={onExpand} title={name} className="flex-1 text-[11px] font-semibold text-gray-500 hover:text-blue-600 py-2" style={{ writingMode: "vertical-rl" }}>
         {name}
       </button>
       <button onClick={onUnpin} title="Retirer" className="mb-2 text-gray-400 hover:text-red-600 text-xs">✕</button>
