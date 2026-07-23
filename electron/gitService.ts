@@ -585,6 +585,13 @@ export async function approveStandardInGit(remoteInput: string, adminUsername: s
  * Pousse un standard vers le dépôt central commun (Simule le Push réseau)
  */
 export async function submitStandardToGit(remoteInput: string, username: string, standard: any): Promise<void> {
+  // Dernière barrière avant l'écriture disque : un manifest.id absent
+  // produisait "standard-undefined.json", fichier corrompu qui bloquait la
+  // synchronisation de tous les postes. On refuse plutôt que d'écrire.
+  if (!standard?.manifest?.id || typeof standard.manifest.id !== "string") {
+    throw new Error("Standard invalide : manifest.id manquant, publication refusée.");
+  }
+
   await ensureDirectories();
   await initOrCloneRepository(remoteInput);
   const centralPath = getFsPath(remoteInput);

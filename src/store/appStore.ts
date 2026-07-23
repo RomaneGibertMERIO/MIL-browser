@@ -410,23 +410,50 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (gitResult.pulledProfiles && gitResult.pulledStandards) {
       (db as any).isSyncingInternal = true;
+      const skipped: string[] = [];
       try {
         for (const rawStd of gitResult.pulledStandards) {
           const std = rawStd as any;
-          const adjustedStandard: any = {
-            ...std,
-            manifest: {
-              ...std.manifest,
-              isBuiltin: false
-            },
-            status: std.status || "approved",
-            // Vient du dépôt central : c'est la version qui fait autorité.
-            workspace: "shared",
-          };
-          await upsertStandard(adjustedStandard as any);
+
+          // Un enregistrement corrompu (ex. manifest.id manquant) ne DOIT jamais
+          // interrompre la synchronisation : la table est indexée sur
+          // manifest.id, donc db.standards.put() lève une exception sur une clé
+          // absente, ce qui avortait toute la boucle AVANT la reconstruction de
+          // la file de validation — plus aucun pending n'apparaissait, ni les
+          // siens ni ceux des autres. On ignore le fichier fautif et on continue.
+          if (!std?.manifest?.id || typeof std.manifest.id !== "string") {
+            skipped.push("standard sans identifiant");
+            console.error("[sync] Standard central corrompu ignoré (manifest.id manquant) :", std);
+            continue;
+          }
+
+          try {
+            await upsertStandard({
+              ...std,
+              manifest: { ...std.manifest, isBuiltin: false },
+              status: std.status || "approved",
+              // Vient du dépôt central : c'est la version qui fait autorité.
+              workspace: "shared",
+            } as any);
+          } catch (err) {
+            skipped.push(std.manifest.id);
+            console.error(`[sync] Standard "${std.manifest.id}" non importé :`, err);
+          }
         }
+
         for (const rawProf of gitResult.pulledProfiles) {
-          await upsertProfile(rawProf as any);
+          const prof = rawProf as any;
+          if (!prof?.id || typeof prof.id !== "string") {
+            skipped.push("profil sans identifiant");
+            console.error("[sync] Profil central corrompu ignoré (id manquant) :", prof);
+            continue;
+          }
+          try {
+            await upsertProfile(prof);
+          } catch (err) {
+            skipped.push(prof.id);
+            console.error(`[sync] Profil "${prof.id}" non importé :`, err);
+          }
         }
 
         await applyRejections(gitResult.rejections ?? [], state.systemUsername);
@@ -435,11 +462,25 @@ export const useAppStore = create<AppState>((set, get) => ({
         (db as any).isSyncingInternal = false;
       }
 
+      if (skipped.length > 0) {
+        set({
+          syncError:
+            `${skipped.length} enregistrement(s) du dépôt central sont corrompus et ont été ignorés ` +
+            `(${skipped.slice(0, 5).join(", ")}${skipped.length > 5 ? "…" : ""}). ` +
+            `La synchronisation s'est poursuivie normalement.`,
+        });
+      }
+
       const dbProfiles = await getAllProfiles();
       const pendingProfiles = dbProfiles.filter((p: any) => p.status === "pending");
 
       const dbStandards = await db.standards.toArray();
-      const pendingStandards = dbStandards.filter((s: any) => s.status === "pending");
+      // On exclut aussi tout standard sans manifest.id valide : un tel
+      // enregistrement casserait le mapping ci-dessous (clé de commit
+      // "commit-undefined", identifiants dupliqués côté React).
+      const pendingStandards = dbStandards.filter(
+        (s: any) => s.status === "pending" && typeof s?.manifest?.id === "string",
+      );
 
       const reconstructedCommits: AdminCommitRequest[] = [
         ...pendingProfiles.map((p: any) => ({
@@ -559,6 +600,15 @@ export const useAppStore = create<AppState>((set, get) => ({
             pushedEventIds.push(event.id);
           }
           else if (event.entity === "standard") {
+            // Garde-fou d'intégrité : ne jamais pousser un standard sans
+            // manifest.id. C'est ce qui créait "standard-undefined.json" côté
+            // dépôt central — un fichier corrompu qui bloquait ensuite la
+            // synchronisation de tous les postes.
+            if (!payload?.manifest?.id || typeof payload.manifest.id !== "string") {
+              failures.push(`${label} : standard sans identifiant, publication refusée`);
+              continue;
+            }
+
             const standardToSend: any = {
               ...payload,
               status: "pending",
