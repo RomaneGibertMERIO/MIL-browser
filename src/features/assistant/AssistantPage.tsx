@@ -31,6 +31,8 @@ import { saveActiveStandard } from "../../core/db/repositories/settings.repo";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 import { EmptyWorkspaceNotice } from "../../shared/components/ui/EmptyWorkspaceNotice";
 import { Badge } from "../../shared/components/ui/Badge";
+import { Icon } from "../../shared/components/ui/Icon";
+import { AppFrame, Brand } from "../../shared/components/AppFrame";
 import { profileStatusLabel } from "../../shared/profileStatus";
 import { ProfileDetail } from "../profile/ProfileDetail";
 import { getEffectiveSchema } from "../../core/engine/profileEngine";
@@ -124,6 +126,7 @@ export function AssistantPage() {
   const activeStdId  = useAppStore(s => s.activeStandardId);
   const setActiveStd = useAppStore(s => s.setActiveStandard);
   const setMode      = useAppStore(s => s.setMode);
+  const role         = useAppStore(s => s.role);
 
   const [selectedPath, setSelectedPath]           = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -281,10 +284,11 @@ export function AssistantPage() {
   const expandedIds = ["info", ...expandedPins.map(p => p.id)];
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+    <AppFrame>
+    <div className="h-full flex flex-col bg-gray-50 overflow-hidden">
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-3">
-        <span className="text-xs font-bold text-gray-600 tracking-widest uppercase">MIL Browser</span>
+        <Brand />
         <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-semibold uppercase tracking-wide">
           Read-Only
         </span>
@@ -299,29 +303,33 @@ export function AssistantPage() {
           </div>
         )}
 
-        {/* Recherche — balaie tous les champs de la norme active */}
+        {/* Search — scans every field of the active standard */}
         <div className="relative ml-auto min-w-[180px] max-w-xs flex-shrink-0">
-          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
-          </svg>
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+            <Icon name="search" size={14} />
+          </span>
           <input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Rechercher (tous les champs)…"
+            placeholder="Search (all fields)…"
             className="w-full pl-8 pr-7 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {searchQuery.length > 0 && (
-            <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-sm">✕</button>
+            <button onClick={() => setSearchQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
+              <Icon name="close" size={14} />
+            </button>
           )}
         </div>
 
-        <button
-          onClick={() => setMode("admin")}
-          className="flex-shrink-0 text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
-        >
-          Manage ⚙
-        </button>
+        {role !== "readonly" && (
+          <button
+            onClick={() => setMode("admin")}
+            className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            <Icon name="settings" size={14} /> Manage
+          </button>
+        )}
       </header>
 
       {/* ── Résultats de recherche (remplacent le browser) ─────────────── */}
@@ -438,6 +446,7 @@ export function AssistantPage() {
       </div>
       )}
     </div>
+    </AppFrame>
   );
 }
 

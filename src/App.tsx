@@ -5,6 +5,8 @@ import { useBootstrap } from './shared/hooks/useBootstrap';
 import { useStandard, useStandards } from './shared/hooks/useStandards';
 import { EmptyWorkspaceNotice } from './shared/components/ui/EmptyWorkspaceNotice';
 import { AccountManagementPage } from './features/accounts/AccountManagementPage';
+import { AppFrame, Brand } from './shared/components/AppFrame';
+import { Icon } from './shared/components/ui/Icon';
 import { stripHeavyJson } from './shared/previewSafe';
 import { AssistantPage } from './features/assistant/AssistantPage';
 import { LibraryPage } from './features/library/LibraryPage';
@@ -60,13 +62,13 @@ function AdminLayout() {
   // "Browser-Session" et écrasait la valeur correcte.
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <AppFrame>
+    <div className="flex h-full overflow-hidden bg-gray-50">
       <Sidebar />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <header className="flex-shrink-0 h-16 bg-white border-b border-gray-200 flex items-center px-6 gap-4 shadow-xs">
-          <span className="font-black text-gray-900 text-lg tracking-tight">MIL Browser</span>
-          <span className="text-[11px] font-mono font-semibold text-gray-400" title="Version de l'application">v{__APP_VERSION__}</span>
+        <header className="flex-shrink-0 h-16 bg-white border-b border-gray-200 flex items-center px-6 gap-4">
+          <Brand />
           <span className="inline-flex items-center px-2 py-0.5 text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded-md">
             MANAGEMENT
           </span>
@@ -82,7 +84,7 @@ function AdminLayout() {
           {repoMode === 'shared' && (
             <span
               className="inline-flex items-center px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide rounded border text-indigo-700 bg-indigo-50 border-indigo-200"
-              title="Votre rôle dans le dépôt partagé"
+              title="Your role in the shared repository"
             >
               {role}
             </span>
@@ -125,10 +127,10 @@ function AdminLayout() {
               <button
                 type="button"
                 onClick={() => setSyncError(null)}
-                aria-label="Masquer le message d'erreur de synchronisation"
-                className="text-red-400 hover:text-red-600 font-bold leading-none"
+                aria-label="Dismiss synchronization error"
+                className="text-red-400 hover:text-red-600 leading-none"
               >
-                ✕
+                <Icon name="close" size={16} />
               </button>
             </div>
           </div>
@@ -142,6 +144,7 @@ function AdminLayout() {
         </main>
       </div>
     </div>
+    </AppFrame>
   );
 }
 
