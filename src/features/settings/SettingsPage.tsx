@@ -265,7 +265,7 @@ export function SettingsPage() {
           </p>
           <p>
             <span className="font-medium text-gray-700">Version</span>{" "}
-            2.0.0
+            {__APP_VERSION__}
           </p>
           <p>
             <span className="font-medium text-gray-700">Standards loaded</span>{" "}

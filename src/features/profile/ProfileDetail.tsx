@@ -13,6 +13,7 @@ import type { Profile } from "../../core/domain/profile";
 import type { ProfileDefinition } from "../../core/domain/standard";
 import { Card } from "../../shared/components/ui/Card";
 import { Badge } from "../../shared/components/ui/Badge";
+import { profileStatusLabel } from "../../shared/profileStatus";
 import { TimeSeriesChart } from "../../shared/components/charts/TimeSeriesChart";
 import type { FieldGroup } from "../../core/domain/standard";
 
@@ -67,9 +68,10 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: P
           <h2 className="text-base font-semibold text-gray-900 leading-snug">
             {profile.name}
           </h2>
-          <Badge variant={profile.source === "builtin" ? "blue" : "gray"}>
-            {profile.source === "builtin" ? "Built-in" : "User"}
-          </Badge>
+          {(() => {
+            const s = profileStatusLabel(profile.status);
+            return <Badge variant={s.variant}>{s.label}</Badge>;
+          })()}
         </div>
         {profile.description !== "" && (
           <p className="mt-0.5 text-sm text-gray-500 leading-relaxed">

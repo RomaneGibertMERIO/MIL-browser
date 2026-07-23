@@ -64,6 +64,7 @@ function AdminLayout() {
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <header className="flex-shrink-0 h-16 bg-white border-b border-gray-200 flex items-center px-6 gap-4 shadow-xs">
           <span className="font-black text-gray-900 text-lg tracking-tight">MIL Browser</span>
+          <span className="text-[11px] font-mono font-semibold text-gray-400" title="Version de l'application">v{__APP_VERSION__}</span>
           <span className="inline-flex items-center px-2 py-0.5 text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded-md">
             MANAGEMENT
           </span>

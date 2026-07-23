@@ -11,6 +11,9 @@
  * résolution des types de Vite dans le runner CI.
  */
 
+/** Version de l'app, injectée par Vite depuis package.json (voir vite.config.ts). */
+declare const __APP_VERSION__: string;
+
 declare module "*.css";
 declare module "*.svg" {
   const src: string;

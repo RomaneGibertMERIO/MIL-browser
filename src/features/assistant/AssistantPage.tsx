@@ -27,6 +27,7 @@ import { saveActiveStandard } from "../../core/db/repositories/settings.repo";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 import { EmptyWorkspaceNotice } from "../../shared/components/ui/EmptyWorkspaceNotice";
 import { Badge } from "../../shared/components/ui/Badge";
+import { profileStatusLabel } from "../../shared/profileStatus";
 import { ProfileDetail } from "../profile/ProfileDetail";
 import { getEffectiveSchema } from "../../core/engine/profileEngine";
 
@@ -493,9 +494,10 @@ function ProfilesColumn({ profiles, onSelectProfile, selectedProfileId, width, o
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                  <Badge variant={profile.source === "builtin" ? "blue" : "gray"}>
-                    {profile.source === "builtin" ? "built-in" : "user"}
-                  </Badge>
+                  {(() => {
+                    const s = profileStatusLabel(profile.status);
+                    return <Badge variant={s.variant}>{s.label}</Badge>;
+                  })()}
                   <span className="text-xs text-gray-400">{profile.dataset.length}pts</span>
                 </div>
               </div>
