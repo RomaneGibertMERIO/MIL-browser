@@ -24,7 +24,8 @@ import type { FieldGroup } from "../../core/domain/standard";
 interface ProfileDetailProps {
   profile: Profile;
   schema: ProfileDefinition;
-  onBack: () => void;
+  /** Optionnel : sans lui, aucun bouton retour (ex. carte de comparaison épinglée). */
+  onBack?: () => void;
   backLabel?: string;
 }
 
@@ -51,16 +52,18 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: P
   const btnInactive = "text-gray-600 border-gray-200 bg-white hover:bg-gray-50";
   return (
     <div className="space-y-5">
-      {/* ── Back button ─────────────────────────────────────────────── */}
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
-      >
-        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z" />
-        </svg>
-        {backLabel}
-      </button>
+      {/* ── Back button (masqué quand aucun onBack n'est fourni) ─────── */}
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z" />
+          </svg>
+          {backLabel}
+        </button>
+      )}
 
       {/* ── Header ──────────────────────────────────────────────────── */}
       <Card>
