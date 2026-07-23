@@ -4,6 +4,7 @@ import { useBootstrapStore } from './store/bootstrapStore';
 import { useBootstrap } from './shared/hooks/useBootstrap';
 import { useStandard, useStandards } from './shared/hooks/useStandards';
 import { EmptyWorkspaceNotice } from './shared/components/ui/EmptyWorkspaceNotice';
+import { AccountManagementPage } from './features/accounts/AccountManagementPage';
 import { stripHeavyJson } from './shared/previewSafe';
 import { AssistantPage } from './features/assistant/AssistantPage';
 import { LibraryPage } from './features/library/LibraryPage';
@@ -49,6 +50,7 @@ function AdminLayout() {
   const setSyncError = useAppStore((s) => s.setSyncError);
   const repoMode = useAppStore((s) => s.repoMode);
   const isOffline = useAppStore((s) => s.isOffline);
+  const role = useAppStore((s) => s.role);
 
   const standard = useStandard(activeStdId ?? '');
 
@@ -74,8 +76,17 @@ function AdminLayout() {
               : adminView === 'standards' ? 'Standards'
               : adminView === 'settings' ? 'Settings'
               : adminView === 'validations' ? 'Pending Validations'
+              : adminView === 'accounts' ? 'Accounts & Roles'
               : adminView}
           </span>
+          {repoMode === 'shared' && (
+            <span
+              className="inline-flex items-center px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide rounded border text-indigo-700 bg-indigo-50 border-indigo-200"
+              title="Votre rôle dans le dépôt partagé"
+            >
+              {role}
+            </span>
+          )}
           
           {/* RECONSTRUCTED & ENLARGED SESSION INFO PANEL */}
           <div className="ml-auto flex items-center gap-3 pr-2">
@@ -139,21 +150,36 @@ interface ContentPaneProps {
   standard:  ReturnType<typeof useStandard>;
 }
 
+const ROLE_RANK = { readonly: 0, testing: 1, admin: 2 } as const;
+
 function ContentPane({ adminView, standard }: ContentPaneProps) {
   const setMode = useAppStore((s) => s.setMode);
-  const isAdmin = useAppStore((s) => s.isAdmin);
+  const role = useAppStore((s) => s.role);
   const standards = useStandards();
   const workspaceEmpty = standards !== undefined && standards.length === 0;
 
-  // Second verrou d'affichage : l'onglet est masqué dans la sidebar, mais la
-  // vue peut aussi être restaurée depuis les réglages persistés (lastView).
-  if (adminView === 'validations' && !isAdmin) {
+  // Rôle minimal requis par vue. Second verrou d'affichage : un onglet masqué
+  // dans la sidebar peut aussi être restauré via lastView. Le contrôle réel des
+  // écritures reste appliqué par le processus principal.
+  const minRoleByView: Record<AdminView, keyof typeof ROLE_RANK> = {
+    settings: "readonly",
+    browse: "testing",
+    library: "testing",
+    standards: "testing",
+    validations: "admin",
+    accounts: "admin",
+  };
+
+  if (ROLE_RANK[role] < ROLE_RANK[minRoleByView[adminView]]) {
     return (
-      <div className="flex items-center justify-center h-full text-sm text-gray-400">
-        Cette section est réservée aux administrateurs déclarés dans admins.json.
+      <div className="flex items-center justify-center h-full text-sm text-gray-400 text-center px-6">
+        Section réservée à un rôle supérieur.<br />
+        Votre rôle actuel est « {role} ». Contactez un administrateur pour obtenir plus de droits.
       </div>
     );
   }
+
+  if (adminView === 'accounts') return <AccountManagementPage />;
 
   if (adminView === 'browse') {
     return (

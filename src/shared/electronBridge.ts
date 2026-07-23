@@ -47,6 +47,15 @@ export interface DeletionMarker {
   deletedAt: string;
 }
 
+export type UserRole = "admin" | "testing" | "readonly";
+
+export interface SessionInfo {
+  username: string;
+  firstSeen: string;
+  lastSeen: string;
+  role: UserRole;
+}
+
 export interface GitSyncResult extends IpcResult {
   pulledProfiles?: unknown[];
   pulledStandards?: unknown[];
@@ -54,7 +63,13 @@ export interface GitSyncResult extends IpcResult {
   deletions?: DeletionMarker[];
   admins?: string[];
   currentUser?: string;
+  role?: UserRole;
   isAdmin?: boolean;
+}
+
+export interface SessionsResult extends IpcResult {
+  sessions?: SessionInfo[];
+  currentUser?: string;
 }
 
 export interface AdminsResult extends IpcResult {
@@ -89,6 +104,9 @@ export interface ElectronBridge {
     standardId: string;
     reason: string;
   }) => Promise<IpcResult>;
+
+  gitListSessions: (repoPath?: string) => Promise<SessionsResult>;
+  gitSetRole: (payload: { repoPath?: string; username: string; role: UserRole }) => Promise<IpcResult>;
 }
 
 /**

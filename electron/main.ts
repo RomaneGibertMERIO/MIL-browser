@@ -14,7 +14,12 @@ import {
   readAdmins,
   isAdminUser,
   deleteProfileFromGit,
-  deleteStandardFromGit
+  deleteStandardFromGit,
+  readRole,
+  recordSession,
+  readSessions,
+  setUserRole,
+  type UserRole
 } from "./gitService";
 
 /**
@@ -34,8 +39,19 @@ async function assertAdmin(repoPath: string): Promise<{ success: false; error: s
   return {
     success: false,
     error:
-      `Compte "${currentUser()}" non autorise a valider. ` +
-      `Les administrateurs sont declares dans admins.json, a la racine du depot central.`,
+      `Compte "${currentUser()}" non autorise : action reservee aux administrateurs.`,
+  };
+}
+
+/** Refuse l'opération si l'utilisateur courant est en lecture seule. */
+async function assertCanContribute(repoPath: string): Promise<{ success: false; error: string } | null> {
+  const role = await readRole(repoPath, currentUser());
+  if (role !== "readonly") return null;
+  return {
+    success: false,
+    error:
+      `Compte "${currentUser()}" en lecture seule : la soumission de modifications ` +
+      `requiert un role "testing" ou "admin", attribue par un administrateur.`,
   };
 }
 
@@ -164,6 +180,51 @@ ipcMain.handle("git:get-admins", async (_event, repoPath?: string) => {
   };
 });
 
+ipcMain.handle("git:list-sessions", async (_event, repoPath?: string) => {
+  const targetPath = repoPath || activeRemotePath;
+  if (!targetPath) {
+    return { success: false, error: "Aucun dépôt Git configuré." };
+  }
+  const denied = await assertAdmin(targetPath);
+  if (denied) return denied;
+  return { success: true, sessions: await readSessions(targetPath), currentUser: currentUser() };
+});
+
+ipcMain.handle("git:set-role", async (_event, payload) => {
+  try {
+    const { repoPath, username, role } = payload as { repoPath?: string; username: string; role: UserRole };
+    const targetPath = repoPath || activeRemotePath;
+    if (!targetPath) {
+      return { success: false, error: "Aucun dépôt Git configuré." };
+    }
+    if (role !== "admin" && role !== "testing" && role !== "readonly") {
+      return { success: false, error: `Rôle invalide : ${role}` };
+    }
+    const denied = await assertAdmin(targetPath);
+    if (denied) return denied;
+
+    // Garde-fou : un admin ne peut pas se retirer à lui-même le dernier rôle
+    // admin (risque de verrouillage total du dépôt).
+    if (role !== "admin" && username.trim().toLowerCase() === currentUser().trim().toLowerCase()) {
+      const sessions = await readSessions(targetPath);
+      const otherAdmins = sessions.filter(
+        (s) => s.role === "admin" && s.username.trim().toLowerCase() !== currentUser().trim().toLowerCase(),
+      );
+      if (otherAdmins.length === 0) {
+        return {
+          success: false,
+          error: "Impossible : vous êtes le dernier administrateur. Promouvez d'abord un autre compte.",
+        };
+      }
+    }
+
+    return await setUserRole(targetPath, username, role);
+  } catch (error: any) {
+    console.error("Erreur git:set-role:", error);
+    return { success: false, error: error.message };
+  }
+});
+
 let activeRemotePath: string = "";
 
 ipcMain.handle("git:set-path", async (_event, repoPath: string) => {
@@ -182,7 +243,13 @@ ipcMain.handle("git:sync", async (_event, username: string) => {
     if (!activeRemotePath) {
       return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
     }
+    const me = currentUser();
+    // Enregistre le passage de ce poste (même un simple pull) pour alimenter la
+    // liste des sessions que l'admin consulte. Ne bloque jamais la synchro.
+    await recordSession(activeRemotePath, me);
+
     const { standards, profiles, rejections, deletions, admins } = await pullRepository(activeRemotePath);
+    const role = await readRole(activeRemotePath, me);
     return {
       success: true,
       pulledProfiles: profiles,
@@ -190,8 +257,9 @@ ipcMain.handle("git:sync", async (_event, username: string) => {
       rejections,
       deletions,
       admins,
-      currentUser: currentUser(),
-      isAdmin: await isAdminUser(activeRemotePath, currentUser()),
+      currentUser: me,
+      role,
+      isAdmin: role === "admin",
     };
   } catch (error: any) {
     console.error("Erreur git:sync:", error);
@@ -204,6 +272,8 @@ ipcMain.handle("git:submit-profile", async (_event, { username, profile }) => {
     if (!activeRemotePath) {
       return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
     }
+    const denied = await assertCanContribute(activeRemotePath);
+    if (denied) return denied;
     await submitProfileToGit(activeRemotePath, username, profile);
     return { success: true };
   } catch (error: any) {
@@ -261,6 +331,8 @@ ipcMain.handle("git:submit-standard", async (_event, payload) => {
       return { success: false, error: "Aucun dépôt Git configuré." };
     }
 
+    const denied = await assertCanContribute(targetPath);
+    if (denied) return denied;
     await submitStandardToGit(targetPath, username, standard);
     return { success: true };
   } catch (error: any) {

@@ -112,9 +112,144 @@ export async function readAdmins(remoteInput: string): Promise<string[]> {
 
 /** Comparaison insensible à la casse : les noms de session Windows varient. */
 export async function isAdminUser(remoteInput: string, username: string): Promise<boolean> {
+  return (await readRole(remoteInput, username)) === "admin";
+}
+
+// ===========================================================================
+// Rôles & sessions
+// ===========================================================================
+
+export type UserRole = "admin" | "testing" | "readonly";
+
+export interface SessionInfo {
+  username: string;
+  firstSeen: string;
+  lastSeen: string;
+  role: UserRole;
+}
+
+/** Fichier de rôles à la racine du dépôt : { "roles": { "rgibert": "admin" } }. */
+const ACCESS_FILE = "access.json";
+/** Un fichier par poste : sessions/<user>.json. */
+const SESSIONS_SUBDIR = "sessions";
+
+const norm = (u: string): string => u.trim().toLowerCase();
+const safeName = (u: string): string => norm(u).replace(/[^a-z0-9._-]/g, "_") || "unknown";
+
+/**
+ * Charge la table des rôles depuis le dépôt central.
+ *
+ * - Si access.json existe, il fait foi.
+ * - Sinon on migre depuis l'ancien admins.json (ses membres deviennent admin).
+ * - Si aucun des deux n'existe (dépôt neuf), `source` vaut "none" : l'accès est
+ *   alors ouvert à tous pour éviter tout verrouillage, jusqu'à ce qu'un admin
+ *   assigne le premier rôle.
+ */
+async function loadRoles(
+  remoteInput: string,
+): Promise<{ roles: Record<string, UserRole>; source: "access" | "admins" | "none" }> {
+  const base = getFsPath(remoteInput);
+
+  try {
+    const parsed = JSON.parse(await fsp.readFile(path.join(base, ACCESS_FILE), "utf8"));
+    const raw = parsed?.roles ?? {};
+    const roles: Record<string, UserRole> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v === "admin" || v === "testing" || v === "readonly") roles[norm(k)] = v;
+    }
+    return { roles, source: "access" };
+  } catch {
+    // access.json absent : on tente la migration depuis admins.json.
+  }
+
   const admins = await readAdmins(remoteInput);
-  if (admins.length === 0) return true;
-  return admins.some((a) => a.trim().toLowerCase() === username.trim().toLowerCase());
+  if (admins.length > 0) {
+    const roles: Record<string, UserRole> = {};
+    for (const a of admins) roles[norm(a)] = "admin";
+    return { roles, source: "admins" };
+  }
+
+  return { roles: {}, source: "none" };
+}
+
+/**
+ * Rôle effectif d'un utilisateur.
+ * Dépôt sans contrôle d'accès => admin (comportement ouvert historique).
+ * Sinon, non listé => readonly (le plus restrictif).
+ */
+export async function readRole(remoteInput: string, username: string): Promise<UserRole> {
+  const { roles, source } = await loadRoles(remoteInput);
+  if (source === "none") return "admin";
+  return roles[norm(username)] ?? "readonly";
+}
+
+/** Enregistre le passage d'un poste (connexion ou pull) dans le dépôt central. */
+export async function recordSession(remoteInput: string, username: string): Promise<void> {
+  try {
+    const dir = path.join(getFsPath(remoteInput), SESSIONS_SUBDIR);
+    await fsp.mkdir(dir, { recursive: true });
+    const file = path.join(dir, `${safeName(username)}.json`);
+
+    let firstSeen = new Date().toISOString();
+    try {
+      const prev = JSON.parse(await fsp.readFile(file, "utf8"));
+      if (typeof prev?.firstSeen === "string") firstSeen = prev.firstSeen;
+    } catch {
+      // Première visite de ce poste.
+    }
+
+    await fsp.writeFile(
+      file,
+      JSON.stringify({ username, firstSeen, lastSeen: new Date().toISOString() }, null, 2),
+      "utf8",
+    );
+  } catch (err) {
+    // Le suivi de session ne doit jamais faire échouer une synchronisation.
+    console.warn("recordSession impossible :", err);
+  }
+}
+
+/** Liste toutes les sessions connues, chacune annotée de son rôle courant. */
+export async function readSessions(remoteInput: string): Promise<SessionInfo[]> {
+  const dir = path.join(getFsPath(remoteInput), SESSIONS_SUBDIR);
+  const { roles, source } = await loadRoles(remoteInput);
+  const files = await listJson(dir);
+
+  const sessions = await Promise.all(
+    files.map(async (f) => {
+      try {
+        const s = JSON.parse(await fsp.readFile(path.join(dir, f), "utf8"));
+        const role: UserRole = source === "none" ? "admin" : roles[norm(s.username)] ?? "readonly";
+        return { username: s.username, firstSeen: s.firstSeen, lastSeen: s.lastSeen, role } as SessionInfo;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return sessions.filter((s): s is SessionInfo => s !== null).sort((a, b) => a.username.localeCompare(b.username));
+}
+
+/**
+ * Assigne un rôle à un utilisateur (réservé aux admins — vérifié côté main).
+ * Écrit access.json en migrant au passage les admins hérités d'admins.json,
+ * pour ne perdre personne lors du premier changement de rôle.
+ */
+export async function setUserRole(
+  remoteInput: string,
+  targetUser: string,
+  role: UserRole,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const base = getFsPath(remoteInput);
+    const { roles } = await loadRoles(remoteInput);
+    roles[norm(targetUser)] = role;
+    await fsp.writeFile(path.join(base, ACCESS_FILE), JSON.stringify({ roles }, null, 2), "utf8");
+    return { success: true };
+  } catch (error: any) {
+    console.error("setUserRole impossible :", error);
+    return { success: false, error: error.message };
+  }
 }
 
 function getFsPath(remoteInput: string): string {

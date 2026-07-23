@@ -10,5 +10,11 @@
   ],
   "win": {
     "target": ["portable", "nsis"]
+  },
+  "nsis": {
+    "artifactName": "MIL-Browser-Setup-${version}.${ext}"
+  },
+  "portable": {
+    "artifactName": "MIL-Browser-Portable-${version}.${ext}"
   }
 }

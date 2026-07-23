@@ -44,14 +44,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win portable nsis --publish never
 
+      # Les noms de fichiers incluent la version (voir electron-builder.json) :
+      # MIL-Browser-Portable-<version>.exe et MIL-Browser-Setup-<version>.exe.
       - name: Upload artifacts (portable)
         uses: actions/upload-artifact@v4
         with:
           name: mil-browser-portable
-          path: release/*portable*.exe
+          path: release/*Portable*.exe
+          if-no-files-found: error
 
       - name: Upload artifacts (installer)
         uses: actions/upload-artifact@v4
         with:
           name: mil-browser-installer
           path: release/*Setup*.exe
+          if-no-files-found: error

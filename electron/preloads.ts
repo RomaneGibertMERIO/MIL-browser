@@ -31,6 +31,11 @@ const bridge = {
 
   gitGetAdmins: (repoPath?: string) => ipcRenderer.invoke("git:get-admins", repoPath),
 
+  gitListSessions: (repoPath?: string) => ipcRenderer.invoke("git:list-sessions", repoPath),
+
+  gitSetRole: (payload: { repoPath?: string; username: string; role: string }) =>
+    ipcRenderer.invoke("git:set-role", payload),
+
   gitSubmitStandard: (payload: { repoPath: string; username: string; standard: unknown }) =>
     ipcRenderer.invoke("git:submit-standard", payload),
 

@@ -4,12 +4,21 @@ import { useStandards } from "../shared/hooks/useStandards";
 import { saveActiveStandard } from "../core/db/repositories/settings.repo";
 import { SubmitChangesModal } from "./SubmitChangesModal";
 
-const NAV_ITEMS: { view: AdminView; label: string; icon: string; adminOnly?: boolean }[] = [
-  { view: "library",   label: "Library Space",   icon: "◧" },
-  { view: "standards", label: "Standards Config", icon: "≡" },
-  { view: "validations", label: "Admin Validations", icon: "🔧", adminOnly: true },
-  { view: "settings",  label: "Global Settings",  icon: "⚙" },
+type Role = "admin" | "testing" | "readonly";
+
+// `minRole` : rôle minimal pour voir l'entrée.
+// - readonly ne voit que Settings (pour régler le chemin du dépôt).
+// - testing voit Library/Standards (créer et pousser) + Settings.
+// - admin voit tout, plus Validations et Accounts.
+const NAV_ITEMS: { view: AdminView; label: string; icon: string; minRole: Role }[] = [
+  { view: "library",     label: "Library Space",     icon: "◧", minRole: "testing" },
+  { view: "standards",   label: "Standards Config",  icon: "≡", minRole: "testing" },
+  { view: "validations", label: "Admin Validations", icon: "🔧", minRole: "admin" },
+  { view: "accounts",    label: "Accounts & Roles",  icon: "👥", minRole: "admin" },
+  { view: "settings",    label: "Global Settings",   icon: "⚙", minRole: "readonly" },
 ];
+
+const ROLE_RANK: Record<Role, number> = { readonly: 0, testing: 1, admin: 2 };
 
 export function Sidebar() {
   const adminView       = useAppStore((s) => s.adminView);
@@ -20,11 +29,12 @@ export function Sidebar() {
 
   const localChanges    = useAppStore((s) => s.localStagedChanges);
   const pendingCommits  = useAppStore((s) => s.pendingCommits);
-  const isAdmin         = useAppStore((s) => s.isAdmin);
+  const role            = useAppStore((s) => s.role);
 
-  // L'onglet de validation n'est qu'un confort d'affichage : le refus d'accès
-  // réel est appliqué par le processus principal, à partir du compte système.
-  const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  // Gating d'affichage uniquement : le refus d'accès réel est appliqué par le
+  // processus principal, à partir du compte système (non falsifiable).
+  const visibleNavItems = NAV_ITEMS.filter((item) => ROLE_RANK[role] >= ROLE_RANK[item.minRole]);
+  const canContribute = ROLE_RANK[role] >= ROLE_RANK.testing;
 
   const [isSyncOpen, setIsSyncOpen] = useState(false);
 
@@ -55,17 +65,19 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* SUBMIT CHANGES ACTION BUTTON */}
-      <div className="px-4 pt-4 pb-2 flex-shrink-0">
-        <button
-          onClick={() => setIsSyncOpen(true)}
-          disabled={localChanges.length === 0}
-          className="w-full flex items-center justify-center gap-3 px-4 py-3.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-500 disabled:opacity-20 disabled:hover:bg-blue-600 disabled:cursor-not-allowed transition-all shadow-md active:scale-[0.98]"
-        >
-          <span className="text-base">📤</span>
-          <span>Push Local Changes ({localChanges.length})</span>
-        </button>
-      </div>
+      {/* SUBMIT CHANGES ACTION BUTTON — masqué en lecture seule */}
+      {canContribute && (
+        <div className="px-4 pt-4 pb-2 flex-shrink-0">
+          <button
+            onClick={() => setIsSyncOpen(true)}
+            disabled={localChanges.length === 0}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-500 disabled:opacity-20 disabled:hover:bg-blue-600 disabled:cursor-not-allowed transition-all shadow-md active:scale-[0.98]"
+          >
+            <span className="text-base">📤</span>
+            <span>Push Local Changes ({localChanges.length})</span>
+          </button>
+        </div>
+      )}
 
       {/* STANDARD SELECTOR */}
       <div className="px-4 py-3 flex-shrink-0">

@@ -13,7 +13,7 @@ import {
 import { standardWorkspace } from "../core/domain/standard";
 
 export type AppMode = "assistant" | "admin";
-export type AdminView = 'browse' | 'library' | 'standards' | 'settings' | 'validations';
+export type AdminView = 'browse' | 'library' | 'standards' | 'settings' | 'validations' | 'accounts';
 
 export interface ActiveNode {
   standardId: string;
@@ -73,6 +73,19 @@ interface AppState {
    * appliqué par le processus principal, qui seul connaît l'identité système.
    */
   isAdmin: boolean;
+
+  /**
+   * Rôle de l'utilisateur courant dans le dépôt partagé.
+   * - "admin"    : gère les comptes, valide/refuse les propositions.
+   * - "testing"  : peut créer et pousser des propositions.
+   * - "readonly" : accès limité au réglage du chemin du dépôt.
+   *
+   * En mode autonome (aucun dépôt), l'utilisateur est traité comme "admin" :
+   * c'est son application locale, il y a tous les droits. En mode partagé, le
+   * rôle vient du processus principal (access.json). Ce champ ne pilote QUE
+   * l'affichage ; le contrôle réel est appliqué côté main.
+   */
+  role: "admin" | "testing" | "readonly";
 
   /**
    * Espace de travail actif, déduit de gitRepoPath.
@@ -269,6 +282,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingCommits: [],
   syncError: null,
   isAdmin: true,
+  role: "admin",
   repoMode: "local",
   isOffline: false,
 
@@ -284,7 +298,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Le mode découle directement du chemin : renseigné => le dépôt fait foi.
     const repoMode = gitRepoPath.trim() === "" ? "local" : "shared";
     const previousMode = get().repoMode;
-    set({ gitRepoPath, repoMode, isOffline: false });
+    // Mode autonome : tous les droits sur sa propre app. Le rôle réel du mode
+    // partagé sera fixé par la prochaine synchro.
+    set({
+      gitRepoPath,
+      repoMode,
+      isOffline: false,
+      ...(repoMode === "local" ? { role: "admin" as const, isAdmin: true } : {}),
+    });
 
     // Retour au mode autonome : on réinstalle le socle d'usine. Les normes
     // builtin que le dépôt central avait remplacées n'existent plus en base
@@ -516,9 +537,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ pendingCommits: reconstructedCommits });
     }
 
-    // Renseigné par le processus principal à partir de admins.json.
+    // Rôle et statut admin renseignés par le processus principal (access.json).
     set({
-      isAdmin: gitResult.isAdmin ?? true,
+      role: gitResult.role ?? "readonly",
+      isAdmin: gitResult.isAdmin ?? (gitResult.role === "admin"),
       repoMode: "shared",
       isOffline: false,
       syncError: null,

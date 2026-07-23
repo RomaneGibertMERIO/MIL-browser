@@ -23,7 +23,6 @@ import { Card } from "../../shared/components/ui/Card";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 
 import { saveGitRepoPath } from "../../core/db/repositories/settings.repo";
-import { getElectronBridge, type AdminsResult } from "../../shared/electronBridge";
 
 // ---------------------------------------------------------------------------
 // SettingsPage
@@ -38,30 +37,21 @@ export function SettingsPage() {
   // AppStore interactions for Git Repository Path
   const gitRepoPath = useAppStore((s) => s.gitRepoPath);
   const setGitRepoPath = useAppStore((s) => s.setGitRepoPath);
+  const repoMode = useAppStore((s) => s.repoMode);
+  const role = useAppStore((s) => s.role);
+  const systemUsername = useAppStore((s) => s.systemUsername);
   const [localPathInput, setLocalPathInput] = useState(gitRepoPath);
   const [pathSaveSuccess, setPathSaveSuccess] = useState(false);
 
   const importInputRef = useRef<HTMLInputElement>(null);
 
-  const [access, setAccess] = useState<AdminsResult | null>(null);
-
   useEffect(() => {
     let cancelled = false;
-
     getSettings()
       .then((s) => { if (!cancelled) setSettings(s); })
       .catch((err) => console.error("Lecture des reglages impossible :", err));
-
-    const bridge = getElectronBridge();
-    if (bridge !== null) {
-      bridge
-        .gitGetAdmins(gitRepoPath)
-        .then((r) => { if (!cancelled) setAccess(r); })
-        .catch((err) => console.error("Lecture de admins.json impossible :", err));
-    }
-
     return () => { cancelled = true; };
-  }, [gitRepoPath]);
+  }, []);
 
   if (settings === null || standards === undefined) return <LoadingSpinner />;
 
@@ -142,57 +132,23 @@ export function SettingsPage() {
         </form>
       </Card>
 
-      {/* ── Contrôle d'accès administrateur ───────────────────────────── */}
-      {access !== null && (
-        <Card title="Validation Access Control">
-          <div className="space-y-3 text-sm">
+      {/* ── Rôle & accès ───────────────────────────────────────────────── */}
+      {repoMode === "shared" && (
+        <Card title="Your access">
+          <div className="space-y-2 text-sm">
             <p className="text-gray-600">
-              Signed in as{" "}
-              <span className="font-mono font-semibold text-gray-900">
-                {access.currentUser ?? "—"}
-              </span>{" "}
-              —{" "}
-              {access.isAdmin ? (
-                <span className="font-semibold text-emerald-700">administrator</span>
-              ) : (
-                <span className="font-semibold text-gray-500">standard user</span>
-              )}
+              Connecté en tant que{" "}
+              <span className="font-mono font-semibold text-gray-900">{systemUsername}</span> —{" "}
+              rôle{" "}
+              <span className="font-semibold text-indigo-700">{role}</span>
             </p>
-
-            {access.unrestricted ? (
-              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-                <p className="font-semibold mb-1">No access control is in place.</p>
-                <p>
-                  Every workstation can approve and reject submissions. To restrict this, create a
-                  file named <span className="font-mono font-semibold">admins.json</span> at the root
-                  of the central repository:
-                </p>
-                <pre className="mt-2 p-2 bg-white/70 rounded border border-amber-200 font-mono text-[11px] overflow-x-auto">{`{ "admins": ["${access.currentUser ?? "your.username"}"] }`}</pre>
-                <p className="mt-2">
-                  Names are matched against the Windows session name, case-insensitively.
-                </p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-1.5">
-                  Declared administrators ({access.admins?.length ?? 0})
-                </p>
-                <ul className="flex flex-wrap gap-1.5">
-                  {(access.admins ?? []).map((name) => (
-                    <li
-                      key={name}
-                      className="px-2 py-1 rounded-md bg-gray-100 border border-gray-200 font-mono text-xs text-gray-700"
-                    >
-                      {name}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-2 text-xs text-gray-400">
-                  Edit <span className="font-mono">admins.json</span> at the root of the central
-                  repository to change this list.
-                </p>
-              </div>
-            )}
+            <p className="text-xs text-gray-400">
+              {role === "admin"
+                ? "Vous gérez les comptes et validez les propositions (onglet « Accounts & Roles »)."
+                : role === "testing"
+                ? "Vous pouvez créer et pousser des propositions. La validation revient aux administrateurs."
+                : "Accès en lecture seule : vous pouvez seulement vérifier le chemin du dépôt. Un administrateur peut élargir vos droits."}
+            </p>
           </div>
         </Card>
       )}
