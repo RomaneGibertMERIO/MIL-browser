@@ -77,6 +77,45 @@ function columnHeading(nodes: TaxonomyNodeItem[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Recherche — balaie TOUS les champs (nœuds ET profils)
+// ---------------------------------------------------------------------------
+
+function flattenNodes(nodes: TaxonomyNodeItem[]): TaxonomyNodeItem[] {
+  const out: TaxonomyNodeItem[] = [];
+  const walk = (ns: TaxonomyNodeItem[]) => { for (const n of ns) { out.push(n); walk(n.children); } };
+  walk(nodes);
+  return out;
+}
+
+/** Chemin d'ids de la racine jusqu'au nœud cible (pour naviguer depuis un résultat). */
+function buildIdPath(tree: TaxonomyNodeItem[], targetId: string): string[] {
+  const search = (ns: TaxonomyNodeItem[], path: string[]): string[] | null => {
+    for (const n of ns) {
+      const p = [...path, n.id];
+      if (n.id === targetId) return p;
+      const found = search(n.children, p);
+      if (found !== null) return found;
+    }
+    return null;
+  };
+  return search(tree, []) ?? [];
+}
+
+/** Texte recherchable d'un nœud : label, code, description, tags, type. */
+function nodeHaystack(n: TaxonomyNodeItem): string {
+  return [n.label, n.code, n.description ?? "", (n.tags ?? []).join(" "), n.type].join(" ").toLowerCase();
+}
+
+/** Texte recherchable d'un profil : nom, description, auteur, statut, TOUS les
+ *  champs et TOUTES les cellules du dataset (donc commentaires/notes compris). */
+function profileHaystack(p: Profile): string {
+  const parts: string[] = [p.name, p.description ?? "", p.author ?? "", p.status ?? ""];
+  for (const v of Object.values(p.fields ?? {})) parts.push(String(v ?? ""));
+  for (const row of p.dataset ?? []) for (const v of Object.values(row ?? {})) parts.push(String(v ?? ""));
+  return parts.join(" ").toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
 // AssistantPage
 // ---------------------------------------------------------------------------
 
@@ -88,6 +127,7 @@ export function AssistantPage() {
 
   const [selectedPath, setSelectedPath]           = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery]             = useState("");
   const [pinned, setPinned]                       = useState<Profile[]>([]);
   const [collapsedPins, setCollapsedPins]         = useState<Set<string>>(new Set());
   const [rightWidth, setRightWidth]               = useState(520);
@@ -130,6 +170,16 @@ export function AssistantPage() {
     };
   }, [standards]);
 
+  const searchActive = searchQuery.trim().length >= 2;
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (q.length < 2) return { nodes: [] as TaxonomyNodeItem[], profiles: [] as Profile[] };
+    return {
+      nodes: flattenNodes(tree).filter(n => nodeHaystack(n).includes(q)),
+      profiles: (allProfiles ?? []).filter(p => profileHaystack(p).includes(q)),
+    };
+  }, [searchQuery, tree, allProfiles]);
+
   const millerRef = useRef<HTMLDivElement>(null);
   const resizeAbortRef = useRef<AbortController | null>(null);
   useEffect(() => () => resizeAbortRef.current?.abort(), []);
@@ -141,6 +191,7 @@ export function AssistantPage() {
   useEffect(() => {
     setSelectedPath([]);
     setSelectedProfileId(null);
+    setSearchQuery("");
   }, [activeStdId]);
 
   function beginGesture(onMove: (ev: MouseEvent) => void): void {
@@ -197,6 +248,17 @@ export function AssistantPage() {
     setSelectedPath(prev => [...prev.slice(0, colIdx), nodeId]);
     setSelectedProfileId(null);
   }
+  // Depuis un résultat de recherche : on navigue jusqu'au nœud (et au profil).
+  function goToNode(nodeId: string) {
+    setSelectedPath(buildIdPath(tree, nodeId));
+    setSelectedProfileId(null);
+    setSearchQuery("");
+  }
+  function goToProfile(p: Profile) {
+    setSelectedPath(buildIdPath(tree, p.nodeId));
+    setSelectedProfileId(p.id);
+    setSearchQuery("");
+  }
   function togglePin(profile: Profile) {
     setPinned(prev => prev.some(p => p.id === profile.id)
       ? prev.filter(p => p.id !== profile.id)
@@ -226,7 +288,7 @@ export function AssistantPage() {
         <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-semibold uppercase tracking-wide">
           Read-Only
         </span>
-        {selectedNode != null && (
+        {selectedNode != null && !searchActive && (
           <div className="flex flex-wrap items-center gap-1 text-xs text-gray-400 min-w-0 overflow-hidden">
             {selectedNode.path.map((label, i) => (
               <span key={i} className="flex items-center gap-1 whitespace-nowrap">
@@ -236,15 +298,44 @@ export function AssistantPage() {
             ))}
           </div>
         )}
+
+        {/* Recherche — balaie tous les champs de la norme active */}
+        <div className="relative ml-auto min-w-[180px] max-w-xs flex-shrink-0">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Rechercher (tous les champs)…"
+            className="w-full pl-8 pr-7 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {searchQuery.length > 0 && (
+            <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-sm">✕</button>
+          )}
+        </div>
+
         <button
           onClick={() => setMode("admin")}
-          className="ml-auto flex-shrink-0 text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
+          className="flex-shrink-0 text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
         >
           Manage ⚙
         </button>
       </header>
 
-      {/* ── Corps ──────────────────────────────────────────────────────── */}
+      {/* ── Résultats de recherche (remplacent le browser) ─────────────── */}
+      {searchActive ? (
+        <SearchResultsView
+          results={searchResults}
+          query={searchQuery.trim()}
+          onNode={goToNode}
+          onProfile={goToProfile}
+          onTogglePin={togglePin}
+          isPinned={isPinned}
+        />
+      ) : (
+      /* ── Corps ──────────────────────────────────────────────────────── */
       <div className="flex flex-1 overflow-hidden">
 
         {/* MILLER — normes + nœuds + PROFILS, colonnes à largeur égale */}
@@ -345,6 +436,88 @@ export function AssistantPage() {
           ))}
         </div>
       </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Vue des résultats de recherche
+// ---------------------------------------------------------------------------
+
+function SearchResultsView({ results, query, onNode, onProfile, onTogglePin, isPinned }: {
+  results: { nodes: TaxonomyNodeItem[]; profiles: Profile[] };
+  query: string;
+  onNode: (nodeId: string) => void;
+  onProfile: (p: Profile) => void;
+  onTogglePin: (p: Profile) => void;
+  isPinned: (id: string) => boolean;
+}) {
+  const total = results.nodes.length + results.profiles.length;
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+        {total} résultat{total !== 1 ? "s" : ""} pour « {query} »
+      </p>
+
+      {total === 0 && (
+        <p className="text-sm text-gray-400 text-center py-12">
+          Aucune correspondance dans la norme active. La recherche balaie labels, codes,
+          descriptions, tags, ainsi que le nom, l'auteur, tous les champs et toutes les
+          cellules de données des profils.
+        </p>
+      )}
+
+      {results.nodes.length > 0 && (
+        <section className="mb-8 max-w-3xl">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Nœuds ({results.nodes.length})</h3>
+          <div className="space-y-1.5">
+            {results.nodes.map(node => (
+              <button key={node.id} onClick={() => onNode(node.id)}
+                className="w-full text-left bg-white border border-gray-200 rounded-lg px-4 py-3 hover:border-blue-300 hover:shadow-sm transition-all group">
+                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                  <span className="font-medium text-sm text-gray-900 group-hover:text-blue-700">{node.label}</span>
+                  <span className="text-xs font-mono text-gray-400">{node.code}</span>
+                  <Badge variant="gray">{node.type}</Badge>
+                </div>
+                <p className="text-xs text-gray-400">{node.path.join(" › ")}</p>
+                {node.description !== undefined && (
+                  <p className="text-xs text-gray-500 mt-1 line-clamp-1">{node.description}</p>
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {results.profiles.length > 0 && (
+        <section className="max-w-3xl">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Profils ({results.profiles.length})</h3>
+          <div className="space-y-1.5">
+            {results.profiles.map(p => {
+              const s = profileStatusLabel(p.status);
+              const pinned = isPinned(p.id);
+              return (
+                <div key={p.id} className="flex items-stretch gap-2 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all">
+                  <button onClick={() => onProfile(p)} className="flex-1 min-w-0 text-left px-4 py-3 group">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                      <span className="font-medium text-sm text-gray-900 group-hover:text-blue-700">{p.name}</span>
+                      <Badge variant={s.variant}>{s.label}</Badge>
+                      <span className="text-xs text-gray-400">{p.dataset.length} pts</span>
+                    </div>
+                    {p.description !== "" && <p className="text-xs text-gray-500 line-clamp-1">{p.description}</p>}
+                    {p.author && p.author !== "unknown" && <p className="text-[11px] text-gray-400 italic mt-0.5">by {p.author}</p>}
+                  </button>
+                  <button onClick={() => onTogglePin(p)} title={pinned ? "Retirer de la comparaison" : "Épingler pour comparer"}
+                    className={`flex-shrink-0 px-3 border-l border-gray-100 text-sm transition-colors ${pinned ? "text-blue-600 bg-blue-50" : "text-gray-300 hover:text-blue-600 hover:bg-blue-50"}`}>
+                    📌
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
