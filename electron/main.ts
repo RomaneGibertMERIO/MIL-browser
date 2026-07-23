@@ -68,17 +68,18 @@ function attachRendererLog(win: BrowserWindow): void {
   const LEVELS = ["VERBOSE", "INFO", "WARN", "ERROR"];
 
   win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
-    try {
-      const label = LEVELS[level] ?? String(level);
-      const source = sourceId ? `${sourceId}:${line}` : "";
-      fs.appendFileSync(
-        logFile,
-        `[${new Date().toISOString()}] ${label} ${message}${source ? `  (${source})` : ""}\n`,
-        "utf8",
-      );
-    } catch {
-      // Un échec d'écriture du journal ne doit jamais perturber l'application.
-    }
+    const label = LEVELS[level] ?? String(level);
+    const source = sourceId ? `${sourceId}:${line}` : "";
+    // Écriture asynchrone : un message volumineux ne doit pas bloquer la boucle
+    // d'événements du processus principal. On tronque aussi par sécurité.
+    const safeMessage = typeof message === "string" && message.length > 4000
+      ? `${message.slice(0, 4000)}… [${message.length} caractères]`
+      : message;
+    fs.promises
+      .appendFile(logFile, `[${new Date().toISOString()}] ${label} ${safeMessage}${source ? `  (${source})` : ""}\n`, "utf8")
+      .catch(() => {
+        // Un échec d'écriture du journal ne doit jamais perturber l'application.
+      });
   });
 }
 

@@ -5,6 +5,7 @@ import { useAppStore } from "../../store/appStore";
 import { loadBuiltinStandards } from "../../core/engine/standardLoader";
 import { db } from "../../core/db/schema";
 import { standardWorkspace } from "../../core/domain/standard";
+import { compactStandardSyncEvents } from "../../core/db/repositories/syncEvents.repo";
 import { getElectronBridge } from "../electronBridge";
 
 /**
@@ -44,6 +45,16 @@ export function useBootstrap(): void {
         }
       } else {
         setSystemUsername("Browser-Session");
+      }
+
+      // 1bis. Compaction unique des événements de synchro trop lourds
+      //       (anciens standards illustrés stockés en entier). Évite le gel de
+      //       refreshLocalChanges hérité des versions précédentes.
+      try {
+        const compacted = await compactStandardSyncEvents();
+        if (compacted > 0) console.log(`[bootstrap] ${compacted} événement(s) de synchro compacté(s).`);
+      } catch (err) {
+        console.warn("[bootstrap] Compaction des événements de synchro impossible :", err);
       }
 
       // 2. Récupération des paramètres locaux d'abord

@@ -609,12 +609,21 @@ export const useAppStore = create<AppState>((set, get) => ({
               continue;
             }
 
+            // Le payload de l'événement n'est qu'un RÉSUMÉ (sans noeuds ni
+            // images, pour ne pas geler refreshLocalChanges). On relit donc la
+            // version COMPLÈTE et à jour depuis la base avant de la pousser.
+            const fullStandard = await db.standards.get(payload.manifest.id);
+            if (fullStandard === undefined) {
+              failures.push(`${label} : standard introuvable en base, publication ignorée`);
+              continue;
+            }
+
             const standardToSend: any = {
-              ...payload,
+              ...fullStandard,
               status: "pending",
               lastModifiedBy: state.systemUsername,
               manifest: {
-                ...payload.manifest,
+                ...fullStandard.manifest,
                 isBuiltin: false
               }
             };

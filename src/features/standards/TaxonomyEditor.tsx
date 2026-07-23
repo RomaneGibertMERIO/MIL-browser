@@ -179,7 +179,8 @@ export function TaxonomyEditor({ standard, onSave, onCancel }: TaxonomyEditorPro
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
-    console.log("[DEBUG TAXONOMY] Enregistrement des nœuds de taxonomie :", workingNodes);
+    // (log de debug retiré : il sérialisait toute la taxonomie, images base64
+    //  comprises, à chaque sauvegarde — coûteux et bruyant dans renderer.log)
     try {
       await onSave(workingNodes);
     } catch (err) {

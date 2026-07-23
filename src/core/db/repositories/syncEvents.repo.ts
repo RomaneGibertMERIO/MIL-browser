@@ -9,9 +9,32 @@
  * prune acknowledged events after a successful push.
  */
 
-import { db } from "../schema";
+import { db, standardSyncSummary } from "../schema";
 import type { SyncEvent } from "../../domain/sync";
 import { getDeviceId } from "../../utils/deviceId";
+
+/**
+ * Réécrit en résumé léger les événements de synchro de standards qui
+ * contiennent encore la liste complète des noeuds (donc potentiellement des
+ * images base64 de plusieurs Mo). Migration unique, exécutée au démarrage :
+ * sans elle, les événements gonflés déjà présents continueraient de geler
+ * refreshLocalChanges à chaque modification locale.
+ *
+ * @returns le nombre d'événements compactés.
+ */
+export async function compactStandardSyncEvents(): Promise<number> {
+  let compacted = 0;
+  const events = await db.syncEvents.where("entity").equals("standard").toArray();
+  for (const ev of events) {
+    const payload = ev.payload as any;
+    // "nodes" présent = ancien format complet à alléger.
+    if (payload && Array.isArray(payload.nodes)) {
+      await db.syncEvents.put({ ...ev, payload: standardSyncSummary(payload) });
+      compacted++;
+    }
+  }
+  return compacted;
+}
 
 // ---------------------------------------------------------------------------
 // Reads

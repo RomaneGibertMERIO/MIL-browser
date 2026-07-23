@@ -12,6 +12,25 @@ function getOrCreateDeviceId(): string {
   return id;
 }
 
+/**
+ * Résumé léger d'un standard pour le journal de synchronisation.
+ *
+ * On exclut délibérément `nodes` : leurs images base64 pouvaient peser ~16 Mo,
+ * et le journal est rechargé entièrement (refreshLocalChanges) à chaque
+ * modification locale. On ne conserve que ce dont l'affichage a besoin
+ * (nom/organisation) ; la version complète est relue depuis db.standards au
+ * moment du push.
+ */
+export function standardSyncSummary(std: any): any {
+  return {
+    id: std?.manifest?.id,
+    manifest: std?.manifest,
+    status: std?.status,
+    source: std?.source,
+    lastModifiedBy: std?.lastModifiedBy,
+  };
+}
+
 export class AppDatabase extends Dexie {
   profiles!: Table<Profile, string>;
   standards!: Table<StandardPlugin, string>;
@@ -91,7 +110,7 @@ export class AppDatabase extends Dexie {
     // ── HOOK STANDARDS ──
     this.standards.hook("creating", (primKey, obj) => {
       if (this.isSyncingInternal) return;
-      
+
       const standard = obj as any;
       if (standard.manifest?.isBuiltin && standard.status === "approved") return;
 
@@ -102,7 +121,11 @@ export class AppDatabase extends Dexie {
           timestamp: Date.now(),
           operation: "upsert",
           entity: "standard",
-          payload: obj
+          // Résumé léger, PAS le standard complet : les noeuds portent des
+          // images base64 (jusqu'à ~16 Mo). Les stocker ici gonflait chaque
+          // événement et gelait refreshLocalChanges à la moindre modification.
+          // submitCommit relit la version complète depuis db.standards au push.
+          payload: standardSyncSummary(obj)
         }).catch(err => console.error("Event error (Standard Create):", err));
       }, 0);
     });
@@ -126,7 +149,8 @@ export class AppDatabase extends Dexie {
           timestamp: Date.now(),
           operation: "upsert",
           entity: "standard",
-          payload: updatedObj
+          // Résumé léger (voir le hook "creating" ci-dessus).
+          payload: standardSyncSummary(updatedObj)
         }).catch(err => console.error("Event error (Standard Update):", err));
       }, 0);
     });
