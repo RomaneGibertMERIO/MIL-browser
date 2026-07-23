@@ -3,19 +3,20 @@ import { useAppStore, type AdminView } from "../store/appStore";
 import { useStandards } from "../shared/hooks/useStandards";
 import { saveActiveStandard } from "../core/db/repositories/settings.repo";
 import { SubmitChangesModal } from "./SubmitChangesModal";
+import { Icon, type IconName } from "../shared/components/ui/Icon";
 
 type Role = "admin" | "testing" | "readonly";
 
-// `minRole` : rôle minimal pour voir l'entrée.
-// - readonly ne voit que Settings (pour régler le chemin du dépôt).
-// - testing voit Library/Standards (créer et pousser) + Settings.
-// - admin voit tout, plus Validations et Accounts.
-const NAV_ITEMS: { view: AdminView; label: string; icon: string; minRole: Role }[] = [
-  { view: "library",     label: "Library Space",     icon: "◧", minRole: "testing" },
-  { view: "standards",   label: "Standards Config",  icon: "≡", minRole: "testing" },
-  { view: "validations", label: "Admin Validations", icon: "🔧", minRole: "admin" },
-  { view: "accounts",    label: "Accounts & Roles",  icon: "👥", minRole: "admin" },
-  { view: "settings",    label: "Global Settings",   icon: "⚙", minRole: "readonly" },
+// `minRole`: minimum role required to see the entry.
+// - readonly only sees Settings (to set the repository path).
+// - testing sees Library/Standards (create & push) + Settings.
+// - admin sees everything, plus Validations and Accounts.
+const NAV_ITEMS: { view: AdminView; label: string; icon: IconName; minRole: Role }[] = [
+  { view: "library",     label: "Library Space",     icon: "edit",     minRole: "testing" },
+  { view: "standards",   label: "Standards Config",  icon: "standards", minRole: "testing" },
+  { view: "validations", label: "Admin Validations", icon: "review",   minRole: "admin" },
+  { view: "accounts",    label: "Accounts & Roles",  icon: "users",    minRole: "admin" },
+  { view: "settings",    label: "Global Settings",   icon: "settings", minRole: "readonly" },
 ];
 
 const ROLE_RANK: Record<Role, number> = { readonly: 0, testing: 1, admin: 2 };
@@ -61,7 +62,8 @@ export function Sidebar() {
           onClick={() => setMode("assistant")}
           className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider text-amber-400 bg-amber-950/40 border border-amber-700/50 rounded-lg hover:bg-amber-900/40 transition-all"
         >
-          <span>◀ Exit Management Mode</span>
+          <Icon name="back" size={14} />
+          <span>Exit Management Mode</span>
         </button>
       </div>
 
@@ -73,7 +75,7 @@ export function Sidebar() {
             disabled={localChanges.length === 0}
             className="w-full flex items-center justify-center gap-3 px-4 py-3.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-500 disabled:opacity-20 disabled:hover:bg-blue-600 disabled:cursor-not-allowed transition-all shadow-md active:scale-[0.98]"
           >
-            <span className="text-base">📤</span>
+            <Icon name="push" size={16} />
             <span>Push Local Changes ({localChanges.length})</span>
           </button>
         </div>
@@ -113,7 +115,7 @@ export function Sidebar() {
             }`}
           >
             <div className="flex items-center gap-3">
-              <span className="w-6 text-center text-lg">{icon}</span>
+              <span className="w-5 flex justify-center"><Icon name={icon} size={16} /></span>
               <span>{label}</span>
             </div>
 
