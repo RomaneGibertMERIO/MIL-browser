@@ -30,6 +30,19 @@ import {
  * La faire transiter depuis l'interface la rendrait falsifiable.
  */
 function currentUser(): string {
+  // Aide au TEST des rôles : si MIL_BROWSER_USER est défini, on l'utilise comme
+  // identité à la place du compte Windows. Cela permet, sur un seul poste, de
+  // lancer l'app sous différentes identités (donc différents rôles) sans créer
+  // de comptes Windows. Exemple (PowerShell) :
+  //   $env:MIL_BROWSER_USER="alice"; & ".\MIL-Browser-Portable-0.2.0.exe"
+  // Le contrôle d'accès reste de toute façon un modèle de confiance interne :
+  // cette surcharge ne l'affaiblit pas (quiconque règle une variable
+  // d'environnement contrôle déjà la session).
+  const override = process.env.MIL_BROWSER_USER;
+  if (override && override.trim() !== "") {
+    console.log(`[main] Identité simulée via MIL_BROWSER_USER = "${override.trim()}"`);
+    return override.trim();
+  }
   return os.userInfo().username || "Unknown-User";
 }
 
