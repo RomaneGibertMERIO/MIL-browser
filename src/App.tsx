@@ -4,6 +4,7 @@ import { useBootstrapStore } from './store/bootstrapStore';
 import { useBootstrap } from './shared/hooks/useBootstrap';
 import { useStandard, useStandards } from './shared/hooks/useStandards';
 import { EmptyWorkspaceNotice } from './shared/components/ui/EmptyWorkspaceNotice';
+import { stripHeavyJson } from './shared/previewSafe';
 import { AssistantPage } from './features/assistant/AssistantPage';
 import { LibraryPage } from './features/library/LibraryPage';
 import { StandardsPage } from "./features/standards/StandardsPage";
@@ -242,7 +243,8 @@ export function AdminValidationsPage() {
 
           let displayValue = "";
           if (value === null || value === undefined) displayValue = "—";
-          else if (typeof value === "object") displayValue = JSON.stringify(value);
+          else if (typeof value === "object") displayValue = stripHeavyJson(value);
+          else if (key === "imageData" && typeof value === "string") displayValue = `[image — ${value.length} caractères]`;
           else displayValue = String(value);
 
           return (
@@ -302,17 +304,28 @@ export function AdminValidationsPage() {
         {allKeys.map((key) => {
           const origVal = original[key];
           const propVal = proposed[key];
-          
-          if (JSON.stringify(origVal) === JSON.stringify(propVal)) return null;
+
+          // Comparaison sur la version allégée : diffuser deux chaînes base64 de
+          // plusieurs Mo via JSON.stringify gèle l'interface. Conséquence
+          // acceptée : un changement portant UNIQUEMENT sur une image n'est pas
+          // détaillé dans le diff (il reste visible via l'aperçu du nœud).
+          const origStr = stripHeavyJson(origVal);
+          const propStr = stripHeavyJson(propVal);
+          if (origStr === propStr) return null;
+
+          const cell = (v: any, s: string) =>
+            v !== null && v !== undefined
+              ? (typeof v === "object" || (typeof v === "string" && v.startsWith("data:")) ? s : String(v))
+              : "—";
 
           return (
             <div key={key} className="grid grid-cols-3 p-4 items-center text-sm hover:bg-yellow-50/20">
               <div className="font-bold text-gray-500 uppercase tracking-wide text-xs">{key}</div>
-              <div className="line-through text-red-600 bg-red-50/50 px-2.5 py-1.5 rounded-lg border border-red-100 font-mono inline-block max-w-max">
-                {origVal !== null && origVal !== undefined ? String(origVal) : "—"}
+              <div className="line-through text-red-600 bg-red-50/50 px-2.5 py-1.5 rounded-lg border border-red-100 font-mono inline-block max-w-max break-all">
+                {cell(origVal, origStr)}
               </div>
-              <div className="text-emerald-700 bg-emerald-50/50 px-2.5 py-1.5 rounded-lg border border-emerald-100 font-bold font-mono inline-block max-w-max">
-                {propVal !== null && propVal !== undefined ? String(propVal) : "—"}
+              <div className="text-emerald-700 bg-emerald-50/50 px-2.5 py-1.5 rounded-lg border border-emerald-100 font-bold font-mono inline-block max-w-max break-all">
+                {cell(propVal, propStr)}
               </div>
             </div>
           );

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAppStore, type MockChangeItem } from "../store/appStore";
+import { safePreviewJson } from "../shared/previewSafe";
 
 interface SubmitChangesModalProps {
   onClose: () => void;
@@ -201,7 +202,7 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
                 <div className="flex flex-col gap-1.5 flex-1 min-h-0">
                   <span className="text-[10px] font-bold text-gray-400 uppercase">Proposed Payload JSON</span>
                   <pre className="bg-slate-900 text-emerald-400 p-3 rounded-lg text-[10px] font-mono overflow-auto max-h-[50vh] whitespace-pre-wrap leading-relaxed shadow-inner">
-                    {JSON.stringify(selectedPreviewChange.proposedData, null, 2)}
+                    {safePreviewJson(selectedPreviewChange.proposedData)}
                   </pre>
                 </div>
               </div>
