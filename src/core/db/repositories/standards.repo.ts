@@ -71,10 +71,12 @@ export async function createStandard(standard: StandardPlugin): Promise<void> {
   const newStandard: any = {
     ...standard,
     status: "local",
-    // Une norme créée à la main rejoint l'espace de travail courant, sinon
-    // elle serait invisible dès sa création (mode partagé) ou publierait du
-    // travail personnel dans le dépôt d'équipe (mode autonome).
-    workspace: useAppStore.getState().repoMode,
+    // Une création est TOUJOURS un brouillon local, y compris en mode partagé :
+    // elle reste visible pour son auteur (badge « Local ») et ne devient
+    // « shared » que lorsqu'elle a été poussée puis retirée du dépôt central.
+    // La marquer « shared » d'emblée la ferait passer pour une norme officielle
+    // avant toute validation.
+    workspace: "local",
   };
   await upsertStandard(newStandard);
 }

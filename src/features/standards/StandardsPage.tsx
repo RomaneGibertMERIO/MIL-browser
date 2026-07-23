@@ -52,6 +52,8 @@ if (subView === "edit-taxonomy" && editingStandard !== null) {
             // validation de son propre auteur, qui pouvait donc s'auto-valider
             // sans avoir jamais rien poussé.
             status: "local",
+            // Une édition non poussée est un brouillon local, badgé comme tel.
+            workspace: "local",
           } as any;
 
           // 2. Une unique opération d'écriture atomique en base de données
@@ -222,8 +224,8 @@ function StandardCard({ standard, onDelete, onEditTaxonomy }: StandardCardProps)
     badgeLabel = "En attente";
     badgeColor = "gray";
   } else {
-    // Créé ou dérivé localement
-    badgeLabel = "Local";
+    // Créé ou dérivé localement, pas encore poussé vers le dépôt central.
+    badgeLabel = "Local · non poussé";
     badgeColor = "gray";
   }
 
