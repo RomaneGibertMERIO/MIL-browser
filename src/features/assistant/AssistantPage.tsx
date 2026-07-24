@@ -367,9 +367,9 @@ export function AssistantPage() {
 
             {/* Colonne des profils du nœud sélectionné — DANS le Miller */}
             {standard != null && selectedNode != null && (
-              <MillerColumn heading={`Profils${nodeProfiles.length ? ` (${nodeProfiles.length})` : ""}`}>
+              <MillerColumn heading={`Profiles${nodeProfiles.length ? ` (${nodeProfiles.length})` : ""}`}>
                 {nodeProfiles.length === 0
-                  ? <p className="text-xs text-gray-400 text-center px-3 py-6 italic">Aucun profil sur ce nœud.</p>
+                  ? <p className="text-xs text-gray-400 text-center px-3 py-6 italic">No profiles on this node.</p>
                   : nodeProfiles.map(p => (
                     <ProfileRow
                       key={p.id}
@@ -385,7 +385,7 @@ export function AssistantPage() {
 
             {standard == null && (
               <div className="flex-1 flex items-center justify-center text-sm text-gray-400 px-8 text-center">
-                Sélectionnez une norme dans la première colonne pour commencer.
+                Select a standard in the first column to begin.
               </div>
             )}
           </div>
@@ -466,20 +466,19 @@ function SearchResultsView({ results, query, onNode, onProfile, onTogglePin, isP
   return (
     <div className="flex-1 overflow-y-auto p-6">
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-        {total} résultat{total !== 1 ? "s" : ""} pour « {query} »
+        {total} result{total !== 1 ? "s" : ""} for &ldquo;{query}&rdquo;
       </p>
 
       {total === 0 && (
         <p className="text-sm text-gray-400 text-center py-12">
-          Aucune correspondance dans la norme active. La recherche balaie labels, codes,
-          descriptions, tags, ainsi que le nom, l'auteur, tous les champs et toutes les
-          cellules de données des profils.
+          No match in the active standard. Search scans labels, codes, descriptions and
+          tags, as well as profile name, author, every field and every dataset cell.
         </p>
       )}
 
       {results.nodes.length > 0 && (
         <section className="mb-8 max-w-3xl">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Nœuds ({results.nodes.length})</h3>
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Nodes ({results.nodes.length})</h3>
           <div className="space-y-1.5">
             {results.nodes.map(node => (
               <button key={node.id} onClick={() => onNode(node.id)}
@@ -501,7 +500,7 @@ function SearchResultsView({ results, query, onNode, onProfile, onTogglePin, isP
 
       {results.profiles.length > 0 && (
         <section className="max-w-3xl">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Profils ({results.profiles.length})</h3>
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Profiles ({results.profiles.length})</h3>
           <div className="space-y-1.5">
             {results.profiles.map(p => {
               const s = profileStatusLabel(p.status);
@@ -517,9 +516,9 @@ function SearchResultsView({ results, query, onNode, onProfile, onTogglePin, isP
                     {p.description !== "" && <p className="text-xs text-gray-500 line-clamp-1">{p.description}</p>}
                     {p.author && p.author !== "unknown" && <p className="text-[11px] text-gray-400 italic mt-0.5">by {p.author}</p>}
                   </button>
-                  <button onClick={() => onTogglePin(p)} title={pinned ? "Retirer de la comparaison" : "Épingler pour comparer"}
-                    className={`flex-shrink-0 px-3 border-l border-gray-100 text-sm transition-colors ${pinned ? "text-blue-600 bg-blue-50" : "text-gray-300 hover:text-blue-600 hover:bg-blue-50"}`}>
-                    📌
+                  <button onClick={() => onTogglePin(p)} title={pinned ? "Remove from comparison" : "Pin to compare"}
+                    className={`flex-shrink-0 flex items-center px-3 border-l border-gray-100 transition-colors ${pinned ? "text-blue-600 bg-blue-50" : "text-gray-300 hover:text-blue-600 hover:bg-blue-50"}`}>
+                    <Icon name="pin" size={15} />
                   </button>
                 </div>
               );
@@ -593,9 +592,9 @@ function ProfileRow({ profile, selected, pinned, onSelect, onTogglePin }: {
             <span className="text-xs text-gray-400">{profile.dataset.length} pts</span>
           </div>
         </button>
-        <button onClick={onTogglePin} title={pinned ? "Retirer de la comparaison" : "Épingler pour comparer"}
-          className={`flex-shrink-0 text-sm leading-none px-1.5 py-1 rounded transition-colors ${pinned ? "text-blue-600 bg-blue-100" : "text-gray-300 hover:text-blue-600 hover:bg-blue-50"}`}>
-          📌
+        <button onClick={onTogglePin} title={pinned ? "Remove from comparison" : "Pin to compare"}
+          className={`flex-shrink-0 px-1.5 py-1 rounded transition-colors ${pinned ? "text-blue-600 bg-blue-100" : "text-gray-300 hover:text-blue-600 hover:bg-blue-50"}`}>
+          <Icon name="pin" size={14} />
         </button>
       </div>
     </div>
@@ -637,11 +636,11 @@ function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile
         <div className="px-5 pt-4 flex justify-end">
           <button onClick={() => onTogglePin(profile)}
             className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${pinned ? "text-blue-700 bg-blue-50 border-blue-200" : "text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
-            📌 {pinned ? "Épinglé" : "Épingler pour comparer"}
+            <span className="inline-flex items-center gap-1.5"><Icon name="pin" size={13} /> {pinned ? "Pinned" : "Pin to compare"}</span>
           </button>
         </div>
         <div className="px-6 pb-6">
-          <ProfileDetail profile={profile} schema={schema} onBack={onClearProfile} backLabel="Retour aux profils" />
+          <ProfileDetail profile={profile} schema={schema} onBack={onClearProfile} backLabel="Back to profiles" />
         </div>
       </div>
     );
@@ -651,7 +650,7 @@ function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile
     return (
       <div className="h-full flex items-center justify-center">
         <p className="text-sm text-gray-400 text-center px-8 leading-relaxed">
-          Sélectionnez un nœud pour ses détails, ou un profil pour sa carte.
+          Select a node for its details, or a profile for its card.
         </p>
       </div>
     );
@@ -678,7 +677,7 @@ function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile
         </div>
       )}
       {node.imageData === undefined && node.description === undefined && (
-        <div className="px-5 py-8 text-sm text-gray-400">Aucune image ni description attachée à ce nœud.</div>
+        <div className="px-5 py-8 text-sm text-gray-400">No image or description attached to this node.</div>
       )}
     </div>
   );
@@ -695,18 +694,18 @@ function PinnedPanel({ profile, schema, standardLabel, onCollapse, onUnpin }: {
     <div className="h-full border-l-2 border-blue-200 bg-white overflow-y-auto">
       <div className="sticky top-0 z-10 px-4 py-2 bg-blue-50 border-b border-blue-100 flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider truncate">Comparaison · {standardLabel}</p>
+          <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider truncate">Comparison · {standardLabel}</p>
           <p className="text-sm font-bold text-gray-900 truncate">{profile.name}</p>
         </div>
         <div className="flex-shrink-0 flex items-center gap-1">
-          <button onClick={onCollapse} title="Replier" className="text-gray-400 hover:text-gray-700 text-sm px-1">–</button>
-          <button onClick={onUnpin} title="Retirer" className="text-gray-400 hover:text-red-600 font-bold text-sm px-1">✕</button>
+          <button onClick={onCollapse} title="Collapse" aria-label="Collapse" className="text-gray-400 hover:text-gray-700 px-1"><Icon name="collapse" size={14} /></button>
+          <button onClick={onUnpin} title="Remove" aria-label="Remove" className="text-gray-400 hover:text-red-600 px-1"><Icon name="close" size={14} /></button>
         </div>
       </div>
       <div className="px-5 py-4">
         {schema !== null
           ? <ProfileDetail profile={profile} schema={schema} />
-          : <p className="text-xs text-gray-400 italic">Schéma introuvable (norme non chargée).</p>}
+          : <p className="text-xs text-gray-400 italic">Schema not found (standard not loaded).</p>}
       </div>
     </div>
   );
@@ -715,11 +714,11 @@ function PinnedPanel({ profile, schema, standardLabel, onCollapse, onUnpin }: {
 function CollapsedPin({ name, onExpand, onUnpin }: { name: string; onExpand: () => void; onUnpin: () => void }) {
   return (
     <div className="flex-shrink-0 flex flex-col items-center border-l-2 border-blue-200 bg-blue-50/50" style={{ width: COLLAPSED_W }}>
-      <button onClick={onExpand} title="Déplier" className="mt-2 text-gray-500 hover:text-blue-600 text-sm">▸</button>
+      <button onClick={onExpand} title="Expand" aria-label="Expand" className="mt-2 text-gray-500 hover:text-blue-600"><Icon name="chevronRight" size={14} /></button>
       <button onClick={onExpand} title={name} className="flex-1 text-[11px] font-semibold text-gray-500 hover:text-blue-600 py-2" style={{ writingMode: "vertical-rl" }}>
         {name}
       </button>
-      <button onClick={onUnpin} title="Retirer" className="mb-2 text-gray-400 hover:text-red-600 text-xs">✕</button>
+      <button onClick={onUnpin} title="Remove" aria-label="Remove" className="mb-2 text-gray-400 hover:text-red-600"><Icon name="close" size={13} /></button>
     </div>
   );
 }
