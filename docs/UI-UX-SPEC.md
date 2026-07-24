@@ -94,8 +94,12 @@ MIL-Browser
 - **Global chrome on every page** (Browser and all Management pages):
   - **Top-left:** app **logo + name** ("MIL-Browser"). Always present, always the same.
   - **Bottom bar:** **version** (`__APP_VERSION__`) + **credits**. Always present.
-- **Browser:** global **search** (top center/left) + **Manage** button top-right
-  (hidden when `role === 'readonly'`).
+- **Browser:** global **search** (top center/left) + **Manage** button top-right.
+  The Manage button is visible to **all** roles (including read-only): read-only
+  users still need Management to reach **Settings** and set/verify the Git
+  repository path. The role gate then restricts read-only to the Settings view
+  only (see §15). *(This overrides the initial "hidden for readonly" brief, per
+  the product owner, to preserve the pre-existing read-only → git-path flow.)*
 - **Management:** left **rail** with the five destinations (Home / Edit / Sync / Settings /
   Admin). A persistent **"← Browser"** button top-left returns to the Browser. Admin entry
   visible only to `admin`. Contribution actions (Push, edit) hidden below `write`.
@@ -327,7 +331,8 @@ Admin.** Layout is visually identical regardless of standard — only content is
 ## 14. Browser Page
 
 - **Toolbar:** logo·name (left) · **global search** (scans all DB text — see below) ·
-  **Manage** button (right, hidden for `readonly`).
+  **Manage** button (right; visible to all roles — read-only reaches Settings for
+  the git path, then the role gate limits it to Settings only).
 - **Body:** `MillerBrowser` (standards→nodes→profiles) │ collective splitter │ **Info panel**
   (node info when a node is selected; **Profile Card** when a profile is selected) +
   **pinned comparison cards**. Neither Miller nor Info can vanish; splitter always reachable.

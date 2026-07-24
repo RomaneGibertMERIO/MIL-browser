@@ -126,7 +126,6 @@ export function AssistantPage() {
   const activeStdId  = useAppStore(s => s.activeStandardId);
   const setActiveStd = useAppStore(s => s.setActiveStandard);
   const setMode      = useAppStore(s => s.setMode);
-  const role         = useAppStore(s => s.role);
 
   const [selectedPath, setSelectedPath]           = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -322,14 +321,15 @@ export function AssistantPage() {
           )}
         </div>
 
-        {role !== "readonly" && (
-          <button
-            onClick={() => setMode("admin")}
-            className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
-          >
-            <Icon name="settings" size={14} /> Manage
-          </button>
-        )}
+        {/* Manage is available to everyone: read-only users still need it to
+            reach Settings and set/verify the Git repository path. The internal
+            role gate then restricts read-only to the Settings view only. */}
+        <button
+          onClick={() => setMode("admin")}
+          className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
+        >
+          <Icon name="settings" size={14} /> Manage
+        </button>
       </header>
 
       {/* ── Résultats de recherche (remplacent le browser) ─────────────── */}
