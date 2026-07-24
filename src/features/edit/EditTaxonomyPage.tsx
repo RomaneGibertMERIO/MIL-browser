@@ -81,6 +81,11 @@ export function EditTaxonomyPage() {
   const resizeAbortRef = useRef<AbortController | null>(null);
   useEffect(() => () => resizeAbortRef.current?.abort(), []);
 
+  // Référence « toujours à jour » du tampon, pour détecter une saisie
+  // concurrente pendant un enregistrement asynchrone (cf. handleSave).
+  const workingNodesRef = useRef(workingNodes);
+  workingNodesRef.current = workingNodes;
+
   // Charge le tampon depuis la norme quand l'IDENTITÉ de la norme change (pas à
   // chaque nouvel objet norme, sinon un save réinitialiserait l'édition).
   const loadedIdRef = useRef<string | null>(null);
@@ -204,11 +209,14 @@ export function EditTaxonomyPage() {
 
   async function handleSave() {
     if (standard === null) return;
+    const snapshot = workingNodes;
     setSaving(true);
     setSaveError(null);
     try {
-      await updateStandardNodes(standard.manifest.id, workingNodes);
-      setDirty(false);
+      await updateStandardNodes(standard.manifest.id, snapshot);
+      // Ne baisse le drapeau que si le tampon n'a PAS changé pendant l'écriture,
+      // sinon une saisie concurrente serait marquée « sauvegardée » sans l'être.
+      if (workingNodesRef.current === snapshot) setDirty(false);
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     } catch (err) {
@@ -265,7 +273,7 @@ export function EditTaxonomyPage() {
                 onSelect={() => selectStandard(s.manifest.id)}
               />
             ))}
-            <AddRow label="New standard" onClick={() => setNewStdOpen(true)} />
+            <AddRow label="New standard" onClick={() => { if (confirmDiscardIfDirty()) setNewStdOpen(true); }} />
           </MillerColumn>
 
           {standard !== null && columns.map((colNodes, colIdx) => {
