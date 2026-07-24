@@ -3,8 +3,6 @@ import { createPortal } from 'react-dom';
 import { useAppStore, type AdminView } from './store/appStore';
 import { useBootstrapStore } from './store/bootstrapStore';
 import { useBootstrap } from './shared/hooks/useBootstrap';
-import { useStandard, useStandards } from './shared/hooks/useStandards';
-import { EmptyWorkspaceNotice } from './shared/components/ui/EmptyWorkspaceNotice';
 import { AccountManagementPage } from './features/accounts/AccountManagementPage';
 import { AppFrame, Brand } from './shared/components/AppFrame';
 import { Icon, type IconName } from './shared/components/ui/Icon';
@@ -12,10 +10,9 @@ import { RepoBadge, RoleBadge } from './shared/components/ui/RepoBadge';
 import { StatusDot } from './shared/components/ui/StatusBadge';
 import { stripHeavyJson } from './shared/previewSafe';
 import { canAccess, roleLabel } from './shared/roles';
-import { saveActiveStandard } from './core/db/repositories/settings.repo';
 import { AssistantPage } from './features/assistant/AssistantPage';
 import { HomePage } from './features/home/HomePage';
-import { LibraryPage } from './features/library/LibraryPage';
+import { EditProfilesPage } from './features/edit/EditProfilesPage';
 import { StandardsPage } from "./features/standards/StandardsPage";
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Sidebar } from './app/Sidebar';
@@ -51,12 +48,9 @@ export default function App() {
 
 function AdminLayout() {
   const adminView   = useAppStore((s) => s.adminView);
-  const activeStdId = useAppStore((s) => s.activeStandardId);
   const syncError = useAppStore((s) => s.syncError);
   const setSyncError = useAppStore((s) => s.setSyncError);
   const repoMode = useAppStore((s) => s.repoMode);
-
-  const standard = useStandard(activeStdId ?? '');
 
   // Le nom d'utilisateur OS est désormais résolu une seule fois, dans
   // useBootstrap. L'effet qui vivait ici testait `window.electronAPI` alors que
@@ -96,10 +90,7 @@ function AdminLayout() {
         )}
 
         <main className="flex-1 overflow-hidden">
-          <ContentPane
-            adminView={adminView}
-            standard={standard}
-          />
+          <ContentPane adminView={adminView} />
         </main>
       </div>
     </div>
@@ -117,10 +108,9 @@ const VIEW_TITLES: Record<AdminView, string> = {
 
 interface ContentPaneProps {
   adminView: AdminView;
-  standard:  ReturnType<typeof useStandard>;
 }
 
-function ContentPane({ adminView, standard }: ContentPaneProps) {
+function ContentPane({ adminView }: ContentPaneProps) {
   const role = useAppStore((s) => s.role);
 
   // Second verrou d'affichage (le premier étant le filtrage du rail). Le
@@ -138,7 +128,7 @@ function ContentPane({ adminView, standard }: ContentPaneProps) {
     case 'home':
       return <div className="h-full overflow-y-auto px-6 py-6"><HomePage /></div>;
     case 'edit':
-      return <EditSection standard={standard} />;
+      return <EditSection />;
     case 'sync':
       return <SyncSection />;
     case 'settings':
@@ -156,49 +146,27 @@ function ContentPane({ adminView, standard }: ContentPaneProps) {
 // DiffView, onglets Admin) sans toucher au rail ni au gate.
 // ---------------------------------------------------------------------------
 
-/** Edit : profils (LibraryPage) + taxonomie (StandardsPage), via un sous-onglet. */
-function EditSection({ standard }: { standard: ReturnType<typeof useStandard> }) {
+/**
+ * Edit : profils (mode Miller éditable, phase 4a) + taxonomie (StandardsPage),
+ * via un sous-onglet. La bascule engrenage et le mode Taxonomie en Miller
+ * arrivent en phase 4b ; le sélecteur de norme vit désormais dans la 1re
+ * colonne du Miller de EditProfilesPage.
+ */
+function EditSection() {
   const [tab, setTab] = useState<'profiles' | 'taxonomy'>('profiles');
-  const activeStdId = useAppStore((s) => s.activeStandardId);
-  const setActiveStd = useAppStore((s) => s.setActiveStandard);
-  const standards = useStandards();
-  const workspaceEmpty = standards !== undefined && standards.length === 0;
-
-  function handleStandardChange(id: string) {
-    setActiveStd(id);
-    void saveActiveStandard(id);
-  }
 
   return (
     <div className="h-full flex flex-col">
       <div className="flex-shrink-0 flex items-center gap-2 px-6 py-3 border-b border-gray-200 bg-white">
         <SubTab active={tab === 'profiles'} onClick={() => setTab('profiles')} icon="edit" label="Profiles" />
         <SubTab active={tab === 'taxonomy'} onClick={() => setTab('taxonomy')} icon="standards" label="Taxonomy" />
-        {tab === 'profiles' && (
-          <select
-            value={activeStdId ?? ''}
-            onChange={(e) => handleStandardChange(e.target.value)}
-            className="ml-auto px-3 py-1.5 text-sm bg-white text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="" disabled>— Choose a standard —</option>
-            {(standards ?? []).map((s) => (
-              <option key={s.manifest.id} value={s.manifest.id}>{s.manifest.label}</option>
-            ))}
-          </select>
-        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
         {tab === 'taxonomy' ? (
           <div className="h-full overflow-y-auto px-6 py-6"><StandardsPage /></div>
-        ) : workspaceEmpty ? (
-          <div className="h-full overflow-y-auto px-6 py-6"><EmptyWorkspaceNotice /></div>
-        ) : standard === undefined ? (
-          <div className="flex items-center justify-center h-full text-sm text-gray-400">
-            Select a standard above to manage its profiles.
-          </div>
         ) : (
-          <LibraryPage standard={standard} />
+          <EditProfilesPage />
         )}
       </div>
     </div>

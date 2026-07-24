@@ -34,6 +34,12 @@ interface ProfileFormProps {
   onChange?: (draft: ProfileDraft) => void;
   /** Hide the bottom Cancel/Save buttons (parent owns them). */
   hideActions?: boolean;
+  /**
+   * When set, the taxonomy node is fixed by the parent (e.g. selected in the
+   * Edit Miller) and the Classification cascade is hidden. The draft's nodeId
+   * must already be seeded to this value by the parent (via initialDraft).
+   */
+  lockedNodeId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,6 +55,7 @@ export function ProfileForm({
   onCancel,
   onChange,
   hideActions = false,
+  lockedNodeId,
 }: ProfileFormProps) {
   const [draft, setDraft] = useState<ProfileDraft>(() =>
     initialDraft ?? buildEmptyDraft(standard),
@@ -149,22 +156,25 @@ function handleSubmit(e: FormEvent) {
       </Card>
 
       {/* ── Taxonomy Node ───────────────────────────────────────────── */}
-      <Card title="Classification">
-        {getError("nodeId") !== undefined && (
-          <p className="mb-3 text-xs text-red-600">{getError("nodeId")}</p>
-        )}
-        <NodeCascadeSelector
-          tree={tree}
-          selectedNodeId={draft.nodeId}
-          onSelect={handleNodeSelect}
-        />
-        {selectedNode !== null && (
-          <p className="mt-2 text-xs text-gray-400">
-            Node:{" "}
-            <span className="font-mono text-gray-600">{selectedNode.id}</span>
-          </p>
-        )}
-      </Card>
+      {/* Masqué quand le nœud est imposé par le Miller parent (mode Edit). */}
+      {lockedNodeId === undefined && (
+        <Card title="Classification">
+          {getError("nodeId") !== undefined && (
+            <p className="mb-3 text-xs text-red-600">{getError("nodeId")}</p>
+          )}
+          <NodeCascadeSelector
+            tree={tree}
+            selectedNodeId={draft.nodeId}
+            onSelect={handleNodeSelect}
+          />
+          {selectedNode !== null && (
+            <p className="mt-2 text-xs text-gray-400">
+              Node:{" "}
+              <span className="font-mono text-gray-600">{selectedNode.id}</span>
+            </p>
+          )}
+        </Card>
+      )}
 
       {/* ── Schema Fields (by group) ─────────────────────────────────── */}
       {renderFieldGroups(standard, draft, handleFieldChange, getError, effectiveSchema.fields)}
