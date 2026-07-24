@@ -303,7 +303,11 @@ export function EditProfilesPage() {
   const canDelete = selectedProfile !== null && !isCreating && selectedProfile.source !== "builtin";
 
   return (
-    <div className="flex h-full select-none">
+    // overflow-x-auto : si la fenêtre est trop étroite pour la somme des
+    // largeurs mini (Miller + éditeur + aperçu), toute la rangée défile
+    // horizontalement au lieu de rogner l'aperçu hors écran (la fenêtre
+    // Electron n'a pas de largeur mini).
+    <div className="flex h-full select-none overflow-x-auto">
       {/* Miller (flexible) */}
       <div className="flex-1 min-w-0" style={{ minWidth: MIN_MILLER }}>
         <div className="flex h-full overflow-x-auto overflow-y-hidden">

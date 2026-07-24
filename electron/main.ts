@@ -116,6 +116,10 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
+    // Largeur/hauteur mini : évite que la fenêtre soit réduite au point de
+    // rogner les panneaux à largeur fixe (éditeur/aperçu) sans recours.
+    minWidth: 960,
+    minHeight: 600,
     webPreferences: {
       // __dirname pointe vers le dossier compilé (ex: electron-dist/)
       preload: path.join(__dirname, "preloads.js"), 
