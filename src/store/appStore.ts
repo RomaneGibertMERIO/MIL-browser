@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { upsertProfile, getAllProfiles } from "../core/db/repositories/profiles.repo";
 import { upsertStandard } from "../core/db/repositories/standards.repo";
+import {
+  attachNodeImages,
+  putNodeImagesAndStrip,
+  deleteNodeImagesForStandard,
+} from "../core/db/repositories/nodeImages.repo";
 import { db } from "../core/db/schema";
 import {
   getElectronBridge,
@@ -225,8 +230,10 @@ async function seedCentralRepositoryFromBuiltin(
 
   let pushed = 0;
   for (const standard of candidates) {
+    // Ré-attache les images (no-op pour les builtin qui utilisent des chemins).
+    const withImages = await attachNodeImages(standard);
     const result = toIpcResult(
-      await api.gitSubmitStandard({ repoPath, username, standard }),
+      await api.gitSubmitStandard({ repoPath, username, standard: withImages }),
       "gitSubmitStandard n'a renvoyé aucun résultat.",
     );
     if (result.success) pushed++;
@@ -263,6 +270,7 @@ async function applyDeletions(deletions: DeletionMarker[]): Promise<void> {
         if (standardWorkspace(standard) !== "shared") continue;
         if (standard.updatedAt && marker.deletedAt <= standard.updatedAt) continue;
         await db.standards.delete(marker.id);
+        await deleteNodeImagesForStandard(marker.id); // GC des images (phase 8)
       }
     } catch (err) {
       console.error(`Application de la suppression impossible (${marker.entity} ${marker.id}) :`, err);
@@ -644,12 +652,16 @@ export const useAppStore = create<AppState>((set, get) => ({
               continue;
             }
 
+            // Phase 8 : db.standards est allégé (images dans db.nodeImages). On
+            // ré-attache les images pour que le JSON poussé sur le partage les
+            // porte (gitService reste inchangé).
+            const hydrated = await attachNodeImages(fullStandard);
             const standardToSend: any = {
-              ...fullStandard,
+              ...hydrated,
               status: "pending",
               lastModifiedBy: state.systemUsername,
               manifest: {
-                ...fullStandard.manifest,
+                ...hydrated.manifest,
                 isBuiltin: false
               }
             };
@@ -668,7 +680,9 @@ export const useAppStore = create<AppState>((set, get) => ({
               continue;
             }
 
-            await db.standards.put(standardToSend);
+            // Le put LOCAL reste ALLÉGÉ (les images restent dans db.nodeImages),
+            // sinon la ligne se ré-alourdit et le gel réapparaît.
+            await db.standards.put(await putNodeImagesAndStrip(standardToSend));
             pushedEventIds.push(event.id);
           }
         } catch (err) {

@@ -17,13 +17,17 @@
 import { useState, useMemo, useRef, useEffect, useCallback, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import type { StandardPlugin, StandardNode } from "../../core/domain/standard";
+import type { Profile } from "../../core/domain/profile";
+import type { TaxonomyNodeItem } from "../../core/domain/tree";
 import { buildTree } from "../../core/engine/treeBuilder";
 import { updateStandardNodes, createStandard } from "../../core/db/repositories/standards.repo";
+import { attachNodeImages } from "../../core/db/repositories/nodeImages.repo";
 import { saveActiveStandard } from "../../core/db/repositories/settings.repo";
 import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
 import { useStandards } from "../../shared/hooks/useStandards";
 import { useAppStore } from "../../store/appStore";
 import { Icon } from "../../shared/components/ui/Icon";
+import { StatusDot } from "../../shared/components/ui/StatusBadge";
 import {
   MillerColumn,
   StandardRow,
@@ -60,6 +64,7 @@ function maxSiblingOrder(nodes: StandardNode[], parentId: string | null): number
 export function EditTaxonomyPage() {
   const activeStandardId = useAppStore((s) => s.activeStandardId);
   const setActiveStandard = useAppStore((s) => s.setActiveStandard);
+  const repoMode = useAppStore((s) => s.repoMode);
   const standards = useStandards();
   const standard = useMemo(
     () => standards?.find((s) => s.manifest.id === activeStandardId) ?? null,
@@ -99,15 +104,46 @@ export function EditTaxonomyPage() {
     }
     if (loadedIdRef.current !== standard.manifest.id) {
       loadedIdRef.current = standard.manifest.id;
-      setWorkingNodes(standard.nodes);
       setSelectedPath([]);
       setDirty(false);
       setSaveError(null);
+      // Phase 8 : db.standards est allégé → HYDRATER le tampon avec les images
+      // (db.nodeImages) avant édition, sinon un Save réconcilierait les images à
+      // néant. Le tampon reste vide le temps du chargement (quasi instantané).
+      const idAtLoad = standard.manifest.id;
+      setWorkingNodes([]);
+      void attachNodeImages(standard).then((h) => {
+        if (loadedIdRef.current === idAtLoad) setWorkingNodes(h.nodes);
+      });
     }
   }, [standard]);
 
   const tree = useMemo(() => buildTree(workingNodes, []), [workingNodes]);
   const columns = useMemo(() => buildColumns(tree, selectedPath), [tree, selectedPath]);
+
+  // Roll-up de statut par nœud (identique au Browser / mode Profils) : purement
+  // dérivé des profils. N'affiche les pastilles qu'en mode partagé.
+  const rollupByNode = useMemo(() => {
+    const RANK: Record<string, number> = { local: 3, pending: 2, approved: 1 };
+    const LABEL = ["", "approved", "pending", "local"];
+    const profByNode = new Map<string, Profile[]>();
+    for (const p of allProfiles ?? []) {
+      const arr = profByNode.get(p.nodeId);
+      if (arr) arr.push(p); else profByNode.set(p.nodeId, [p]);
+    }
+    const out = new Map<string, string>();
+    const visit = (n: TaxonomyNodeItem): number => {
+      let best = 0;
+      for (const p of profByNode.get(n.id) ?? []) best = Math.max(best, RANK[p.status ?? "local"] ?? 0);
+      for (const c of n.children) best = Math.max(best, visit(c));
+      if (best > 0) out.set(n.id, LABEL[best]!);
+      return best;
+    };
+    for (const r of tree) visit(r);
+    return out;
+  }, [tree, allProfiles]);
+  const showStatus = repoMode === "shared";
+
   const selectedId = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1]! : null;
   const selectedNode = useMemo(
     () => (selectedId === null ? null : workingNodes.find((n) => n.id === selectedId) ?? null),
@@ -271,6 +307,7 @@ export function EditTaxonomyPage() {
                 standard={s}
                 selected={s.manifest.id === activeStandardId}
                 onSelect={() => selectStandard(s.manifest.id)}
+                statusDot={showStatus ? <StatusDot status={(s as { status?: string }).status} /> : null}
               />
             ))}
             <AddRow label="New standard" onClick={() => { if (confirmDiscardIfDirty()) setNewStdOpen(true); }} />
@@ -280,14 +317,19 @@ export function EditTaxonomyPage() {
             const parentId = colIdx === 0 ? null : (selectedPath[colIdx - 1] ?? null);
             return (
               <MillerColumn key={colIdx} heading={columnHeading(colNodes)}>
-                {colNodes.map((node) => (
-                  <NodeRow
-                    key={node.id}
-                    node={node}
-                    selected={node.id === (selectedPath[colIdx] ?? null)}
-                    onSelect={() => selectNode(colIdx, node.id)}
-                  />
-                ))}
+                {colNodes.map((node) => {
+                  const r = rollupByNode.get(node.id);
+                  const dot = showStatus && (r === "local" || r === "pending") ? <StatusDot status={r} /> : null;
+                  return (
+                    <NodeRow
+                      key={node.id}
+                      node={node}
+                      selected={node.id === (selectedPath[colIdx] ?? null)}
+                      onSelect={() => selectNode(colIdx, node.id)}
+                      statusDot={dot}
+                    />
+                  );
+                })}
                 <AddRow label="New node here" onClick={() => addNode(parentId)} />
               </MillerColumn>
             );

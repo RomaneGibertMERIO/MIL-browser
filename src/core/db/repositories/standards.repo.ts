@@ -1,6 +1,11 @@
 import { db } from "../schema";
 import { standardWorkspace, type StandardPlugin, type StandardNode } from "../../domain/standard";
 import { useAppStore } from "../../../store/appStore";
+import {
+  putNodeImagesAndStrip,
+  reconcileNodeImages,
+  deleteNodeImagesForStandard,
+} from "./nodeImages.repo";
 
 export async function getAllStandards(): Promise<StandardPlugin[]> {
   return db.standards.toArray();
@@ -18,7 +23,10 @@ export async function getBuiltinStandards(): Promise<StandardPlugin[]> {
  * Insère ou met à jour un standard.
  */
 export async function upsertStandard(standard: StandardPlugin): Promise<void> {
-  await db.standards.put(standard);
+  // Phase 8 : les images de nœuds partent dans db.nodeImages (non destructif) ;
+  // la ligne du standard reste légère. Couvre pull/import/save/create/echo.
+  const light = await putNodeImagesAndStrip(standard);
+  await db.standards.put(light);
   await useAppStore.getState().refreshLocalChanges();
 }
 
@@ -41,7 +49,7 @@ export async function seedBuiltinStandard(standard: StandardPlugin): Promise<voi
   }
   // Le socle d'usine appartient toujours à l'espace autonome : il ne doit pas
   // apparaître quand un dépôt central fait autorité.
-  await db.standards.put({ ...standard, workspace: "local" });
+  await db.standards.put(await putNodeImagesAndStrip({ ...standard, workspace: "local" }));
 }
 
 /**
@@ -60,8 +68,11 @@ export async function updateStandardNodes(standardId: string, nodes: StandardNod
     status: "local",
     nodes,
   };
-  
+
   await upsertStandard(updatedStandard);
+  // Chemin ÉDITEUR : les nœuds sont hydratés (vérité complète) → on réconcilie
+  // les suppressions d'images (image retirée ou nœud supprimé).
+  await reconcileNodeImages(standardId, nodes);
 }
 
 export async function createStandard(standard: StandardPlugin): Promise<void> {
@@ -101,5 +112,6 @@ export async function deleteStandardAndProfiles(id: string): Promise<void> {
   }
 
   await db.standards.delete(id);
+  await deleteNodeImagesForStandard(id); // GC des images du standard supprimé
   await useAppStore.getState().refreshLocalChanges();
 }

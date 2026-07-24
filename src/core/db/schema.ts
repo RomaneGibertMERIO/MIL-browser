@@ -31,12 +31,29 @@ export function standardSyncSummary(std: any): any {
   };
 }
 
+/**
+ * Image de nœud stockée HORS de la ligne du standard (phase 8).
+ *
+ * Les images (`data:` URIs base64) vivaient inline dans StandardNode.imageData,
+ * ce qui rendait chaque ligne de db.standards lourde (jusqu'à ~16 Mo) et gelait
+ * la live-query de la liste des normes à chaque écriture. Elles sont désormais
+ * dans cette table séparée, clé composite [standardId+nodeId]. Les lignes de
+ * db.standards restent légères ; les images sont ré-attachées à l'affichage et
+ * aux points de sortie (push/export) uniquement.
+ */
+export interface NodeImage {
+  standardId: string;
+  nodeId: string;
+  data: string; // data: URI (base64)
+}
+
 export class AppDatabase extends Dexie {
   profiles!: Table<Profile, string>;
   standards!: Table<StandardPlugin, string>;
   syncEvents!: Table<SyncEvent, string>;
   settings!: Table<AppSettings, string>;
-  
+  nodeImages!: Table<NodeImage, [string, string]>;
+
   public isSyncingInternal = false;
 
   constructor() {
@@ -47,6 +64,11 @@ export class AppDatabase extends Dexie {
       standards: "manifest.id, manifest.organization, manifest.isBuiltin, status, source",
       syncEvents: "id, timestamp, entity",
       settings: "key",
+    });
+
+    // v2 (phase 8) : table séparée pour les images de nœuds (voir NodeImage).
+    this.version(2).stores({
+      nodeImages: "[standardId+nodeId], standardId",
     });
 
     // ── HOOK PROFILES ──

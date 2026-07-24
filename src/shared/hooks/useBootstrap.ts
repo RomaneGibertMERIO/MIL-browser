@@ -7,6 +7,7 @@ import { loadBuiltinStandards } from "../../core/engine/standardLoader";
 import { db } from "../../core/db/schema";
 import { standardWorkspace } from "../../core/domain/standard";
 import { compactStandardSyncEvents } from "../../core/db/repositories/syncEvents.repo";
+import { extractStandardImages } from "../../core/db/repositories/nodeImages.repo";
 import { getElectronBridge } from "../electronBridge";
 
 /**
@@ -56,6 +57,15 @@ export function useBootstrap(): void {
         if (compacted > 0) console.log(`[bootstrap] ${compacted} événement(s) de synchro compacté(s).`);
       } catch (err) {
         console.warn("[bootstrap] Compaction des événements de synchro impossible :", err);
+      }
+
+      // 1ter. Migration unique (phase 8) : draine les images de nœuds base64 des
+      //       lignes db.standards vers db.nodeImages, AVANT toute live-query /
+      //       seed / synchro, pour éliminer le gel de la liste des normes.
+      try {
+        await extractStandardImages();
+      } catch (err) {
+        console.warn("[bootstrap] Extraction des images de nœuds impossible :", err);
       }
 
       // 2. Récupération des paramètres locaux d'abord

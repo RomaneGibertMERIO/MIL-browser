@@ -28,6 +28,7 @@ import { useStandards } from "../../shared/hooks/useStandards";
 import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
 import { useAppStore } from "../../store/appStore";
 import { saveActiveStandard } from "../../core/db/repositories/settings.repo";
+import { getNodeImage } from "../../core/db/repositories/nodeImages.repo";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 import { EmptyWorkspaceNotice } from "../../shared/components/ui/EmptyWorkspaceNotice";
 import { Badge } from "../../shared/components/ui/Badge";
@@ -666,6 +667,18 @@ function WeightedPanel({ weight, children }: { weight: number; children: React.R
   );
 }
 
+/** Charge à la demande l'image d'un nœud depuis db.nodeImages (phase 8). */
+function useNodeImage(standardId: string | undefined, nodeId: string | undefined): string | null {
+  const [img, setImg] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!standardId || !nodeId) { setImg(null); return; }
+    void getNodeImage(standardId, nodeId).then((d) => { if (!cancelled) setImg(d); });
+    return () => { cancelled = true; };
+  }, [standardId, nodeId]);
+  return img;
+}
+
 function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile }: {
   node: TaxonomyNodeItem | null;
   profile: Profile | null;
@@ -674,6 +687,9 @@ function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile
   onTogglePin: (p: Profile) => void;
   onClearProfile: () => void;
 }) {
+  // Phase 8 : les images de nœuds (téléversées) vivent dans db.nodeImages ; on
+  // les charge à la demande. Les builtin gardent un chemin inline dans imageData.
+  const externalImage = useNodeImage(node?.standardId, node?.id);
   if (profile !== null && schema !== null) {
     return (
       <div>
@@ -700,6 +716,8 @@ function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile
     );
   }
 
+  const nodeImage = node.imageData ?? externalImage;
+
   return (
     <div className="flex flex-col min-h-0">
       <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
@@ -709,9 +727,9 @@ function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile
         </div>
         <h2 className="text-base font-semibold text-gray-900 leading-snug">{node.label}</h2>
       </div>
-      {node.imageData !== undefined && (
+      {nodeImage !== null && (
         <div className="p-5 flex items-center justify-center bg-gray-50">
-          <img src={node.imageData} alt={node.label} className="max-w-full max-h-[50vh] object-contain rounded-lg shadow-sm bg-white" />
+          <img src={nodeImage} alt={node.label} className="max-w-full max-h-[50vh] object-contain rounded-lg shadow-sm bg-white" />
         </div>
       )}
       {node.description !== undefined && (
@@ -720,7 +738,7 @@ function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile
           <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{node.description}</p>
         </div>
       )}
-      {node.imageData === undefined && node.description === undefined && (
+      {nodeImage === null && node.description === undefined && (
         <div className="px-5 py-8 text-sm text-gray-400">No image or description attached to this node.</div>
       )}
     </div>

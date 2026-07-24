@@ -12,6 +12,7 @@ import type { StandardPlugin } from "../domain/standard";
 import type { ExportEnvelope } from "../domain/tree";
 import { upsertProfile, getAllProfiles } from "../db/repositories/profiles.repo";
 import { upsertStandard, getAllStandards } from "../db/repositories/standards.repo";
+import { attachNodeImages } from "../db/repositories/nodeImages.repo";
 import { migrateProfiles } from "./migrationEngine";
 import { StandardPluginSchema } from "../domain/standard";
 
@@ -31,6 +32,9 @@ export async function exportDatabase(): Promise<void> {
     getAllProfiles(),
     getAllStandards(),
   ]);
+  // Phase 8 : db.standards est allégé → ré-attacher les images pour un export
+  // JSON auto-suffisant (le destinataire n'a pas la table db.nodeImages).
+  const standardsWithImages = await Promise.all(standards.map(attachNodeImages));
 
   const envelope: ExportEnvelope = {
     exportMeta: {
@@ -43,7 +47,7 @@ export async function exportDatabase(): Promise<void> {
         schemaVersion: s.profileSchema.version,
       })),
     },
-    standards,
+    standards: standardsWithImages,
     profiles,
     customFieldExtensions: [],
   };
@@ -154,6 +158,8 @@ export async function exportProfilesForStandard(
   profiles: Profile[],
   standard: StandardPlugin,
 ): Promise<void> {
+  // Phase 8 : ré-attacher les images pour un export auto-suffisant.
+  const standardWithImages = await attachNodeImages(standard);
   const envelope: ExportEnvelope = {
     exportMeta: {
       appVersion: APP_VERSION,
@@ -163,7 +169,7 @@ export async function exportProfilesForStandard(
         { id: standardId, schemaVersion: standard.profileSchema.version },
       ],
     },
-    standards: [standard],
+    standards: [standardWithImages],
     profiles,
     customFieldExtensions: [],
   };
