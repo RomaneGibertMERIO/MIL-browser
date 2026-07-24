@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { getSettings } from "../../core/db/repositories/settings.repo";
 import { useBootstrapStore } from "../../store/bootstrapStore";
 import { useAppStore } from "../../store/appStore";
+import { canAccess } from "../roles";
 import { loadBuiltinStandards } from "../../core/engine/standardLoader";
 import { db } from "../../core/db/schema";
 import { standardWorkspace } from "../../core/domain/standard";
@@ -112,8 +113,12 @@ export function useBootstrap(): void {
         standards: "edit",
         settings:  "settings",
       };
+      // On ne restaure une vue que si le rôle synchronisé y donne accès : sinon
+      // un readonly dont l'ancien lastView pointait vers 'edit' atterrirait sur
+      // l'écran « rôle insuffisant » sans onglet actif dans le rail. Le défaut
+      // accessible ('home') est conservé dans le cas contraire.
       const lastAdminView = adminViewMap[settings.lastView];
-      if (lastAdminView !== undefined) {
+      if (lastAdminView !== undefined && canAccess(lastAdminView, useAppStore.getState().role)) {
         setAdminView(lastAdminView);
       }
       await useAppStore.getState().refreshLocalChanges();
