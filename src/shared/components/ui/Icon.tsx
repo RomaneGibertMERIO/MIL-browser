@@ -9,7 +9,7 @@
 
 import {
   Pin, PinOff, X, Settings, ShieldCheck, Users, UploadCloud, ArrowLeft,
-  ExternalLink, ChevronRight, ChevronDown, Minus, SquarePen, ListTree, Search,
+  ExternalLink, ChevronRight, ChevronDown, ChevronUp, Minus, SquarePen, ListTree, Search,
   Plus, Check, GitBranch, GitCommit, AppWindow, Home, RefreshCw, Trash2,
   Download, Upload, AlertTriangle, type LucideIcon,
 } from "lucide-react";
@@ -26,6 +26,7 @@ const ICONS = {
   open: ExternalLink,
   chevronRight: ChevronRight,
   chevronDown: ChevronDown,
+  chevronUp: ChevronUp,
   collapse: Minus,
   edit: SquarePen,
   standards: ListTree,

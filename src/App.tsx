@@ -13,7 +13,7 @@ import { canAccess, roleLabel } from './shared/roles';
 import { AssistantPage } from './features/assistant/AssistantPage';
 import { HomePage } from './features/home/HomePage';
 import { EditProfilesPage } from './features/edit/EditProfilesPage';
-import { StandardsPage } from "./features/standards/StandardsPage";
+import { EditTaxonomyPage } from './features/edit/EditTaxonomyPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Sidebar } from './app/Sidebar';
 import { SubmitChangesModal } from './app/SubmitChangesModal';
@@ -147,10 +147,9 @@ function ContentPane({ adminView }: ContentPaneProps) {
 // ---------------------------------------------------------------------------
 
 /**
- * Edit : profils (mode Miller éditable, phase 4a) + taxonomie (StandardsPage),
- * via un sous-onglet. La bascule engrenage et le mode Taxonomie en Miller
- * arrivent en phase 4b ; le sélecteur de norme vit désormais dans la 1re
- * colonne du Miller de EditProfilesPage.
+ * Edit : bascule engrenage entre le mode Profils (EditProfilesPage) et le mode
+ * Taxonomie (EditTaxonomyPage), tous deux en Miller éditable. La norme active
+ * est choisie dans la 1re colonne du Miller (partagée par les deux modes).
  */
 function EditSection() {
   const [tab, setTab] = useState<'profiles' | 'taxonomy'>('profiles');
@@ -159,15 +158,11 @@ function EditSection() {
     <div className="h-full flex flex-col">
       <div className="flex-shrink-0 flex items-center gap-2 px-6 py-3 border-b border-gray-200 bg-white">
         <SubTab active={tab === 'profiles'} onClick={() => setTab('profiles')} icon="edit" label="Profiles" />
-        <SubTab active={tab === 'taxonomy'} onClick={() => setTab('taxonomy')} icon="standards" label="Taxonomy" />
+        <SubTab active={tab === 'taxonomy'} onClick={() => setTab('taxonomy')} icon="settings" label="Taxonomy" />
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        {tab === 'taxonomy' ? (
-          <div className="h-full overflow-y-auto px-6 py-6"><StandardsPage /></div>
-        ) : (
-          <EditProfilesPage />
-        )}
+        {tab === 'taxonomy' ? <EditTaxonomyPage /> : <EditProfilesPage />}
       </div>
     </div>
   );

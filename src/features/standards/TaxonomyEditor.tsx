@@ -482,7 +482,7 @@ interface NodePropertiesPanelProps {
   onChange: (changes: Partial<StandardNode>) => void;
 }
 
-function NodePropertiesPanel({ node, onChange }: NodePropertiesPanelProps) {
+export function NodePropertiesPanel({ node, onChange }: NodePropertiesPanelProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -579,7 +579,7 @@ interface NodeSchemaPanelProps {
   onChange: (changes: Partial<StandardNode>) => void;
 }
 
-function NodeSchemaPanel({ node, standard, onChange }: NodeSchemaPanelProps) {
+export function NodeSchemaPanel({ node, standard, onChange }: NodeSchemaPanelProps) {
   return (
     <div className="p-6">
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Profile Schema</p>
