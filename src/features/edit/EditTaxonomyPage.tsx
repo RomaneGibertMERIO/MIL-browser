@@ -256,7 +256,9 @@ export function EditTaxonomyPage() {
   // --- Persistance ----------------------------------------------------------
 
   async function handleSave() {
-    if (standard === null) return;
+    // Garde de sécurité anti-perte : ne JAMAIS persister un tampon non hydraté
+    // (le bouton Save est déjà désactivé, ceci est une ceinture supplémentaire).
+    if (standard === null || !hydrated) return;
     const snapshot = workingNodes;
     setSaving(true);
     setSaveError(null);
