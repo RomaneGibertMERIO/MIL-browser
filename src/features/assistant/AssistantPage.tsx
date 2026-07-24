@@ -32,6 +32,7 @@ import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 import { EmptyWorkspaceNotice } from "../../shared/components/ui/EmptyWorkspaceNotice";
 import { Badge } from "../../shared/components/ui/Badge";
 import { Icon } from "../../shared/components/ui/Icon";
+import { StatusDot } from "../../shared/components/ui/StatusBadge";
 import { AppFrame, Brand } from "../../shared/components/AppFrame";
 import { profileStatusLabel } from "../../shared/profileStatus";
 import { ProfileDetail } from "../profile/ProfileDetail";
@@ -126,6 +127,7 @@ export function AssistantPage() {
   const activeStdId  = useAppStore(s => s.activeStandardId);
   const setActiveStd = useAppStore(s => s.setActiveStandard);
   const setMode      = useAppStore(s => s.setMode);
+  const repoMode     = useAppStore(s => s.repoMode);
 
   const [selectedPath, setSelectedPath]           = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -148,6 +150,30 @@ export function AssistantPage() {
     [standard, allProfiles],
   );
   const columns = useMemo(() => buildColumns(tree, selectedPath), [tree, selectedPath]);
+
+  // Status roll-up per node: the "most local" status found in a node's subtree
+  // profiles (local > pending > approved). Purely derived from data already
+  // loaded — no engine change. Only shown in shared mode (sync state).
+  const rollupByNode = useMemo(() => {
+    const RANK: Record<string, number> = { local: 3, pending: 2, approved: 1 };
+    const LABEL = ["", "approved", "pending", "local"];
+    const profByNode = new Map<string, Profile[]>();
+    for (const p of allProfiles ?? []) {
+      const arr = profByNode.get(p.nodeId);
+      if (arr) arr.push(p); else profByNode.set(p.nodeId, [p]);
+    }
+    const out = new Map<string, string>();
+    const visit = (n: TaxonomyNodeItem): number => {
+      let best = 0;
+      for (const p of profByNode.get(n.id) ?? []) best = Math.max(best, RANK[p.status ?? "local"] ?? 0);
+      for (const c of n.children) best = Math.max(best, visit(c));
+      if (best > 0) out.set(n.id, LABEL[best]!);
+      return best;
+    };
+    for (const r of tree) visit(r);
+    return out;
+  }, [tree, allProfiles]);
+  const showStatus = repoMode === "shared";
 
   const selectedNode = useMemo((): TaxonomyNodeItem | null => {
     if (selectedPath.length === 0) return null;
@@ -349,9 +375,15 @@ export function AssistantPage() {
         {/* MILLER — normes + nœuds + PROFILS, colonnes à largeur égale */}
         <div className="flex-1 min-w-0" style={{ minWidth: MIN_MILLER }}>
           <div ref={millerRef} className="flex h-full overflow-x-auto overflow-y-hidden">
-            <MillerColumn heading="Standards" tone="std">
+            <MillerColumn heading="Standards">
               {standards.map(s => (
-                <StandardRow key={s.manifest.id} standard={s} selected={s.manifest.id === activeStdId} onSelect={() => selectStandard(s.manifest.id)} />
+                <StandardRow
+                  key={s.manifest.id}
+                  standard={s}
+                  selected={s.manifest.id === activeStdId}
+                  onSelect={() => selectStandard(s.manifest.id)}
+                  statusDot={showStatus ? <StatusDot status={(s as any).status} /> : null}
+                />
               ))}
             </MillerColumn>
 
@@ -359,9 +391,14 @@ export function AssistantPage() {
               <MillerColumn key={colIdx} heading={columnHeading(colNodes)}>
                 {colNodes.length === 0
                   ? <p className="text-xs text-gray-400 text-center px-3 py-6">No items</p>
-                  : colNodes.map(node => (
-                    <NodeRow key={node.id} node={node} selected={node.id === (selectedPath[colIdx] ?? null)} onSelect={() => selectNode(colIdx, node.id)} />
-                  ))}
+                  : colNodes.map(node => {
+                    // Node dot only when the branch holds non-official work (local/pending).
+                    const r = rollupByNode.get(node.id);
+                    const dot = showStatus && (r === "local" || r === "pending") ? <StatusDot status={r} /> : null;
+                    return (
+                      <NodeRow key={node.id} node={node} selected={node.id === (selectedPath[colIdx] ?? null)} onSelect={() => selectNode(colIdx, node.id)} statusDot={dot} />
+                    );
+                  })}
               </MillerColumn>
             ))}
 
@@ -534,9 +571,12 @@ function SearchResultsView({ results, query, onNode, onProfile, onTogglePin, isP
 // Colonnes du Miller — flex-1 (largeur égale) + min-width
 // ---------------------------------------------------------------------------
 
-function MillerColumn({ heading, tone, children }: { heading: string; tone?: "std"; children: React.ReactNode }) {
+// The Miller (navigation structure) is deliberately greyed vs the white info/
+// profile area on the right, so "structure" reads as secondary and "content" as
+// primary (spec section 6).
+function MillerColumn({ heading, children }: { heading: string; children: React.ReactNode }) {
   return (
-    <div className={`flex-1 flex flex-col border-r border-gray-200 ${tone === "std" ? "bg-gray-50/60" : "bg-white"}`} style={{ minWidth: COL_MIN }}>
+    <div className="flex-1 flex flex-col border-r border-gray-200 bg-gray-50/50" style={{ minWidth: COL_MIN }}>
       <PanelHeader>{heading}</PanelHeader>
       <div className="flex-1 overflow-y-auto py-1">{children}</div>
     </div>
@@ -551,12 +591,15 @@ function PanelHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StandardRow({ standard, selected, onSelect }: { standard: StandardPlugin; selected: boolean; onSelect: () => void }) {
+function StandardRow({ standard, selected, onSelect, statusDot }: { standard: StandardPlugin; selected: boolean; onSelect: () => void; statusDot?: React.ReactNode }) {
   return (
     <button onClick={onSelect} title={standard.manifest.label}
       className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${selected ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-white"}`}>
       <span className="flex-1 min-w-0">
-        <span className="block text-sm font-medium leading-snug truncate">{standard.manifest.label}</span>
+        <span className="flex items-center gap-1.5">
+          {statusDot}
+          <span className="block text-sm font-medium leading-snug truncate">{standard.manifest.label}</span>
+        </span>
         <span className={`block text-xs truncate ${selected ? "text-blue-200" : "text-gray-400"}`}>{standard.manifest.organization}</span>
       </span>
       <Chevron selected={selected} />
@@ -564,7 +607,7 @@ function StandardRow({ standard, selected, onSelect }: { standard: StandardPlugi
   );
 }
 
-function NodeRow({ node, selected, onSelect }: { node: TaxonomyNodeItem; selected: boolean; onSelect: () => void }) {
+function NodeRow({ node, selected, onSelect, statusDot }: { node: TaxonomyNodeItem; selected: boolean; onSelect: () => void; statusDot?: React.ReactNode }) {
   return (
     <button onClick={onSelect} title={node.label}
       className={`w-full text-left px-3 py-2 flex items-start gap-2 transition-colors ${selected ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
@@ -573,6 +616,7 @@ function NodeRow({ node, selected, onSelect }: { node: TaxonomyNodeItem; selecte
         <span className={`block text-xs font-mono leading-tight ${selected ? "text-blue-200" : "text-gray-400"}`}>{node.code}</span>
         <span className="block text-sm leading-snug">{node.label}</span>
       </span>
+      {statusDot && <span className="flex-shrink-0 mt-1.5">{statusDot}</span>}
       {node.children.length > 0 && <Chevron selected={selected} />}
     </button>
   );
