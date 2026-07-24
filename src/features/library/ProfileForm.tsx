@@ -14,9 +14,10 @@ import type { ProfileDraft, ValidationError } from "../../core/domain/profile";
 import type { StandardPlugin } from "../../core/domain/standard";
 import type { TaxonomyNodeItem } from "../../core/domain/tree";
 import { buildTree } from "../../core/engine/treeBuilder";
-import { getEffectiveSchema } from "../../core/engine/profileEngine";
+import { getEffectiveSchema, buildProfileFromDraft } from "../../core/engine/profileEngine";
 import { Card } from "../../shared/components/ui/Card";
 import { FieldRenderer } from "../../shared/components/forms/FieldRenderer";
+import { TimeSeriesChart } from "../../shared/components/charts/TimeSeriesChart";
 import { DatasetEditor, type DatasetRow } from "./DatasetEditor";
 
 // ---------------------------------------------------------------------------
@@ -127,6 +128,23 @@ function handleSubmit(e: FormEvent) {
     [standard, draft.nodeId],
   );
 
+  // Graphe live, mémoïsé pour ne dépendre QUE du dataset et des axes log :
+  // taper dans un champ texte ne doit pas re-rendre le graphe (Recharts).
+  const xIsLog = !!draft.fields["xIsLog"];
+  const yIsLog = !!draft.fields["yIsLog"];
+  const chartFields = useMemo(() => ({ xIsLog, yIsLog }), [xIsLog, yIsLog]);
+  const chartData = useMemo(() => {
+    try {
+      return buildProfileFromDraft(draftRef.current, effectiveSchema).dataset;
+    } catch {
+      return [];
+    }
+  }, [draft.datasetRows, effectiveSchema]);
+  const liveChart = useMemo(() => {
+    if (chartData.length === 0) return null;
+    return <TimeSeriesChart columns={effectiveSchema.datasetColumns} data={chartData} fields={chartFields} />;
+  }, [chartData, effectiveSchema, chartFields]);
+
   return (
     <form id="profile-form" onSubmit={handleSubmit} noValidate className="space-y-5">
       {/* ── Profile Information ─────────────────────────────────────── */}
@@ -188,6 +206,13 @@ function handleSubmit(e: FormEvent) {
 
       {/* ── Schema Fields (by group) ─────────────────────────────────── */}
       {renderFieldGroups(standard, draft, handleFieldChange, getError, effectiveSchema.fields)}
+
+      {/* ── Graphe (entre les champs et le dataset, s'il y a des données) ─ */}
+      {liveChart !== null && (
+        <Card title="Chart">
+          {liveChart}
+        </Card>
+      )}
 
       {/* ── Dataset ─────────────────────────────────────────────────── */}
       <Card title="Dataset">

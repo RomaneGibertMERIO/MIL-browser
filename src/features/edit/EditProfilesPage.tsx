@@ -32,7 +32,6 @@ import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
 import { useStandards } from "../../shared/hooks/useStandards";
 import { useAppStore } from "../../store/appStore";
 import { ProfileForm } from "../library/ProfileForm";
-import { TimeSeriesChart } from "../../shared/components/charts/TimeSeriesChart";
 import { Icon } from "../../shared/components/ui/Icon";
 import { StatusDot } from "../../shared/components/ui/StatusBadge";
 import {
@@ -56,8 +55,7 @@ export function EditProfilesPage() {
   const [creatingNodeId, setCreatingNodeId] = useState<string | null>(null);
   const [formKey, setFormKey] = useState(0);
 
-  // Éditeur / aperçu
-  const [previewDraft, setPreviewDraft] = useState<ProfileDraft | null>(null);
+  // Éditeur
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -66,15 +64,11 @@ export function EditProfilesPage() {
   const [editorWidth, setEditorWidth] = useState(620);
   const resizeAbortRef = useRef<AbortController | null>(null);
 
-  // L'aperçu live est propagé en différé (debounce) pour ne pas re-rendre tout
-  // l'écran à chaque frappe. `editedRef` note IMMÉDIATEMENT qu'une saisie a eu
-  // lieu, pour que la garde anti-perte reste fiable même avant le debounce.
+  // Le graphe et le dataset sont rendus DANS le ProfileForm : taper ne re-rend
+  // plus le parent. `editedRef` note simplement qu'une saisie a eu lieu, pour la
+  // garde anti-perte à la navigation.
   const editedRef = useRef(false);
-  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    resizeAbortRef.current?.abort();
-    if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
-  }, []);
+  useEffect(() => () => resizeAbortRef.current?.abort(), []);
 
   // Store
   const activeStandardId = useAppStore((s) => s.activeStandardId);
@@ -147,22 +141,6 @@ export function EditProfilesPage() {
     return null;
   }, [standard, isCreating, creatingNodeId, selectedProfile]);
 
-  // Aperçu live dérivé du brouillon courant.
-  const previewProfile = useMemo((): Profile | null => {
-    if (standard == null) return null;
-    const d = previewDraft;
-    if (d === null) return selectedProfile;
-    try {
-      const schema = getEffectiveSchema(standard, d.nodeId);
-      return buildProfileFromDraft(d, schema, selectedProfile?.id, selectedProfile?.createdAt);
-    } catch { return selectedProfile; }
-  }, [previewDraft, selectedProfile, standard]);
-
-  const previewSchema = useMemo((): ProfileDefinition | null => {
-    if (standard == null) return null;
-    return previewDraft ? getEffectiveSchema(standard, previewDraft.nodeId) : standard.profileSchema;
-  }, [previewDraft, standard]);
-
   function confirmDiscardIfDirty(): boolean {
     if (editedRef.current) {
       return window.confirm("You have unsaved updates. Are you sure you want to discard your changes?");
@@ -170,25 +148,20 @@ export function EditProfilesPage() {
     return true;
   }
 
-  // Propage le brouillon à l'aperçu en différé : la frappe reste fluide (seul le
-  // ProfileForm se re-rend), l'aperçu se met à jour après la pause. La garde
-  // anti-perte, elle, s'appuie sur editedRef (immédiat), pas sur le debounce.
-  const handleFormChange = useCallback((draft: ProfileDraft) => {
+  // Le ProfileForm signale une saisie ; le rendu (graphe/dataset) se fait chez
+  // lui, donc on ne fait que lever le drapeau anti-perte (aucun re-rendu parent).
+  const handleFormChange = useCallback(() => {
     editedRef.current = true;
-    if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
-    previewTimerRef.current = setTimeout(() => setPreviewDraft(draft), 180);
   }, []);
 
   // Réinitialise l'état de navigation quand la norme active change (comme le
   // Browser). Couvre aussi les changements externes de activeStandardId.
   useEffect(() => {
     editedRef.current = false;
-    if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
     setSelectedPath([]);
     setSelectedProfileId(null);
     setIsCreating(false);
     setCreatingNodeId(null);
-    setPreviewDraft(null);
     setValidationErrors([]);
     setSaveStatus("idle");
     setFormKey((k) => k + 1);
@@ -196,8 +169,6 @@ export function EditProfilesPage() {
 
   function resetEditorState() {
     editedRef.current = false;
-    if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
-    setPreviewDraft(null);
     setValidationErrors([]);
     setSaveStatus("idle");
     setFormKey((k) => k + 1);
@@ -267,8 +238,6 @@ export function EditProfilesPage() {
     await refreshLocalChanges();
 
     editedRef.current = false;
-    if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
-    setPreviewDraft(null);
     setSelectedProfileId(profile.id);
     setIsCreating(false);
     setCreatingNodeId(null);
@@ -304,15 +273,12 @@ export function EditProfilesPage() {
     await dbDeleteProfile(deletingId);
     await refreshLocalChanges();
     if (selectedProfileId === deletingId) {
-      // Réinitialise aussi la garde anti-perte et le debounce, sinon supprimer un
-      // profil qu'on venait d'éditer laisserait editedRef=true → fausse alerte
-      // « unsaved changes » à la navigation suivante (+ timer d'aperçu fuité).
+      // Supprimer un profil qu'on éditait doit lever la garde anti-perte, sinon
+      // fausse alerte « unsaved changes » à la navigation suivante.
       editedRef.current = false;
-      if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
       setSelectedProfileId(null);
       setIsCreating(false);
       setCreatingNodeId(null);
-      setPreviewDraft(null);
     }
     setDeletingId(null);
   }
@@ -340,7 +306,7 @@ export function EditProfilesPage() {
   }
 
   const showEditor = isCreating || selectedProfile !== null;
-  const editorTitle = previewDraft?.name || selectedProfile?.name || (isCreating ? "New profile" : "");
+  const editorTitle = selectedProfile?.name || (isCreating ? "New profile" : "");
   const lockedNodeId = isCreating ? (creatingNodeId ?? undefined) : (selectedProfile?.nodeId ?? undefined);
 
   return (
@@ -472,7 +438,7 @@ export function EditProfilesPage() {
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+            <div className="flex-1 overflow-y-auto px-6 py-4">
               <ProfileForm
                 key={`${selectedProfileId ?? "new"}-${creatingNodeId ?? ""}-${formKey}`}
                 standard={standard}
@@ -485,14 +451,6 @@ export function EditProfilesPage() {
                 hideActions
                 lockedNodeId={lockedNodeId}
               />
-
-              {/* Aperçu live intégré à l'éditeur (le panneau séparé a été retiré). */}
-              {previewProfile !== null && previewSchema !== null && (
-                <div className="border-t border-gray-200 pt-4">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Live preview</p>
-                  <PreviewPanel profile={previewProfile} schema={previewSchema} />
-                </div>
-              )}
             </div>
           </>
         ) : (
@@ -514,74 +472,6 @@ export function EditProfilesPage() {
           onConfirm={() => { void handleDeleteConfirm(); }}
           onCancel={() => setDeletingId(null)}
         />
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Aperçu live (repris de LibraryPage — présentation identique)
-// ---------------------------------------------------------------------------
-
-// Aperçu empilé : le graphe AU-DESSUS du tableau quand le dataset est rempli
-// (gain de place vs. onglets), puis les métadonnées renseignées en dessous.
-function PreviewPanel({ profile, schema }: {
-  profile: Profile;
-  schema: ProfileDefinition;
-}) {
-  const hasData = (profile?.dataset?.length ?? 0) > 0;
-  const cols = schema?.datasetColumns?.filter((c) => c.axis !== "none") ?? [];
-  const fieldsWithValues = (schema?.fields ?? []).filter((f) => {
-    const v = profile?.fields?.[f.key];
-    return v !== null && v !== undefined && v !== "";
-  });
-
-  if (!hasData && fieldsWithValues.length === 0) {
-    return <p className="text-xs text-gray-400 text-center py-10 px-4">Nothing to preview yet — fill in fields or add dataset rows.</p>;
-  }
-
-  return (
-    <div className="p-4 space-y-5">
-      {hasData && (
-        <TimeSeriesChart columns={schema?.datasetColumns ?? []} data={profile?.dataset ?? []} fields={profile?.fields} />
-      )}
-
-      {hasData && cols.length > 0 && (
-        <div className="overflow-x-auto border border-gray-200 rounded-lg">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
-              <tr>
-                {cols.map((col) => (
-                  <th key={col.key} className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                    {col.label} <span className="font-normal ml-1 text-gray-300 normal-case">({col.unit})</span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(profile?.dataset ?? []).map((row, i) => (
-                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                  {cols.map((col) => (
-                    <td key={col.key} className="px-3 py-1.5 font-mono text-gray-700 whitespace-nowrap">
-                      {String(row[col.key] ?? "")}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {fieldsWithValues.length > 0 && (
-        <div className="space-y-3 pt-1">
-          {fieldsWithValues.map((f) => (
-            <div key={f.key}>
-              <p className="text-xs text-gray-400">{f.label}{f.unit ? ` (${f.unit})` : ""}</p>
-              <p className="text-sm text-gray-800">{String(profile?.fields?.[f.key] ?? "")}</p>
-            </div>
-          ))}
-        </div>
       )}
     </div>
   );
