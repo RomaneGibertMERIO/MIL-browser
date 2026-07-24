@@ -304,8 +304,14 @@ export function EditProfilesPage() {
     await dbDeleteProfile(deletingId);
     await refreshLocalChanges();
     if (selectedProfileId === deletingId) {
+      // Réinitialise aussi la garde anti-perte et le debounce, sinon supprimer un
+      // profil qu'on venait d'éditer laisserait editedRef=true → fausse alerte
+      // « unsaved changes » à la navigation suivante (+ timer d'aperçu fuité).
+      editedRef.current = false;
+      if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
       setSelectedProfileId(null);
       setIsCreating(false);
+      setCreatingNodeId(null);
       setPreviewDraft(null);
     }
     setDeletingId(null);
