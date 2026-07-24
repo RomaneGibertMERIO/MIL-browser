@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppStore, type AdminView } from './store/appStore';
 import { useBootstrapStore } from './store/bootstrapStore';
@@ -416,6 +416,110 @@ export function AdminValidationsPage() {
     );
   };
 
+  // Le rendu des diffs (stripHeavyJson sur des normes volumineuses + tableaux de
+  // dataset non bornés) est coûteux. On le mémorise par commit : ouvrir la
+  // modale de refus (état rejectTarget) ne doit PAS le recalculer — c'était la
+  // cause du gel de la zone de saisie du refus (le portail seul n'y suffisait
+  // pas puisque le fil principal était bloqué par le re-rendu).
+  const activeCommitReview = useMemo(
+    () =>
+      activeCommit ? (
+        <div className="flex flex-col h-full divide-y-2 divide-gray-150 overflow-hidden">
+          <div className="p-6 bg-gray-50 border-b-2 border-gray-100 flex-shrink-0">
+            <span className="text-[10px] bg-indigo-150 border border-indigo-200 text-indigo-700 font-black px-2.5 py-1 rounded-md tracking-wider">
+              COMMIT CONTROLLER ID: {activeCommit.id}
+            </span>
+            <h3 className="font-extrabold text-gray-900 text-xl tracking-tight leading-tight mt-2">
+              {activeCommit.commitMessage}
+            </h3>
+            <p className="text-xs text-gray-400 font-semibold mt-1">
+              Submitted by <b className="text-gray-600">{activeCommit.author}</b> on {activeCommit.date}
+            </p>
+          </div>
+
+          <div className="p-6 overflow-y-auto space-y-8 flex-1">
+            <span className="text-xs font-black text-gray-400 uppercase tracking-widest block">
+              Review and Validate Items One by One
+            </span>
+
+            {activeCommit.changes.map((change) => (
+              <div key={change.id} className="border-2 border-gray-150 rounded-2xl overflow-hidden bg-white shadow-xs hover:border-gray-300 transition-all">
+                <div className="p-4 bg-gray-50 flex items-center justify-between border-b border-gray-150 flex-wrap gap-3">
+                  <div>
+                    <p className="text-base font-extrabold text-gray-950">{change.name}</p>
+                    <p className="text-xs text-gray-400 font-mono mt-0.5">{change.location}</p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setRejectTarget({ commitId: activeCommit.id, changeId: change.id, name: change.name })}
+                      className="px-3.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-all active:scale-[0.98]"
+                    >
+                      Reject ❌
+                    </button>
+                    <button
+                      onClick={() => handleApproveChange(activeCommit.id, change.id, change.name)}
+                      className="px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all active:scale-[0.98]"
+                    >
+                      Approve & Merge ✓
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-5 space-y-6">
+                  {change.action === "Created" && change.proposedData && (
+                    <div className="space-y-6">
+                      <div className="bg-emerald-50/30 text-emerald-900 p-4 rounded-xl border border-emerald-200/60">
+                        <span className="font-extrabold text-sm block mb-1">✓ Complete Structural Addition</span>
+                        <p className="text-xs text-emerald-800">Properties proposed to be added in the database branch:</p>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">Target Field Properties</h4>
+                        {renderDynamicFields(change.proposedData)}
+                      </div>
+                      {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
+                        <div>
+                          <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Discrete Curve Dataset</h4>
+                          {renderDynamicDataset(change.proposedData.dataset)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {change.action === "Deleted" && (
+                    <div className="bg-red-50 border border-red-200 text-red-800 text-sm p-4 rounded-xl font-bold">
+                      ⚠️ Warning: Approving this change will remove this taxonomy and its linked data elements.
+                    </div>
+                  )}
+
+                  {change.action === "Modified" && change.originalData && change.proposedData && (
+                    <div className="space-y-6">
+                      <div>
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">Field Differences Mapping</h4>
+                        {renderDynamicDiff(change.originalData, change.proposedData)}
+                      </div>
+                      {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
+                        <div>
+                          <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Proposed Structural Dataset</h4>
+                          {renderDynamicDataset(change.proposedData.dataset)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-base p-12 gap-2">
+          <span className="text-3xl">🔍</span>
+          <span>Select a submission in the queue to inspect and merge individual assets.</span>
+        </div>
+      ),
+    [activeCommit],
+  );
+
   return (
     <div className="h-full flex flex-col space-y-6 w-full max-w-full px-4">
       <div className="flex items-center justify-between border-b border-gray-200 pb-4">
@@ -497,100 +601,7 @@ export function AdminValidationsPage() {
           </div>
 
           <div className="lg:col-span-3 flex flex-col bg-white border-2 border-gray-200 rounded-2xl overflow-hidden shadow-sm h-full">
-            {activeCommit ? (
-              <div className="flex flex-col h-full divide-y-2 divide-gray-150 overflow-hidden">
-                <div className="p-6 bg-gray-50 border-b-2 border-gray-100 flex-shrink-0">
-                  <span className="text-[10px] bg-indigo-150 border border-indigo-200 text-indigo-700 font-black px-2.5 py-1 rounded-md tracking-wider">
-                    COMMIT CONTROLLER ID: {activeCommit.id}
-                  </span>
-                  <h3 className="font-extrabold text-gray-900 text-xl tracking-tight leading-tight mt-2">
-                    {activeCommit.commitMessage}
-                  </h3>
-                  <p className="text-xs text-gray-400 font-semibold mt-1">
-                    Submitted by <b className="text-gray-600">{activeCommit.author}</b> on {activeCommit.date}
-                  </p>
-                </div>
-
-                <div className="p-6 overflow-y-auto space-y-8 flex-1">
-                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest block">
-                    Review and Validate Items One by One
-                  </span>
-                  
-                  {activeCommit.changes.map((change) => (
-                    <div key={change.id} className="border-2 border-gray-150 rounded-2xl overflow-hidden bg-white shadow-xs hover:border-gray-300 transition-all">
-                      <div className="p-4 bg-gray-50 flex items-center justify-between border-b border-gray-150 flex-wrap gap-3">
-                        <div>
-                          <p className="text-base font-extrabold text-gray-950">{change.name}</p>
-                          <p className="text-xs text-gray-400 font-mono mt-0.5">{change.location}</p>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setRejectTarget({ commitId: activeCommit.id, changeId: change.id, name: change.name })}
-                            className="px-3.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-all active:scale-[0.98]"
-                          >
-                            Reject ❌
-                          </button>
-                          <button
-                            onClick={() => handleApproveChange(activeCommit.id, change.id, change.name)}
-                            className="px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all active:scale-[0.98]"
-                          >
-                            Approve & Merge ✓
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="p-5 space-y-6">
-                        {change.action === "Created" && change.proposedData && (
-                          <div className="space-y-6">
-                            <div className="bg-emerald-50/30 text-emerald-900 p-4 rounded-xl border border-emerald-200/60">
-                              <span className="font-extrabold text-sm block mb-1">✓ Complete Structural Addition</span>
-                              <p className="text-xs text-emerald-800">Properties proposed to be added in the database branch:</p>
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">Target Field Properties</h4>
-                              {renderDynamicFields(change.proposedData)}
-                            </div>
-                            {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
-                              <div>
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Discrete Curve Dataset</h4>
-                                {renderDynamicDataset(change.proposedData.dataset)}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {change.action === "Deleted" && (
-                          <div className="bg-red-50 border border-red-200 text-red-800 text-sm p-4 rounded-xl font-bold">
-                            ⚠️ Warning: Approving this change will remove this taxonomy and its linked data elements.
-                          </div>
-                        )}
-
-                        {change.action === "Modified" && change.originalData && change.proposedData && (
-                          <div className="space-y-6">
-                            <div>
-                              <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">Field Differences Mapping</h4>
-                              {renderDynamicDiff(change.originalData, change.proposedData)}
-                            </div>
-                            {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
-                              <div>
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Proposed Structural Dataset</h4>
-                                {renderDynamicDataset(change.proposedData.dataset)}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-base p-12 gap-2">
-                <span className="text-3xl">🔍</span>
-                <span>Select a submission in the queue to inspect and merge individual assets.</span>
-              </div>
-            )}
+            {activeCommitReview}
           </div>
         </div>
       )}

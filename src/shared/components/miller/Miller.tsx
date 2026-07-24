@@ -61,9 +61,14 @@ export function columnHeading(nodes: TaxonomyNodeItem[]): string {
 // Primitives présentationnelles
 // ---------------------------------------------------------------------------
 
-export function MillerColumn({ heading, children }: { heading: string; children: ReactNode }) {
+export function MillerColumn({ heading, children, tone = "structure" }: {
+  heading: string; children: ReactNode; tone?: "structure" | "content";
+}) {
+  // structure (taxonomie, non éditable) = grisé ; content (colonne éditable,
+  // p.ex. les profils) = blanc, pour distinguer navigation et contenu éditable.
+  const bg = tone === "content" ? "bg-white" : "bg-gray-50/50";
   return (
-    <div className="flex-1 flex flex-col border-r border-gray-200 bg-gray-50/50" style={{ minWidth: COL_MIN }}>
+    <div className={`flex-1 flex flex-col border-r border-gray-200 ${bg}`} style={{ minWidth: COL_MIN }}>
       <PanelHeader>{heading}</PanelHeader>
       <div className="flex-1 overflow-y-auto py-1">{children}</div>
     </div>

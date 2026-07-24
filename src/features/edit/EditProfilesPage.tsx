@@ -58,7 +58,6 @@ export function EditProfilesPage() {
 
   // Éditeur / aperçu
   const [previewDraft, setPreviewDraft] = useState<ProfileDraft | null>(null);
-  const [previewTab, setPreviewTab] = useState<"chart" | "table" | "fields">("chart");
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -259,6 +258,29 @@ export function EditProfilesPage() {
     setTimeout(() => setSaveStatus("idle"), 2000);
   }
 
+  // Dupliquer un profil (y compris builtin) : crée une copie locale éditable.
+  // C'est la façon d'obtenir une copie modifiable d'un profil builtin.
+  async function handleDuplicate() {
+    if (selectedProfile === null) return;
+    if (!confirmDiscardIfDirty()) return;
+    const copy: Profile = {
+      ...selectedProfile,
+      id: crypto.randomUUID(),
+      name: `${selectedProfile.name} (copy)`,
+      source: "user",
+      status: "local",
+      author: selectedProfile.author ?? "unknown",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await upsertProfile(copy);
+    await refreshLocalChanges();
+    setSelectedProfileId(copy.id);
+    setIsCreating(false);
+    setCreatingNodeId(null);
+    resetEditorState();
+  }
+
   async function handleDeleteConfirm() {
     if (deletingId === null) return;
     await dbDeleteProfile(deletingId);
@@ -300,7 +322,6 @@ export function EditProfilesPage() {
   const showEditor = isCreating || selectedProfile !== null;
   const editorTitle = previewDraft?.name || selectedProfile?.name || (isCreating ? "New profile" : "");
   const lockedNodeId = isCreating ? (creatingNodeId ?? undefined) : (selectedProfile?.nodeId ?? undefined);
-  const canDelete = selectedProfile !== null && !isCreating && selectedProfile.source !== "builtin";
 
   return (
     // overflow-x-auto : si la fenêtre est trop étroite pour la somme des
@@ -344,7 +365,7 @@ export function EditProfilesPage() {
           ))}
 
           {standard != null && selectedNode != null && (
-            <MillerColumn heading={`Profiles${nodeProfilesExact.length ? ` (${nodeProfilesExact.length})` : ""}`}>
+            <MillerColumn heading={`Profiles${nodeProfilesExact.length ? ` (${nodeProfilesExact.length})` : ""}`} tone="content">
               {nodeProfilesExact.map((p) => (
                 <EditProfileRow
                   key={p.id}
@@ -393,15 +414,26 @@ export function EditProfilesPage() {
                     <Icon name="check" size={12} /> Saved
                   </span>
                 )}
-                {canDelete && (
-                  <button
-                    type="button"
-                    onClick={() => selectedProfile !== null && setDeletingId(selectedProfile.id)}
-                    title="Delete profile"
-                    className="p-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-                  >
-                    <Icon name="delete" size={16} />
-                  </button>
+                {selectedProfile !== null && !isCreating && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { void handleDuplicate(); }}
+                      title="Duplicate this profile (creates an editable local copy)"
+                      className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectedProfile.source !== "builtin" && setDeletingId(selectedProfile.id)}
+                      disabled={selectedProfile.source === "builtin"}
+                      title={selectedProfile.source === "builtin" ? "Built-in profiles cannot be deleted — duplicate it first" : "Delete profile"}
+                      className="p-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Icon name="delete" size={16} />
+                    </button>
+                  </>
                 )}
                 <button
                   type="button"
@@ -456,22 +488,12 @@ export function EditProfilesPage() {
 
       {/* Aperçu live */}
       <div style={{ width: `${previewWidth}px` }} className="flex-shrink-0 flex flex-col bg-gray-50 overflow-hidden select-text">
-        <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-200 flex items-center justify-between">
+        <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-200 flex items-center">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Preview</span>
-          {previewProfile !== null && previewSchema !== null && (
-            <div className="flex gap-0.5">
-              {(["chart", "table", "fields"] as const).map((t) => (
-                <button key={t} onClick={() => setPreviewTab(t)}
-                  className={`px-2 py-0.5 text-xs rounded capitalize transition-colors ${
-                    previewTab === t ? "bg-gray-200 text-gray-900 font-medium" : "text-gray-400 hover:text-gray-700"
-                  }`}>{t}</button>
-              ))}
-            </div>
-          )}
         </div>
         <div className="flex-1 overflow-y-auto">
           {previewProfile !== null && previewSchema !== null ? (
-            <PreviewPanel profile={previewProfile} schema={previewSchema} tab={previewTab} />
+            <PreviewPanel profile={previewProfile} schema={previewSchema} />
           ) : (
             <div className="flex items-center justify-center h-full text-sm text-gray-400 px-4 text-center leading-relaxed">
               Select or create a profile to see a live preview
@@ -495,67 +517,66 @@ export function EditProfilesPage() {
 // Aperçu live (repris de LibraryPage — présentation identique)
 // ---------------------------------------------------------------------------
 
-function PreviewPanel({ profile, schema, tab }: {
+// Aperçu empilé : le graphe AU-DESSUS du tableau quand le dataset est rempli
+// (gain de place vs. onglets), puis les métadonnées renseignées en dessous.
+function PreviewPanel({ profile, schema }: {
   profile: Profile;
   schema: ProfileDefinition;
-  tab: "chart" | "table" | "fields";
 }) {
-  if (tab === "chart") {
-    return (
-      <div className="p-4">
-        {(profile?.dataset?.length ?? 0) === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-8">Dataset is empty — add rows to see the chart.</p>
-        ) : (
-          <TimeSeriesChart columns={schema?.datasetColumns ?? []} data={profile?.dataset ?? []} fields={profile?.fields} />
-        )}
-      </div>
-    );
-  }
-
-  if (tab === "table") {
-    const cols = schema?.datasetColumns?.filter((c) => c.axis !== "none") ?? [];
-    if ((profile?.dataset?.length ?? 0) === 0) return <p className="text-xs text-gray-400 text-center py-8 px-4">No dataset rows.</p>;
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead className="bg-white border-b border-gray-200 sticky top-0">
-            <tr>
-              {cols.map((col) => (
-                <th key={col.key} className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  {col.label} <span className="font-normal ml-1 text-gray-300 normal-case">({col.unit})</span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {(profile?.dataset ?? []).map((row, i) => (
-              <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                {cols.map((col) => (
-                  <td key={col.key} className="px-3 py-1.5 font-mono text-gray-700 whitespace-nowrap">
-                    {String(row[col.key] ?? "")}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
+  const hasData = (profile?.dataset?.length ?? 0) > 0;
+  const cols = schema?.datasetColumns?.filter((c) => c.axis !== "none") ?? [];
   const fieldsWithValues = (schema?.fields ?? []).filter((f) => {
     const v = profile?.fields?.[f.key];
     return v !== null && v !== undefined && v !== "";
   });
-  if (fieldsWithValues.length === 0) return <p className="text-xs text-gray-400 text-center py-8 px-4">No metadata fields filled in.</p>;
+
+  if (!hasData && fieldsWithValues.length === 0) {
+    return <p className="text-xs text-gray-400 text-center py-10 px-4">Nothing to preview yet — fill in fields or add dataset rows.</p>;
+  }
+
   return (
-    <div className="p-4 space-y-3">
-      {fieldsWithValues.map((f) => (
-        <div key={f.key}>
-          <p className="text-xs text-gray-400">{f.label}{f.unit ? ` (${f.unit})` : ""}</p>
-          <p className="text-sm text-gray-800">{String(profile?.fields?.[f.key] ?? "")}</p>
+    <div className="p-4 space-y-5">
+      {hasData && (
+        <TimeSeriesChart columns={schema?.datasetColumns ?? []} data={profile?.dataset ?? []} fields={profile?.fields} />
+      )}
+
+      {hasData && cols.length > 0 && (
+        <div className="overflow-x-auto border border-gray-200 rounded-lg">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+              <tr>
+                {cols.map((col) => (
+                  <th key={col.key} className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                    {col.label} <span className="font-normal ml-1 text-gray-300 normal-case">({col.unit})</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(profile?.dataset ?? []).map((row, i) => (
+                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                  {cols.map((col) => (
+                    <td key={col.key} className="px-3 py-1.5 font-mono text-gray-700 whitespace-nowrap">
+                      {String(row[col.key] ?? "")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      ))}
+      )}
+
+      {fieldsWithValues.length > 0 && (
+        <div className="space-y-3 pt-1">
+          {fieldsWithValues.map((f) => (
+            <div key={f.key}>
+              <p className="text-xs text-gray-400">{f.label}{f.unit ? ` (${f.unit})` : ""}</p>
+              <p className="text-sm text-gray-800">{String(profile?.fields?.[f.key] ?? "")}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
