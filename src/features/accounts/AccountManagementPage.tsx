@@ -13,9 +13,9 @@ import { getElectronBridge, toIpcResult, type SessionInfo, type UserRole } from 
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 
 const ROLES: { value: UserRole; label: string; help: string }[] = [
-  { value: "readonly", label: "Lecture seule", help: "Peut seulement régler le chemin du dépôt." },
-  { value: "testing", label: "Testing team", help: "Peut créer et pousser des propositions." },
-  { value: "admin", label: "Admin", help: "Gère les comptes, valide/refuse les propositions." },
+  { value: "readonly", label: "Read only", help: "Can only set the repository path." },
+  { value: "testing", label: "Testing team", help: "Can create and push proposals." },
+  { value: "admin", label: "Admin", help: "Manages accounts, approves/rejects proposals." },
 ];
 
 export function AccountManagementPage() {
@@ -29,13 +29,13 @@ export function AccountManagementPage() {
   const load = useCallback(async () => {
     const api = getElectronBridge();
     if (api === null) {
-      setError("Gestion des comptes indisponible hors de l'application de bureau.");
+      setError("Account management is unavailable outside the desktop application.");
       setSessions([]);
       return;
     }
     const result = await api.gitListSessions(gitRepoPath);
     if (!result.success) {
-      setError(result.error ?? "Impossible de charger la liste des sessions.");
+      setError(result.error ?? "Unable to load the session list.");
       setSessions([]);
       return;
     }
@@ -55,10 +55,10 @@ export function AccountManagementPage() {
     try {
       const result = toIpcResult(
         await api.gitSetRole({ repoPath: gitRepoPath, username, role }),
-        "gitSetRole n'a renvoyé aucun résultat.",
+        "gitSetRole returned no result.",
       );
       if (!result.success) {
-        setError(result.error ?? "Changement de rôle refusé.");
+        setError(result.error ?? "Role change rejected.");
         return;
       }
       setError(null);
@@ -73,9 +73,9 @@ export function AccountManagementPage() {
   return (
     <div className="max-w-4xl space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Comptes &amp; rôles</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Accounts &amp; roles</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Tous les postes ayant contacté le dépôt central. Attribuez un rôle à chacun.
+          All machines that have contacted the central repository. Assign a role to each.
         </p>
       </div>
 
@@ -88,8 +88,8 @@ export function AccountManagementPage() {
       <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
         {sessions.length === 0 ? (
           <p className="p-6 text-center text-sm text-gray-400">
-            Aucune session enregistrée pour l'instant. Les postes apparaissent ici après leur
-            première synchronisation avec le dépôt.
+            No sessions recorded yet. Machines appear here after their
+            first synchronization with the repository.
           </p>
         ) : (
           sessions.map((s) => {
@@ -99,14 +99,14 @@ export function AccountManagementPage() {
                 <div className="min-w-0">
                   <p className="font-semibold text-sm text-gray-900 truncate">
                     {s.username}
-                    {isSelf && <span className="ml-2 text-xs font-normal text-blue-600">(vous)</span>}
+                    {isSelf && <span className="ml-2 text-xs font-normal text-blue-600">(you)</span>}
                   </p>
                   <p className="text-xs text-gray-400 font-mono mt-0.5">
-                    vu le {new Date(s.lastSeen).toLocaleString()}
+                    seen on {new Date(s.lastSeen).toLocaleString()}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1.5" role="group" aria-label={`Rôle de ${s.username}`}>
+                <div className="flex items-center gap-1.5" role="group" aria-label={`Role for ${s.username}`}>
                   {ROLES.map((r) => {
                     const active = s.role === r.value;
                     return (
@@ -135,8 +135,8 @@ export function AccountManagementPage() {
       </div>
 
       <p className="text-xs text-gray-400">
-        Un compte non listé ou nouvellement connecté est en lecture seule par défaut. Le contrôle
-        d'accès est appliqué par l'application de bureau à partir du nom de session Windows.
+        An unlisted or newly connected account is read only by default. Access control is
+        enforced by the desktop application based on the Windows session name.
       </p>
     </div>
   );

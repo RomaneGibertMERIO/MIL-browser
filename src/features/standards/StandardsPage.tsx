@@ -244,7 +244,7 @@ function StandardCard({ standard, onDelete, onEditTaxonomy }: StandardCardProps)
             
             {/* Affiche le modificateur ou l'auteur si défini */}
             {(standard as any).lastModifiedBy && (
-              <span className="italic">par {(standard as any).lastModifiedBy}</span>
+              <span className="italic">by {(standard as any).lastModifiedBy}</span>
             )}
           </div>
         </div>

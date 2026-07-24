@@ -176,8 +176,8 @@ function ContentPane({ adminView, standard }: ContentPaneProps) {
   if (ROLE_RANK[role] < ROLE_RANK[minRoleByView[adminView]]) {
     return (
       <div className="flex items-center justify-center h-full text-sm text-gray-400 text-center px-6">
-        Section réservée à un rôle supérieur.<br />
-        Votre rôle actuel est « {role} ». Contactez un administrateur pour obtenir plus de droits.
+        This section requires a higher role.<br />
+        Your current role is "{role}". Contact an administrator to request more permissions.
       </div>
     );
   }
@@ -274,7 +274,7 @@ export function AdminValidationsPage() {
           let displayValue = "";
           if (value === null || value === undefined) displayValue = "—";
           else if (typeof value === "object") displayValue = stripHeavyJson(value);
-          else if (key === "imageData" && typeof value === "string") displayValue = `[image — ${value.length} caractères]`;
+          else if (key === "imageData" && typeof value === "string") displayValue = `[image — ${value.length} characters]`;
           else displayValue = String(value);
 
           return (
@@ -575,20 +575,20 @@ function RejectReasonModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl bg-white shadow-xl border border-gray-200">
         <div className="p-4 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">Rejeter la proposition</h3>
+          <h3 className="font-bold text-gray-900">Reject proposal</h3>
           <p className="text-xs text-gray-500 mt-0.5 truncate" title={name}>{name}</p>
         </div>
 
         <div className="p-4">
           <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-            Motif du refus (transmis à l'auteur)
+            Reason for rejection (sent to the author)
           </label>
           <textarea
             autoFocus
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={4}
-            placeholder="Expliquez pourquoi cette proposition est refusée…"
+            placeholder="Explain why this proposal is being rejected…"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </div>
@@ -599,7 +599,7 @@ function RejectReasonModal({
             onClick={onCancel}
             className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            Annuler
+            Cancel
           </button>
           <button
             type="button"
@@ -607,7 +607,7 @@ function RejectReasonModal({
             disabled={reason.trim() === ""}
             className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:bg-red-300 disabled:cursor-not-allowed"
           >
-            Confirmer le refus
+            Confirm rejection
           </button>
         </div>
       </div>

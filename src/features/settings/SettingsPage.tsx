@@ -137,17 +137,17 @@ export function SettingsPage() {
         <Card title="Your access">
           <div className="space-y-2 text-sm">
             <p className="text-gray-600">
-              Connecté en tant que{" "}
+              Connected as{" "}
               <span className="font-mono font-semibold text-gray-900">{systemUsername}</span> —{" "}
-              rôle{" "}
+              role{" "}
               <span className="font-semibold text-indigo-700">{role}</span>
             </p>
             <p className="text-xs text-gray-400">
               {role === "admin"
-                ? "Vous gérez les comptes et validez les propositions (onglet « Accounts & Roles »)."
+                ? "You manage accounts and approve proposals (the “Accounts & Roles” tab)."
                 : role === "testing"
-                ? "Vous pouvez créer et pousser des propositions. La validation revient aux administrateurs."
-                : "Accès en lecture seule : vous pouvez seulement vérifier le chemin du dépôt. Un administrateur peut élargir vos droits."}
+                ? "You can create and push proposals. Approval is handled by administrators."
+                : "Read-only access: you can only check the repository path. An administrator can broaden your permissions."}
             </p>
           </div>
         </Card>
