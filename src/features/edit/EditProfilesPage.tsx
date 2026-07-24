@@ -13,7 +13,7 @@
  * non-régression §27. Les éditions structurelles (nœuds, normes) arrivent en
  * phase 4b (mode Taxonomie).
  */
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import type { Profile, ProfileDraft, ValidationError } from "../../core/domain/profile";
 import type { StandardPlugin, ProfileDefinition } from "../../core/domain/standard";
 import type { TaxonomyNodeItem } from "../../core/domain/tree";
@@ -62,11 +62,19 @@ export function EditProfilesPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Largeurs redimensionnables (éditeur + aperçu ; le Miller occupe le reste)
-  const [editorWidth, setEditorWidth] = useState(460);
-  const [previewWidth, setPreviewWidth] = useState(300);
+  // Largeur redimensionnable de l'éditeur ; le Miller occupe le reste.
+  const [editorWidth, setEditorWidth] = useState(620);
   const resizeAbortRef = useRef<AbortController | null>(null);
-  useEffect(() => () => resizeAbortRef.current?.abort(), []);
+
+  // L'aperçu live est propagé en différé (debounce) pour ne pas re-rendre tout
+  // l'écran à chaque frappe. `editedRef` note IMMÉDIATEMENT qu'une saisie a eu
+  // lieu, pour que la garde anti-perte reste fiable même avant le debounce.
+  const editedRef = useRef(false);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    resizeAbortRef.current?.abort();
+    if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
+  }, []);
 
   // Store
   const activeStandardId = useAppStore((s) => s.activeStandardId);
@@ -155,21 +163,27 @@ export function EditProfilesPage() {
     return previewDraft ? getEffectiveSchema(standard, previewDraft.nodeId) : standard.profileSchema;
   }, [previewDraft, standard]);
 
-  const isDirty = useMemo(() => {
-    if (!previewDraft) return false;
-    return JSON.stringify(previewDraft) !== JSON.stringify(formInitialDraft);
-  }, [previewDraft, formInitialDraft]);
-
   function confirmDiscardIfDirty(): boolean {
-    if (isDirty) {
+    if (editedRef.current) {
       return window.confirm("You have unsaved updates. Are you sure you want to discard your changes?");
     }
     return true;
   }
 
+  // Propage le brouillon à l'aperçu en différé : la frappe reste fluide (seul le
+  // ProfileForm se re-rend), l'aperçu se met à jour après la pause. La garde
+  // anti-perte, elle, s'appuie sur editedRef (immédiat), pas sur le debounce.
+  const handleFormChange = useCallback((draft: ProfileDraft) => {
+    editedRef.current = true;
+    if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
+    previewTimerRef.current = setTimeout(() => setPreviewDraft(draft), 180);
+  }, []);
+
   // Réinitialise l'état de navigation quand la norme active change (comme le
   // Browser). Couvre aussi les changements externes de activeStandardId.
   useEffect(() => {
+    editedRef.current = false;
+    if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
     setSelectedPath([]);
     setSelectedProfileId(null);
     setIsCreating(false);
@@ -181,6 +195,8 @@ export function EditProfilesPage() {
   }, [activeStandardId]);
 
   function resetEditorState() {
+    editedRef.current = false;
+    if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
     setPreviewDraft(null);
     setValidationErrors([]);
     setSaveStatus("idle");
@@ -250,6 +266,8 @@ export function EditProfilesPage() {
     await upsertProfile(profile);
     await refreshLocalChanges();
 
+    editedRef.current = false;
+    if (previewTimerRef.current !== null) clearTimeout(previewTimerRef.current);
     setPreviewDraft(null);
     setSelectedProfileId(profile.id);
     setIsCreating(false);
@@ -293,10 +311,10 @@ export function EditProfilesPage() {
     setDeletingId(null);
   }
 
-  function startResize(e: React.MouseEvent, which: "editor" | "preview") {
+  function startResize(e: React.MouseEvent) {
     e.preventDefault();
     const startX = e.clientX;
-    const startWidth = which === "editor" ? editorWidth : previewWidth;
+    const startWidth = editorWidth;
     resizeAbortRef.current?.abort();
     const controller = new AbortController();
     resizeAbortRef.current = controller;
@@ -304,14 +322,10 @@ export function EditProfilesPage() {
 
     function doResize(ev: MouseEvent) {
       if (ev.buttons === 0) { controller.abort(); return; }
-      // Les deux panneaux sont à droite de leur poignée : ils grandissent quand
-      // la poignée va vers la gauche (le Miller flex-1 absorbe la différence).
+      // L'éditeur est à droite de la poignée : il grandit quand la poignée va
+      // vers la gauche (le Miller flex-1 absorbe la différence).
       const newWidth = startWidth - (ev.clientX - startX);
-      const [min, max] = which === "editor" ? [360, 760] : [240, 560];
-      if (newWidth > min && newWidth < max) {
-        if (which === "editor") setEditorWidth(newWidth);
-        else setPreviewWidth(newWidth);
-      }
+      if (newWidth > 460 && newWidth < 900) setEditorWidth(newWidth);
     }
 
     window.addEventListener("mousemove", doResize, { signal });
@@ -388,7 +402,7 @@ export function EditProfilesPage() {
 
       {/* Poignée Miller / Éditeur */}
       <div
-        onMouseDown={(e) => startResize(e, "editor")}
+        onMouseDown={startResize}
         className="w-1.5 bg-transparent hover:bg-blue-500/30 cursor-col-resize flex-shrink-0 transition-colors border-l border-gray-200"
       />
 
@@ -452,7 +466,7 @@ export function EditProfilesPage() {
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
               <ProfileForm
                 key={`${selectedProfileId ?? "new"}-${creatingNodeId ?? ""}-${formKey}`}
                 standard={standard}
@@ -461,10 +475,18 @@ export function EditProfilesPage() {
                 validationErrors={validationErrors}
                 onSubmit={(draft) => { void handleSave(draft); }}
                 onCancel={handleCancel}
-                onChange={setPreviewDraft}
+                onChange={handleFormChange}
                 hideActions
                 lockedNodeId={lockedNodeId}
               />
+
+              {/* Aperçu live intégré à l'éditeur (le panneau séparé a été retiré). */}
+              {previewProfile !== null && previewSchema !== null && (
+                <div className="border-t border-gray-200 pt-4">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Live preview</p>
+                  <PreviewPanel profile={previewProfile} schema={previewSchema} />
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -478,28 +500,6 @@ export function EditProfilesPage() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Poignée Éditeur / Aperçu */}
-      <div
-        onMouseDown={(e) => startResize(e, "preview")}
-        className="w-1.5 bg-transparent hover:bg-blue-500/30 cursor-col-resize flex-shrink-0 transition-colors border-l border-gray-200"
-      />
-
-      {/* Aperçu live */}
-      <div style={{ width: `${previewWidth}px` }} className="flex-shrink-0 flex flex-col bg-gray-50 overflow-hidden select-text">
-        <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-200 flex items-center">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Preview</span>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {previewProfile !== null && previewSchema !== null ? (
-            <PreviewPanel profile={previewProfile} schema={previewSchema} />
-          ) : (
-            <div className="flex items-center justify-center h-full text-sm text-gray-400 px-4 text-center leading-relaxed">
-              Select or create a profile to see a live preview
-            </div>
-          )}
-        </div>
       </div>
 
       {deletingId !== null && (

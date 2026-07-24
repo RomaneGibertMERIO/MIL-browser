@@ -8,7 +8,7 @@
  * Supports paste-from-spreadsheet import (tab, comma, or space-delimited).
  */
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import type { ColumnDefinition } from "../../core/domain/standard";
 
 // ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ interface DatasetEditorProps {
 // DatasetEditor
 // ---------------------------------------------------------------------------
 
-export function DatasetEditor({ columns, rows, onChange }: DatasetEditorProps) {
+function DatasetEditorImpl({ columns, rows, onChange }: DatasetEditorProps) {
   const [pasteText, setPasteText] = useState("");
   const [pasteError, setPasteError] = useState<string | null>(null);
   const [showPaste, setShowPaste] = useState(rows.length === 0);
@@ -222,6 +222,11 @@ export function DatasetEditor({ columns, rows, onChange }: DatasetEditorProps) {
     </div>
   );
 }
+
+// Mémoïsé : évite de re-rendre le tableau de données (potentiellement grand)
+// quand le parent (ProfileForm) se re-rend pour une frappe dans un autre champ.
+// Efficace uniquement si columns/rows/onChange sont stables côté ProfileForm.
+export const DatasetEditor = memo(DatasetEditorImpl);
 
 // ---------------------------------------------------------------------------
 // Paste parser

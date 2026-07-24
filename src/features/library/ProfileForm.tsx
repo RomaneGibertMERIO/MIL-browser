@@ -9,7 +9,7 @@
  * node tree. The selected nodeId is stored in the draft as a stable ID.
  */
 
-import { useState, type FormEvent } from "react";
+import { useState, useMemo, useCallback, useRef, type FormEvent } from "react";
 import type { ProfileDraft, ValidationError } from "../../core/domain/profile";
 import type { StandardPlugin } from "../../core/domain/standard";
 import type { TaxonomyNodeItem } from "../../core/domain/tree";
@@ -61,7 +61,14 @@ export function ProfileForm({
     initialDraft ?? buildEmptyDraft(standard),
   );
 
-  const tree = buildTree(standard.nodes, []);
+  // Références « toujours à jour » pour exposer au DatasetEditor mémoïsé un
+  // handler STABLE (un nouvel onChange à chaque rendu casserait la mémoïsation).
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const tree = useMemo(() => buildTree(standard.nodes, []), [standard.nodes]);
 
   function handleFieldChange(key: string, value: unknown) {
     const next = { ...draft, fields: { ...draft.fields, [key]: value } };
@@ -69,11 +76,11 @@ export function ProfileForm({
     onChange?.(next);
   }
 
-  function handleDatasetChange(rows: DatasetRow[]) {
-    const next = { ...draft, datasetRows: rows };
+  const handleDatasetChange = useCallback((rows: DatasetRow[]) => {
+    const next = { ...draftRef.current, datasetRows: rows };
     setDraft(next);
-    onChange?.(next);
-  }
+    onChangeRef.current?.(next);
+  }, []);
 
   function handleNodeSelect(nodeId: string) {
     const newSchema = getEffectiveSchema(standard, nodeId);
@@ -115,7 +122,10 @@ function handleSubmit(e: FormEvent) {
   }
   
   const selectedNode = findNodeById(tree, draft.nodeId);
-  const effectiveSchema = getEffectiveSchema(standard, draft.nodeId);
+  const effectiveSchema = useMemo(
+    () => getEffectiveSchema(standard, draft.nodeId),
+    [standard, draft.nodeId],
+  );
 
   return (
     <form id="profile-form" onSubmit={handleSubmit} noValidate className="space-y-5">
