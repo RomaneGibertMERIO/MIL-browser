@@ -7,13 +7,19 @@ import { useStandard, useStandards } from './shared/hooks/useStandards';
 import { EmptyWorkspaceNotice } from './shared/components/ui/EmptyWorkspaceNotice';
 import { AccountManagementPage } from './features/accounts/AccountManagementPage';
 import { AppFrame, Brand } from './shared/components/AppFrame';
-import { Icon } from './shared/components/ui/Icon';
+import { Icon, type IconName } from './shared/components/ui/Icon';
+import { RepoBadge, RoleBadge } from './shared/components/ui/RepoBadge';
+import { StatusDot } from './shared/components/ui/StatusBadge';
 import { stripHeavyJson } from './shared/previewSafe';
+import { canAccess, roleLabel } from './shared/roles';
+import { saveActiveStandard } from './core/db/repositories/settings.repo';
 import { AssistantPage } from './features/assistant/AssistantPage';
+import { HomePage } from './features/home/HomePage';
 import { LibraryPage } from './features/library/LibraryPage';
 import { StandardsPage } from "./features/standards/StandardsPage";
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Sidebar } from './app/Sidebar';
+import { SubmitChangesModal } from './app/SubmitChangesModal';
 import { LoadingSpinner } from './shared/components/ui/LoadingSpinner';
 import { ErrorBanner } from './shared/components/ui/ErrorBanner';
 
@@ -46,14 +52,9 @@ export default function App() {
 function AdminLayout() {
   const adminView   = useAppStore((s) => s.adminView);
   const activeStdId = useAppStore((s) => s.activeStandardId);
-
-  const gitRepoPath = useAppStore((s) => s.gitRepoPath);
-  const systemUsername = useAppStore((s) => s.systemUsername);
   const syncError = useAppStore((s) => s.syncError);
   const setSyncError = useAppStore((s) => s.setSyncError);
   const repoMode = useAppStore((s) => s.repoMode);
-  const isOffline = useAppStore((s) => s.isOffline);
-  const role = useAppStore((s) => s.role);
 
   const standard = useStandard(activeStdId ?? '');
 
@@ -68,56 +69,13 @@ function AdminLayout() {
       <Sidebar />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <header className="flex-shrink-0 h-16 bg-white border-b border-gray-200 flex items-center px-6 gap-4">
+        <header className="flex-shrink-0 h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3">
           <Brand />
-          <span className="inline-flex items-center px-2 py-0.5 text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded-md">
-            MANAGEMENT
-          </span>
-          <span className="text-gray-200 select-none mx-1">|</span>
-          <span className="text-base text-blue-600 font-extrabold capitalize">
-            {adminView === 'library' ? 'Library'
-              : adminView === 'standards' ? 'Standards'
-              : adminView === 'settings' ? 'Settings'
-              : adminView === 'validations' ? 'Pending Validations'
-              : adminView === 'accounts' ? 'Accounts & Roles'
-              : adminView}
-          </span>
-          {repoMode === 'shared' && (
-            <span
-              className="inline-flex items-center px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide rounded border text-indigo-700 bg-indigo-50 border-indigo-200"
-              title="Your role in the shared repository"
-            >
-              {role}
-            </span>
-          )}
-          
-          {/* RECONSTRUCTED & ENLARGED SESSION INFO PANEL */}
-          <div className="ml-auto flex items-center gap-3 pr-2">
-            {/* Quelle source fait autorité : l'information la plus structurante
-                de l'écran, et elle était totalement absente jusqu'ici. */}
-            {repoMode === 'local' ? (
-              <span className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-slate-600 bg-slate-100 border border-slate-300 rounded-md">
-                ⬤ Standalone — built-in standards
-              </span>
-            ) : isOffline ? (
-              <span
-                className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded-md"
-                title="Central repository unreachable — working from the last synchronised state."
-              >
-                ⬤ Offline — last synced data
-              </span>
-            ) : (
-              <span className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 rounded-md">
-                ⬤ Shared repository
-              </span>
-            )}
-
-            <div className="text-right border-l-2 border-gray-200 pl-4 py-1">
-              <p className="text-sm font-extrabold text-gray-900 tracking-tight">👤 Active Session: {systemUsername}</p>
-              <p className="text-xs text-gray-500 font-bold font-mono mt-0.5 max-w-xs truncate" title={gitRepoPath}>
-                {repoMode === 'local' ? 'No central repository configured' : `Database Root: ${gitRepoPath}`}
-              </p>
-            </div>
+          <span className="text-gray-200 select-none">/</span>
+          <span className="text-sm font-semibold text-gray-900">{VIEW_TITLES[adminView]}</span>
+          <div className="ml-auto flex items-center gap-2">
+            {repoMode === 'shared' && <RoleBadge />}
+            <RepoBadge />
           </div>
         </header>
 
@@ -137,7 +95,7 @@ function AdminLayout() {
           </div>
         )}
 
-        <main className={adminView === 'library' ? 'flex-1 overflow-hidden' : 'flex-1 overflow-y-auto px-6 py-6'}>
+        <main className="flex-1 overflow-hidden">
           <ContentPane
             adminView={adminView}
             standard={standard}
@@ -149,78 +107,203 @@ function AdminLayout() {
   );
 }
 
+const VIEW_TITLES: Record<AdminView, string> = {
+  home: 'Home',
+  edit: 'Edit database',
+  sync: 'Synchronization',
+  settings: 'Settings',
+  admin: 'Admin',
+};
+
 interface ContentPaneProps {
   adminView: AdminView;
   standard:  ReturnType<typeof useStandard>;
 }
 
-const ROLE_RANK = { readonly: 0, testing: 1, admin: 2 } as const;
-
 function ContentPane({ adminView, standard }: ContentPaneProps) {
-  const setMode = useAppStore((s) => s.setMode);
   const role = useAppStore((s) => s.role);
-  const standards = useStandards();
-  const workspaceEmpty = standards !== undefined && standards.length === 0;
 
-  // Rôle minimal requis par vue. Second verrou d'affichage : un onglet masqué
-  // dans la sidebar peut aussi être restauré via lastView. Le contrôle réel des
-  // écritures reste appliqué par le processus principal.
-  const minRoleByView: Record<AdminView, keyof typeof ROLE_RANK> = {
-    settings: "readonly",
-    browse: "testing",
-    library: "testing",
-    standards: "testing",
-    validations: "admin",
-    accounts: "admin",
-  };
-
-  if (ROLE_RANK[role] < ROLE_RANK[minRoleByView[adminView]]) {
+  // Second verrou d'affichage (le premier étant le filtrage du rail). Le
+  // contrôle réel des écritures reste appliqué par le processus principal.
+  if (!canAccess(adminView, role)) {
     return (
       <div className="flex items-center justify-center h-full text-sm text-gray-400 text-center px-6">
         This section requires a higher role.<br />
-        Your current role is "{role}". Contact an administrator to request more permissions.
+        Your current role is "{roleLabel(role)}". Contact an administrator to request more permissions.
       </div>
     );
   }
 
-  if (adminView === 'accounts') return <AccountManagementPage />;
+  switch (adminView) {
+    case 'home':
+      return <div className="h-full overflow-y-auto px-6 py-6"><HomePage /></div>;
+    case 'edit':
+      return <EditSection standard={standard} />;
+    case 'sync':
+      return <SyncSection />;
+    case 'settings':
+      return <div className="h-full overflow-y-auto px-6 py-6"><SettingsPage /></div>;
+    case 'admin':
+      return <AdminSection />;
+    default:
+      return null;
+  }
+}
 
-  if (adminView === 'browse') {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-        <p className="text-gray-500 text-sm">The Standards Browser is in full-screen Browse mode.</p>
-        <button
-          onClick={() => setMode('assistant')}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-        >
-          Open Standards Browser ↗
-        </button>
-      </div>
-    );
+// ---------------------------------------------------------------------------
+// Sections interim — la coquille (phase 3) route vers les écrans existants.
+// Les phases 4/5/6 remplaceront le contenu de ces sections (Miller éditable,
+// DiffView, onglets Admin) sans toucher au rail ni au gate.
+// ---------------------------------------------------------------------------
+
+/** Edit : profils (LibraryPage) + taxonomie (StandardsPage), via un sous-onglet. */
+function EditSection({ standard }: { standard: ReturnType<typeof useStandard> }) {
+  const [tab, setTab] = useState<'profiles' | 'taxonomy'>('profiles');
+  const activeStdId = useAppStore((s) => s.activeStandardId);
+  const setActiveStd = useAppStore((s) => s.setActiveStandard);
+  const standards = useStandards();
+  const workspaceEmpty = standards !== undefined && standards.length === 0;
+
+  function handleStandardChange(id: string) {
+    setActiveStd(id);
+    void saveActiveStandard(id);
   }
 
-  if (adminView === 'library') {
-    // Le diagnostic prime sur "sélectionnez une norme" : la sidebar est vide et
-    // le restera, l'invitation à y choisir quelque chose n'aide pas.
-    // Volontairement PAS appliqué aux onglets Settings et Standards Config, qui
-    // sont précisément ceux permettant de sortir de la situation.
-    if (workspaceEmpty) return <EmptyWorkspaceNotice />;
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex-shrink-0 flex items-center gap-2 px-6 py-3 border-b border-gray-200 bg-white">
+        <SubTab active={tab === 'profiles'} onClick={() => setTab('profiles')} icon="edit" label="Profiles" />
+        <SubTab active={tab === 'taxonomy'} onClick={() => setTab('taxonomy')} icon="standards" label="Taxonomy" />
+        {tab === 'profiles' && (
+          <select
+            value={activeStdId ?? ''}
+            onChange={(e) => handleStandardChange(e.target.value)}
+            className="ml-auto px-3 py-1.5 text-sm bg-white text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="" disabled>— Choose a standard —</option>
+            {(standards ?? []).map((s) => (
+              <option key={s.manifest.id} value={s.manifest.id}>{s.manifest.label}</option>
+            ))}
+          </select>
+        )}
+      </div>
 
-    if (standard === undefined) {
-      return (
-        <div className="flex items-center justify-center h-full text-sm text-gray-400">
-          Select a standard in the sidebar to manage profiles.
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {tab === 'taxonomy' ? (
+          <div className="h-full overflow-y-auto px-6 py-6"><StandardsPage /></div>
+        ) : workspaceEmpty ? (
+          <div className="h-full overflow-y-auto px-6 py-6"><EmptyWorkspaceNotice /></div>
+        ) : standard === undefined ? (
+          <div className="flex items-center justify-center h-full text-sm text-gray-400">
+            Select a standard above to manage its profiles.
+          </div>
+        ) : (
+          <LibraryPage standard={standard} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Sync : liste des changements locaux + push (réutilise SubmitChangesModal). */
+function SyncSection() {
+  const localChanges = useAppStore((s) => s.localStagedChanges);
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="h-full overflow-y-auto px-6 py-6">
+      <div className="max-w-3xl space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Synchronization</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Review your local changes and push them to the central repository for review.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            disabled={localChanges.length === 0}
+            className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <Icon name="push" size={16} />
+            Review &amp; push ({localChanges.length})
+          </button>
         </div>
-      );
-    }
-    return <LibraryPage standard={standard} />;
-  }
 
-  if (adminView === 'standards') return <StandardsPage />;
-  if (adminView === 'settings') return <SettingsPage />;
-  if (adminView === 'validations') return <AdminValidationsPage />;
+        {localChanges.length === 0 ? (
+          <div className="rounded-lg border border-gray-200 bg-white p-10 text-center text-sm text-gray-400">
+            Everything is synchronized. No local changes pending.
+          </div>
+        ) : (
+          <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+            {localChanges.map((c) => (
+              <div key={c.id} className="p-3 flex items-center gap-3">
+                <StatusDot status="local" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{c.name}</p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {c.type} · {c.action} · {c.location}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-  return null;
+      {open && <SubmitChangesModal onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+/** Admin : revue (AdminValidationsPage) + comptes (AccountManagementPage). */
+function AdminSection() {
+  const [tab, setTab] = useState<'review' | 'users'>('review');
+  const pendingCommits = useAppStore((s) => s.pendingCommits);
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex-shrink-0 flex items-center gap-2 px-6 py-3 border-b border-gray-200 bg-white">
+        <SubTab active={tab === 'review'} onClick={() => setTab('review')} icon="review" label="Review" badge={pendingCommits.length || undefined} />
+        <SubTab active={tab === 'users'} onClick={() => setTab('users')} icon="users" label="Users" />
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+        {tab === 'review' ? <AdminValidationsPage /> : <AccountManagementPage />}
+      </div>
+    </div>
+  );
+}
+
+function SubTab({
+  active,
+  onClick,
+  icon,
+  label,
+  badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: IconName;
+  label: string;
+  badge?: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? 'true' : undefined}
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+        active ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+      }`}
+    >
+      <Icon name={icon} size={15} />
+      <span>{label}</span>
+      {badge ? (
+        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">{badge}</span>
+      ) : null}
+    </button>
+  );
 }
 
 export function AdminValidationsPage() {

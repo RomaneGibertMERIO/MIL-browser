@@ -104,10 +104,12 @@ export function useBootstrap(): void {
         setActiveStandard(settings.activeStandardId);
       }
 
+      // `settings.lastView` conserve d'anciennes valeurs (schéma Zod inchangé) ;
+      // on les projette sur les nouvelles destinations du rail. Les valeurs non
+      // mappées (browse/assistant) laissent l'application sur son accueil.
       const adminViewMap: Record<string, Parameters<typeof setAdminView>[0]> = {
-        browse:    "browse",
-        library:   "library",
-        standards: "standards",
+        library:   "edit",
+        standards: "edit",
         settings:  "settings",
       };
       const lastAdminView = adminViewMap[settings.lastView];

@@ -1,138 +1,92 @@
-import { useState } from "react";
+/**
+ * Rail de navigation du Management (docs/UI-UX-SPEC.md §4/§5).
+ *
+ * Colonne claire (structure grisée) présentant les cinq destinations —
+ * Home / Edit / Sync / Settings / Admin — filtrées par le rôle via `canAccess`,
+ * un bouton « ← Browser » pour revenir au navigateur, et un rappel du rôle et
+ * de l'état du dépôt en bas. Le sélecteur de norme et le bouton de push, jadis
+ * ici, vivent désormais respectivement dans la section Edit et la section Sync.
+ */
 import { useAppStore, type AdminView } from "../store/appStore";
-import { useStandards } from "../shared/hooks/useStandards";
-import { saveActiveStandard } from "../core/db/repositories/settings.repo";
-import { SubmitChangesModal } from "./SubmitChangesModal";
 import { Icon, type IconName } from "../shared/components/ui/Icon";
+import { canAccess, roleLabel } from "../shared/roles";
+import { RepoBadge } from "../shared/components/ui/RepoBadge";
 
-type Role = "admin" | "testing" | "readonly";
-
-// `minRole`: minimum role required to see the entry.
-// - readonly only sees Settings (to set the repository path).
-// - testing sees Library/Standards (create & push) + Settings.
-// - admin sees everything, plus Validations and Accounts.
-const NAV_ITEMS: { view: AdminView; label: string; icon: IconName; minRole: Role }[] = [
-  { view: "library",     label: "Library Space",     icon: "edit",     minRole: "testing" },
-  { view: "standards",   label: "Standards Config",  icon: "standards", minRole: "testing" },
-  { view: "validations", label: "Admin Validations", icon: "review",   minRole: "admin" },
-  { view: "accounts",    label: "Accounts & Roles",  icon: "users",    minRole: "admin" },
-  { view: "settings",    label: "Global Settings",   icon: "settings", minRole: "readonly" },
+const RAIL_ITEMS: { view: AdminView; label: string; icon: IconName }[] = [
+  { view: "home", label: "Home", icon: "home" },
+  { view: "edit", label: "Edit database", icon: "edit" },
+  { view: "sync", label: "Synchronization", icon: "sync" },
+  { view: "settings", label: "Settings", icon: "settings" },
+  { view: "admin", label: "Admin", icon: "review" },
 ];
 
-const ROLE_RANK: Record<Role, number> = { readonly: 0, testing: 1, admin: 2 };
-
 export function Sidebar() {
-  const adminView       = useAppStore((s) => s.adminView);
-  const activeStdId     = useAppStore((s) => s.activeStandardId);
-  const setAdminView    = useAppStore((s) => s.setAdminView);
-  const setMode         = useAppStore((s) => s.setMode);
-  const setActiveStd    = useAppStore((s) => s.setActiveStandard);
-
-  const localChanges    = useAppStore((s) => s.localStagedChanges);
-  const pendingCommits  = useAppStore((s) => s.pendingCommits);
-  const role            = useAppStore((s) => s.role);
+  const adminView = useAppStore((s) => s.adminView);
+  const setAdminView = useAppStore((s) => s.setAdminView);
+  const setMode = useAppStore((s) => s.setMode);
+  const role = useAppStore((s) => s.role);
+  const pendingCommits = useAppStore((s) => s.pendingCommits);
 
   // Gating d'affichage uniquement : le refus d'accès réel est appliqué par le
   // processus principal, à partir du compte système (non falsifiable).
-  const visibleNavItems = NAV_ITEMS.filter((item) => ROLE_RANK[role] >= ROLE_RANK[item.minRole]);
-  const canContribute = ROLE_RANK[role] >= ROLE_RANK.testing;
-
-  const [isSyncOpen, setIsSyncOpen] = useState(false);
-
-  const standards   = useStandards();
-
-  function handleStandardChange(id: string) {
-    setActiveStd(id);
-    void saveActiveStandard(id);
-  }
+  const items = RAIL_ITEMS.filter((it) => canAccess(it.view, role));
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 w-80 flex-shrink-0 text-slate-200 border-r border-slate-800">
-      {/* HEADER SECTION */}
-      <div className="px-6 py-6 border-b border-slate-800 flex-shrink-0 space-y-4">
-        <div>
-          <p className="text-base font-black text-white tracking-wider uppercase">
-            MIL-Browser
-          </p>
-          <p className="text-xs text-slate-400">Environmental Testing KB</p>
-        </div>
-
-        {/* EXIT BUTTON */}
+    <nav className="flex flex-col h-full w-56 flex-shrink-0 bg-gray-50 border-r border-gray-200">
+      {/* Retour au navigateur */}
+      <div className="p-3 border-b border-gray-200 flex-shrink-0">
         <button
           onClick={() => setMode("assistant")}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider text-amber-400 bg-amber-950/40 border border-amber-700/50 rounded-lg hover:bg-amber-900/40 transition-all"
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-md transition-colors"
         >
-          <Icon name="back" size={14} />
-          <span>Exit Management Mode</span>
+          <Icon name="back" size={16} />
+          <span>Browser</span>
         </button>
       </div>
 
-      {/* SUBMIT CHANGES ACTION BUTTON — masqué en lecture seule */}
-      {canContribute && (
-        <div className="px-4 pt-4 pb-2 flex-shrink-0">
-          <button
-            onClick={() => setIsSyncOpen(true)}
-            disabled={localChanges.length === 0}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-500 disabled:opacity-20 disabled:hover:bg-blue-600 disabled:cursor-not-allowed transition-all shadow-md active:scale-[0.98]"
-          >
-            <Icon name="push" size={16} />
-            <span>Push Local Changes ({localChanges.length})</span>
-          </button>
-        </div>
-      )}
-
-      {/* STANDARD SELECTOR */}
-      <div className="px-4 py-3 flex-shrink-0">
-        <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">
-          Selected Standard
-        </label>
-        <select
-          value={activeStdId ?? ""}
-          onChange={(e) => handleStandardChange(e.target.value)}
-          className="w-full px-3 py-3 text-sm bg-slate-800 text-slate-100 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="" disabled>
-            — Choose active database —
-          </option>
-          {(standards ?? []).map((s) => (
-            <option key={s.manifest.id} value={s.manifest.id}>
-              {s.manifest.label}
-            </option>
-          ))}
-        </select>
+      {/* Destinations */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {items.map(({ view, label, icon }) => {
+          const active = adminView === view;
+          return (
+            <button
+              key={view}
+              onClick={() => setAdminView(view)}
+              aria-current={active ? "page" : undefined}
+              className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                active
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+              }`}
+            >
+              <span className="flex items-center gap-2.5 min-w-0">
+                <Icon name={icon} size={16} />
+                <span className="truncate">{label}</span>
+              </span>
+              {view === "admin" && pendingCommits.length > 0 && (
+                <span
+                  className={`flex-shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                    active ? "bg-white/20 text-white" : "bg-orange-100 text-orange-700"
+                  }`}
+                >
+                  {pendingCommits.length}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* NAVIGATION TABS */}
-      <nav className="px-3 py-2 space-y-1.5 flex-shrink-0">
-        {visibleNavItems.map(({ view, label, icon }) => (
-          <button
-            key={view}
-            onClick={() => setAdminView(view)}
-            className={`w-full text-left flex items-center justify-between px-4 py-3.5 rounded-xl text-sm font-semibold transition-colors ${
-              adminView === view
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-400 hover:bg-slate-800/80 hover:text-slate-100"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <span className="w-5 flex justify-center"><Icon name={icon} size={16} /></span>
-              <span>{label}</span>
-            </div>
-
-            {view === "validations" && pendingCommits.length > 0 && (
-              <span className="bg-amber-500 text-slate-950 text-[11px] px-2 py-0.5 rounded-md font-black shadow-xs">
-                {pendingCommits.length}
-              </span>
-            )}
-          </button>
-        ))}
-      </nav>
-
-      {/* spacer to fill height cleanly without taxonomy tree */}
-      <div className="flex-1" />
-
-      {/* MODAL CONTROL */}
-      {isSyncOpen && <SubmitChangesModal onClose={() => setIsSyncOpen(false)} />}
-    </div>
+      {/* Identité : rôle + état du dépôt */}
+      <div className="p-3 border-t border-gray-200 flex-shrink-0 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+            Role
+          </span>
+          <span className="text-xs font-semibold text-gray-700">{roleLabel(role)}</span>
+        </div>
+        <RepoBadge />
+      </div>
+    </nav>
   );
 }

@@ -13,7 +13,11 @@ import {
 import { standardWorkspace } from "../core/domain/standard";
 
 export type AppMode = "assistant" | "admin";
-export type AdminView = 'browse' | 'library' | 'standards' | 'settings' | 'validations' | 'accounts';
+// Destinations de premier niveau du Management (le rail). Les anciens écrans
+// (library/standards/validations/accounts) sont désormais hébergés à
+// l'intérieur de ces sections : Edit regroupe profils + taxonomie, Admin
+// regroupe la revue + les comptes.
+export type AdminView = 'home' | 'edit' | 'sync' | 'settings' | 'admin';
 
 export interface ActiveNode {
   standardId: string;
@@ -272,7 +276,7 @@ const NO_BRIDGE_ERROR =
 
 export const useAppStore = create<AppState>((set, get) => ({
   mode: "assistant",
-  adminView: "browse",
+  adminView: "home",
   activeStandardId: null,
   activeNode: null,
   gitRepoPath: "",
