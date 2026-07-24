@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppStore, type AdminView } from './store/appStore';
 import { useBootstrapStore } from './store/bootstrapStore';
 import { useBootstrap } from './shared/hooks/useBootstrap';
@@ -570,10 +571,42 @@ function RejectReasonModal({
   onConfirm: (reason: string) => void;
 }) {
   const [reason, setReason] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl border border-gray-200">
+  // Focus une seule fois au montage. On focalise via ref plutôt que par
+  // l'attribut `autoFocus` : la modale est rendue dans un portail (voir plus
+  // bas), ce qui garantit un focus fiable hors de tout conteneur défilant.
+  // Effet distinct de la touche Echap pour NE PAS re-focaliser (et donc
+  // interrompre la saisie) à chaque re-rendu du parent.
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  // Fermeture par Echap. `onCancel` est recréé à chaque rendu parent : se
+  // réabonner est sans effet de bord (contrairement au focus ci-dessus).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  // Rendu dans un portail attaché à <body>. La modale échappe ainsi à tout
+  // ancêtre (overflow, stacking context, transform) susceptible de rendre la
+  // zone de texte non cliquable — cause du gel signalé sur le refus.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Reject proposal"
+      onMouseDown={onCancel}
+    >
+      <div
+        className="w-full max-w-md rounded-xl bg-white shadow-xl border border-gray-200"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="p-4 border-b border-gray-100">
           <h3 className="font-bold text-gray-900">Reject proposal</h3>
           <p className="text-xs text-gray-500 mt-0.5 truncate" title={name}>{name}</p>
@@ -584,7 +617,7 @@ function RejectReasonModal({
             Reason for rejection (sent to the author)
           </label>
           <textarea
-            autoFocus
+            ref={textareaRef}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={4}
@@ -611,6 +644,7 @@ function RejectReasonModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
