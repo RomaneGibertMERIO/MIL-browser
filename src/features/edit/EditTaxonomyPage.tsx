@@ -76,6 +76,7 @@ export function EditTaxonomyPage() {
   const [workingNodes, setWorkingNodes] = useState<StandardNode[]>([]);
   const [selectedPath, setSelectedPath] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [hydrated, setHydrated] = useState(false); // tampon chargé (images incluses) ?
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -100,6 +101,7 @@ export function EditTaxonomyPage() {
       setWorkingNodes([]);
       setSelectedPath([]);
       setDirty(false);
+      setHydrated(false);
       return;
     }
     if (loadedIdRef.current !== standard.manifest.id) {
@@ -107,16 +109,24 @@ export function EditTaxonomyPage() {
       setSelectedPath([]);
       setDirty(false);
       setSaveError(null);
-      // Phase 8 : db.standards est allégé → HYDRATER le tampon avec les images
-      // (db.nodeImages) avant édition, sinon un Save réconcilierait les images à
-      // néant. Le tampon reste vide le temps du chargement (quasi instantané).
-      const idAtLoad = standard.manifest.id;
-      setWorkingNodes([]);
-      void attachNodeImages(standard).then((h) => {
-        if (loadedIdRef.current === idAtLoad) setWorkingNodes(h.nodes);
-      });
+      hydrateBuffer(standard);
     }
   }, [standard]);
+
+  // Hydrate le tampon avec les images (db.standards est allégé en phase 8) AVANT
+  // toute édition, sinon un Save réconcilierait les images à néant. Les mutations
+  // et le Save restent bloqués tant que `hydrated` est faux (voir addNode / Save).
+  function hydrateBuffer(std: StandardPlugin) {
+    const idAtLoad = std.manifest.id;
+    setHydrated(false);
+    setWorkingNodes([]);
+    void attachNodeImages(std).then((h) => {
+      if (loadedIdRef.current === idAtLoad) {
+        setWorkingNodes(h.nodes);
+        setHydrated(true);
+      }
+    });
+  }
 
   const tree = useMemo(() => buildTree(workingNodes, []), [workingNodes]);
   const columns = useMemo(() => buildColumns(tree, selectedPath), [tree, selectedPath]);
@@ -158,7 +168,9 @@ export function EditTaxonomyPage() {
   // --- Mutations (tampon local) ---------------------------------------------
 
   function addNode(parentId: string | null) {
-    if (standard === null) return;
+    // Ne jamais muter un tampon non hydraté : un Save réconcilierait les images
+    // à néant (le tampon serait allégé).
+    if (standard === null || !hydrated) return;
     const order = maxSiblingOrder(workingNodes, parentId) + 10;
     const newNode: StandardNode = {
       id: crypto.randomUUID(),
@@ -264,10 +276,13 @@ export function EditTaxonomyPage() {
 
   function handleCancel() {
     if (!confirmDiscardIfDirty()) return;
-    setWorkingNodes(standard ? standard.nodes : []);
     setSelectedPath([]);
     setDirty(false);
     setSaveError(null);
+    // Ré-hydrater depuis db.nodeImages (NE PAS réinstaller les nœuds allégés de
+    // db.standards, sinon un Save ultérieur réconcilierait les images à néant).
+    if (standard !== null) hydrateBuffer(standard);
+    else { setWorkingNodes([]); setHydrated(false); }
   }
 
   async function handleCreateStandard(plugin: StandardPlugin) {
@@ -330,7 +345,7 @@ export function EditTaxonomyPage() {
                     />
                   );
                 })}
-                <AddRow label="New node here" onClick={() => addNode(parentId)} />
+                <AddRow label="New node here" onClick={() => addNode(parentId)} disabled={!hydrated} />
               </MillerColumn>
             );
           })}
@@ -380,7 +395,7 @@ export function EditTaxonomyPage() {
                 <button
                   type="button"
                   onClick={() => { void handleSave(); }}
-                  disabled={saving || !dirty}
+                  disabled={saving || !dirty || !hydrated}
                   className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   {saving ? "Saving…" : "Save"}
@@ -396,7 +411,8 @@ export function EditTaxonomyPage() {
                     <button
                       type="button"
                       onClick={() => addNode(selectedNode.id)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+                      disabled={!hydrated}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       <Icon name="add" size={13} /> Add child
                     </button>

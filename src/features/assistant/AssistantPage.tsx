@@ -669,14 +669,17 @@ function WeightedPanel({ weight, children }: { weight: number; children: React.R
 
 /** Charge à la demande l'image d'un nœud depuis db.nodeImages (phase 8). */
 function useNodeImage(standardId: string | undefined, nodeId: string | undefined): string | null {
-  const [img, setImg] = useState<string | null>(null);
+  const key = standardId && nodeId ? `${standardId} ${nodeId}` : "";
+  const [state, setState] = useState<{ key: string; img: string | null }>({ key: "", img: null });
   useEffect(() => {
     let cancelled = false;
-    if (!standardId || !nodeId) { setImg(null); return; }
-    void getNodeImage(standardId, nodeId).then((d) => { if (!cancelled) setImg(d); });
+    if (key === "") { setState({ key: "", img: null }); return; }
+    void getNodeImage(standardId!, nodeId!).then((d) => { if (!cancelled) setState({ key, img: d }); });
     return () => { cancelled = true; };
-  }, [standardId, nodeId]);
-  return img;
+  }, [key, standardId, nodeId]);
+  // Ne renvoie l'image QUE si elle correspond au nœud courant : évite d'afficher
+  // l'image du nœud précédent (ou d'une autre norme) pendant le chargement async.
+  return state.key === key ? state.img : null;
 }
 
 function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile }: {
