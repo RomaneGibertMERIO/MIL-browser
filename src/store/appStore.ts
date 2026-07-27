@@ -113,6 +113,11 @@ interface AppState {
   /** Vrai quand le dépôt est configuré mais que la dernière synchro a échoué. */
   isOffline: boolean;
 
+  /** Vrai quand le dépôt central est joignable mais ne contient encore AUCUNE
+   *  norme : l'utilisateur peut alors publier explicitement le socle builtin
+   *  (Q6, page Sync) au lieu d'un amorçage automatique. */
+  centralIsEmpty: boolean;
+
   setMode: (mode: AppMode) => void;
   setAdminView: (view: AdminView) => void;
   setActiveStandard: (standardId: string | null) => void;
@@ -128,6 +133,8 @@ interface AppState {
 
   refreshLocalChanges: () => Promise<void>;
   triggerGitSync: () => Promise<IpcResult>;
+  /** Publie le socle builtin sur un dépôt central vide (action explicite, Q6). */
+  publishBaselineToCentral: () => Promise<IpcResult>;
   /** Renvoie le résultat réel de la validation : l'appelant DOIT tester `success`. */
   resolveSingleChange: (
     commitId: string,
@@ -297,6 +304,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   role: "admin",
   repoMode: "local",
   isOffline: false,
+  centralIsEmpty: false,
 
   setSyncError: (syncError) => set({ syncError }),
 
@@ -404,7 +412,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // Aucun dépôt configuré : mode autonome, le socle builtin fait le travail.
     if (state.gitRepoPath.trim() === "") {
-      set({ repoMode: "local", isOffline: false });
+      set({ repoMode: "local", isOffline: false, centralIsEmpty: false });
       await get().refreshLocalChanges();
       return { success: true };
     }
@@ -429,17 +437,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { success: false, error: message };
     }
 
-    // AMORÇAGE : dépôt central sans aucune norme. On y pousse le socle builtin
-    // pour qu'il soit immédiatement exploitable, au lieu de laisser une
-    // application vide devant l'utilisateur.
-    if ((gitResult.pulledStandards?.length ?? 0) === 0) {
-      const seeded = await seedCentralRepositoryFromBuiltin(api, state.gitRepoPath, state.systemUsername);
-      if (seeded > 0) {
-        // Re-synchronise pour repartir de ce que le dépôt contient réellement.
-        const reSync = await api.gitSync(state.systemUsername);
-        if (reSync?.success) gitResult = reSync;
-      }
-    }
+    // Q6 — dépôt central vide : on NE publie PAS le socle automatiquement. On
+    // signale l'état ; l'utilisateur publie explicitement depuis la page Sync
+    // (publishBaselineToCentral). Le nouveau modèle de visibilité garde le socle
+    // builtin visible en local, donc l'application n'est jamais vide.
+    set({ centralIsEmpty: (gitResult.pulledStandards?.length ?? 0) === 0 });
 
     if (gitResult.pulledProfiles && gitResult.pulledStandards) {
       (db as any).isSyncingInternal = true;
@@ -559,6 +561,33 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
     await get().refreshLocalChanges();
     return { success: true };
+  },
+
+  publishBaselineToCentral: async () => {
+    const state = get();
+    const api = getElectronBridge();
+    if (api === null) {
+      set({ syncError: NO_BRIDGE_ERROR });
+      return { success: false, error: NO_BRIDGE_ERROR };
+    }
+    if (state.repoMode !== "shared") {
+      const error = "Connect a central repository before publishing the baseline.";
+      set({ syncError: error });
+      return { success: false, error };
+    }
+    try {
+      const seeded = await seedCentralRepositoryFromBuiltin(api, state.gitRepoPath, state.systemUsername);
+      if (seeded <= 0) {
+        return { success: false, error: "No built-in standards available to publish." };
+      }
+      set({ centralIsEmpty: false, syncError: null });
+      await get().triggerGitSync();
+      return { success: true };
+    } catch (err) {
+      const error = `Publishing the baseline failed: ${err instanceof Error ? err.message : String(err)}`;
+      set({ syncError: error });
+      return { success: false, error };
+    }
   },
 
   submitCommit: async (_, selectedIds) => {

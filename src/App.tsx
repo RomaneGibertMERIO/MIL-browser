@@ -7,7 +7,6 @@ import { AccountManagementPage } from './features/accounts/AccountManagementPage
 import { AppFrame, Brand } from './shared/components/AppFrame';
 import { Icon, type IconName } from './shared/components/ui/Icon';
 import { RepoBadge, RoleBadge } from './shared/components/ui/RepoBadge';
-import { StatusDot } from './shared/components/ui/StatusBadge';
 import { stripHeavyJson } from './shared/previewSafe';
 import { canAccess, canAccessNow, roleLabel } from './shared/roles';
 import { AssistantPage } from './features/assistant/AssistantPage';
@@ -16,7 +15,7 @@ import { EditProfilesPage } from './features/edit/EditProfilesPage';
 import { EditTaxonomyPage } from './features/edit/EditTaxonomyPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Sidebar } from './app/Sidebar';
-import { SubmitChangesModal } from './app/SubmitChangesModal';
+import { SyncPage } from './features/sync/SyncPage';
 import { toast } from './shared/toast/toastStore';
 import { LoadingSpinner } from './shared/components/ui/LoadingSpinner';
 import { ErrorBanner } from './shared/components/ui/ErrorBanner';
@@ -193,56 +192,10 @@ function EditSection() {
   );
 }
 
-/** Sync : liste des changements locaux + push (réutilise SubmitChangesModal). */
+/** Sync : la page Synchronisation (features/sync/SyncPage). N'est routée que
+ *  lorsqu'on est en ligne (le rail masque Sync en autonome/hors-ligne). */
 function SyncSection() {
-  const localChanges = useAppStore((s) => s.localStagedChanges);
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="h-full overflow-y-auto px-6 py-6">
-      <div className="max-w-3xl space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Synchronization</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Review your local changes and push them to the central repository for review.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            disabled={localChanges.length === 0}
-            className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            <Icon name="push" size={16} />
-            Review &amp; push ({localChanges.length})
-          </button>
-        </div>
-
-        {localChanges.length === 0 ? (
-          <div className="rounded-lg border border-gray-200 bg-white p-10 text-center text-sm text-gray-400">
-            Everything is synchronized. No local changes pending.
-          </div>
-        ) : (
-          <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
-            {localChanges.map((c) => (
-              <div key={c.id} className="p-3 flex items-center gap-3">
-                <StatusDot status="local" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{c.name}</p>
-                  <p className="text-xs text-gray-400 truncate">
-                    {c.type} · {c.action} · {c.location}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {open && <SubmitChangesModal onClose={() => setOpen(false)} />}
-    </div>
-  );
+  return <SyncPage />;
 }
 
 /** Admin : revue (AdminValidationsPage) + comptes (AccountManagementPage). */
