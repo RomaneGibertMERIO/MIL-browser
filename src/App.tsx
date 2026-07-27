@@ -4,6 +4,7 @@ import { useAppStore, type AdminView } from './store/appStore';
 import { useBootstrapStore } from './store/bootstrapStore';
 import { useBootstrap } from './shared/hooks/useBootstrap';
 import { AccountManagementPage } from './features/accounts/AccountManagementPage';
+import { HistoryPage } from './features/accounts/HistoryPage';
 import { AppFrame, Brand } from './shared/components/AppFrame';
 import { Icon, type IconName } from './shared/components/ui/Icon';
 import { RepoBadge, RoleBadge } from './shared/components/ui/RepoBadge';
@@ -200,17 +201,18 @@ function SyncSection() {
 
 /** Admin : revue (AdminValidationsPage) + comptes (AccountManagementPage). */
 function AdminSection() {
-  const [tab, setTab] = useState<'review' | 'users'>('review');
+  const [tab, setTab] = useState<'review' | 'history' | 'users'>('review');
   const pendingCommits = useAppStore((s) => s.pendingCommits);
 
   return (
     <div className="h-full flex flex-col">
       <div className="flex-shrink-0 flex items-center gap-2 px-6 py-3 border-b border-gray-200 bg-white">
         <SubTab active={tab === 'review'} onClick={() => setTab('review')} icon="review" label="Review" badge={pendingCommits.length || undefined} />
+        <SubTab active={tab === 'history'} onClick={() => setTab('history')} icon="gitBranch" label="History" />
         <SubTab active={tab === 'users'} onClick={() => setTab('users')} icon="users" label="Users" />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
-        {tab === 'review' ? <AdminValidationsPage /> : <AccountManagementPage />}
+        {tab === 'review' ? <AdminValidationsPage /> : tab === 'history' ? <HistoryPage /> : <AccountManagementPage />}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 {
   "name": "mil-browser",
   "private": true,
-  "version": "0.8.5",
+  "version": "0.8.6",
   "type": "commonjs",
   "main": "electron-dist/main.js",
   "scripts": {
