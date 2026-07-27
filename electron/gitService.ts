@@ -807,3 +807,59 @@ export async function rejectStandardInGit(
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Une entrée de l'historique Git local (lecture seule).
+ *
+ * `kind` est dérivé du préfixe de message posé par ce service ("Proposal:" /
+ * "Approval:") pour que l'interface puisse colorer sémantiquement sans reparser
+ * le message. `timestamp` est en secondes (convention isomorphic-git).
+ */
+export interface GitLogEntry {
+  oid: string;
+  message: string;
+  author: string;
+  timestamp: number;
+  kind: "proposal" | "approval" | "other";
+}
+
+/**
+ * Lit l'historique des commits du workspace local (proposals/approvals que ce
+ * service écrit déjà). Purement additif et EN LECTURE SEULE : n'écrit ni ne
+ * modifie aucun état Git. Alimente l'onglet Admin → History (spec §17, Tab 2).
+ *
+ * Renvoie un tableau vide si le workspace n'a pas encore de dépôt (jamais
+ * synchronisé) plutôt que de propager une erreur : un historique vide est un
+ * état normal, pas une panne.
+ */
+export async function readGitLog(limit = 200): Promise<GitLogEntry[]> {
+  await ensureDirectories();
+
+  if (!(await exists(path.join(WORKSPACE_DIR, ".git")))) {
+    return [];
+  }
+
+  try {
+    const commits = await git.log({ fs, dir: WORKSPACE_DIR, depth: limit });
+    return commits.map((c) => {
+      const message = c.commit.message.trim();
+      const kind: GitLogEntry["kind"] = message.startsWith("Approval:")
+        ? "approval"
+        : message.startsWith("Proposal:")
+          ? "proposal"
+          : "other";
+      return {
+        oid: c.oid,
+        message,
+        author: c.commit.author.name,
+        timestamp: c.commit.author.timestamp,
+        kind,
+      };
+    });
+  } catch (error) {
+    // Un historique illisible (dépôt corrompu, aucun commit) ne doit pas casser
+    // l'écran : on journalise et on renvoie vide.
+    console.warn("Lecture de l'historique Git impossible :", error);
+    return [];
+  }
+}

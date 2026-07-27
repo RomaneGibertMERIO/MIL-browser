@@ -11,10 +11,13 @@ import { useEffect, useState, useCallback } from "react";
 import { useAppStore } from "../../store/appStore";
 import { getElectronBridge, toIpcResult, type SessionInfo, type UserRole } from "../../shared/electronBridge";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
+import { Icon } from "../../shared/components/ui/Icon";
 
+// UI labels follow docs/UI-UX-SPEC.md §17 Tab 3: the internal `testing` role is
+// surfaced as "Write". The stored value stays `testing` (access.json untouched).
 const ROLES: { value: UserRole; label: string; help: string }[] = [
-  { value: "readonly", label: "Read only", help: "Can only set the repository path." },
-  { value: "testing", label: "Testing team", help: "Can create and push proposals." },
+  { value: "readonly", label: "Read Only", help: "Can browse and read; can set the repository path." },
+  { value: "testing", label: "Write", help: "Can create and push proposals." },
   { value: "admin", label: "Admin", help: "Manages accounts, approves/rejects proposals." },
 ];
 
@@ -73,7 +76,7 @@ export function AccountManagementPage() {
   return (
     <div className="max-w-4xl space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Accounts &amp; roles</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Connected users</h2>
         <p className="text-sm text-gray-500 mt-1">
           All machines that have contacted the central repository. Assign a role to each.
         </p>
@@ -114,15 +117,16 @@ export function AccountManagementPage() {
                         key={r.value}
                         type="button"
                         title={r.help}
+                        aria-pressed={active}
                         disabled={savingUser === s.username || active}
                         onClick={() => changeRole(s.username, r.value)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors disabled:cursor-default ${
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors disabled:cursor-default ${
                           active
                             ? "bg-blue-600 text-white border-blue-600"
                             : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
                         }`}
                       >
-                        {active ? "☑ " : "☐ "}
+                        {active && <Icon name="check" size={13} />}
                         {r.label}
                       </button>
                     );

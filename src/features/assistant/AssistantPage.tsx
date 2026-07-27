@@ -38,6 +38,7 @@ import { AppFrame, Brand } from "../../shared/components/AppFrame";
 import { profileStatusLabel } from "../../shared/profileStatus";
 import { ProfileDetail } from "../profile/ProfileDetail";
 import { getEffectiveSchema } from "../../core/engine/profileEngine";
+import { getElectronBridge } from "../../shared/electronBridge";
 
 const MIN_MILLER = 320;
 const MIN_RIGHT = 340;
@@ -129,6 +130,13 @@ export function AssistantPage() {
   const setActiveStd = useAppStore(s => s.setActiveStandard);
   const setMode      = useAppStore(s => s.setMode);
   const repoMode     = useAppStore(s => s.repoMode);
+
+  // Multi-fenêtre (spec §11) : bouton visible seulement dans l'app de bureau.
+  // Hors Electron (mode navigateur), le pont est nul et l'action n'a pas de sens.
+  const electronBridge = getElectronBridge();
+  const openInNewWindow = () => {
+    void electronBridge?.openBrowserWindow(activeStdId ? { standardId: activeStdId } : undefined);
+  };
 
   const [selectedPath, setSelectedPath]           = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -347,6 +355,20 @@ export function AssistantPage() {
             </button>
           )}
         </div>
+
+        {/* Open in new window (multi-window, spec §11) — desktop app only.
+            Opens a standalone Browser, pre-selected on the current standard so
+            the engineer can place different standards on different monitors. */}
+        {electronBridge !== null && (
+          <button
+            onClick={openInNewWindow}
+            aria-label="Open in new window"
+            title="Open in new window"
+            className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            <Icon name="window" size={14} /> New window
+          </button>
+        )}
 
         {/* Manage is available to everyone: read-only users still need it to
             reach Settings and set/verify the Git repository path. The internal

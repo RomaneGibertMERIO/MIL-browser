@@ -11,8 +11,13 @@ import { contextBridge, ipcRenderer } from "electron";
 const bridge = {
   getSystemUsername: () => ipcRenderer.invoke("get-system-username"),
 
+  openBrowserWindow: (payload?: { standardId?: string }) =>
+    ipcRenderer.invoke("window:open-browser", payload),
+
   gitSetRepoPath: (path: string) => ipcRenderer.invoke("git:set-path", path),
   gitSync: (username: string) => ipcRenderer.invoke("git:sync", username),
+
+  gitLog: (limit?: number) => ipcRenderer.invoke("git:log", limit),
 
   gitSubmitProfile: (payload: { username: string; profile: unknown }) =>
     ipcRenderer.invoke("git:submit-profile", payload),

@@ -19,6 +19,7 @@ import {
   recordSession,
   readSessions,
   setUserRole,
+  readGitLog,
   type UserRole
 } from "./gitService";
 
@@ -112,7 +113,22 @@ function attachRendererLog(win: BrowserWindow): void {
   });
 }
 
-function createWindow() {
+/**
+ * Chaîne de requête passée au renderer pour piloter la fenêtre secondaire.
+ *
+ * Multi-fenêtre (exception de périmètre approuvée, spec §11/§26) : purement
+ * additif. Une seconde fenêtre charge exactement le même renderer ; seul le
+ * `?standard=<id>` diffère, que useBootstrap lit pour ouvrir le Browser
+ * pré-sélectionné sur cette norme. Aucune logique existante n'est touchée.
+ */
+function buildRendererSearch(opts?: { standardId?: string }): string {
+  const params = new URLSearchParams();
+  if (opts?.standardId) params.set("standard", opts.standardId);
+  return params.toString();
+}
+
+function createWindow(opts?: { standardId?: string }) {
+  const search = buildRendererSearch(opts);
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -152,10 +168,11 @@ function createWindow() {
 
   if (!app.isPackaged) {
     win.webContents.openDevTools();
-    win.loadURL("http://localhost:5173");
+    win.loadURL(search ? `http://localhost:5173/?${search}` : "http://localhost:5173");
   } else {
-    // En prod, le fichier index.html se trouve dans le dossier dist à la racine
-    win.loadFile(path.join(__dirname, "../dist/index.html"));
+    // En prod, le fichier index.html se trouve dans le dossier dist à la racine.
+    // `search` alimente window.location.search côté renderer (lu par useBootstrap).
+    win.loadFile(path.join(__dirname, "../dist/index.html"), search ? { search } : undefined);
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -165,7 +182,7 @@ function createWindow() {
 }
 
 // Initialisation de l'application
-app.whenReady().then(createWindow);
+app.whenReady().then(() => createWindow());
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
@@ -177,6 +194,20 @@ app.on("window-all-closed", () => {
 
 ipcMain.handle("get-system-username", () => {
   return currentUser();
+});
+
+// Multi-fenêtre (spec §11/§26) : ouvre une seconde fenêtre Browser autonome,
+// optionnellement pré-sélectionnée sur une norme. Purement additif — ne touche
+// ni au dépôt ni à aucun état partagé ; les deux fenêtres lisent la même base
+// locale (même origine).
+ipcMain.handle("window:open-browser", (_event, payload?: { standardId?: string }) => {
+  try {
+    createWindow({ standardId: payload?.standardId });
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erreur window:open-browser:", error);
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle("git:get-admins", async (_event, repoPath?: string) => {
@@ -195,6 +226,20 @@ ipcMain.handle("git:get-admins", async (_event, repoPath?: string) => {
     // Vrai quand admins.json est absent/vide : l'accès est alors ouvert à tous.
     unrestricted: admins.length === 0,
   };
+});
+
+ipcMain.handle("git:log", async (_event, limit?: number) => {
+  // Lecture seule de l'historique du workspace local. Aucun contrôle d'accès :
+  // l'entrée est déjà réservée aux admins côté interface (onglet Admin), et le
+  // handler ne fait que LIRE des commits locaux — il n'expose rien du réseau ni
+  // n'écrit quoi que ce soit.
+  try {
+    const entries = await readGitLog(typeof limit === "number" ? limit : undefined);
+    return { success: true, entries };
+  } catch (error: any) {
+    console.error("Erreur git:log:", error);
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle("git:list-sessions", async (_event, repoPath?: string) => {

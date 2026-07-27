@@ -131,8 +131,20 @@ export function useBootstrap(): void {
       if (lastAdminView !== undefined && canAccess(lastAdminView, useAppStore.getState().role)) {
         setAdminView(lastAdminView);
       }
+      // 5bis. Multi-fenêtre (spec §11) : une fenêtre secondaire est ouverte avec
+      //       `?standard=<id>`. On force alors le Browser et on pré-sélectionne
+      //       la norme demandée, en écrasant l'état de navigation restauré :
+      //       cette fenêtre doit atterrir là où l'utilisateur l'a demandée, quel
+      //       que soit le dernier écran mémorisé. Sans paramètre (fenêtre
+      //       principale), rien ne change.
+      const requestedStandard = new URLSearchParams(window.location.search).get("standard");
+      if (requestedStandard) {
+        useAppStore.getState().setMode("assistant");
+        setActiveStandard(requestedStandard);
+      }
+
       await useAppStore.getState().refreshLocalChanges();
-      
+
       // 6. C'est prêt !
       setReady();
     }

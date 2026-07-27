@@ -20,6 +20,7 @@ import { SyncPage } from './features/sync/SyncPage';
 import { toast } from './shared/toast/toastStore';
 import { LoadingSpinner } from './shared/components/ui/LoadingSpinner';
 import { ErrorBanner } from './shared/components/ui/ErrorBanner';
+import { EmptyState } from './shared/components/ui/EmptyState';
 
 
 
@@ -251,7 +252,6 @@ function SubTab({
 
 export function AdminValidationsPage() {
   const pendingCommits = useAppStore((s) => s.pendingCommits);
-  const approvedHistory = useAppStore((s) => s.approvedHistory);
   const resolveSingleChange = useAppStore((s) => s.resolveSingleChange);
 
   // État de sélection non figé : `pendingCommits` est rempli de façon
@@ -305,9 +305,9 @@ export function AdminValidationsPage() {
           else displayValue = String(value);
 
           return (
-            <div key={key} className="p-4 bg-gray-50 border border-gray-150 rounded-lg flex flex-col gap-1.5">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{key}</span>
-              <span className="text-base font-semibold text-gray-800 break-words">{displayValue}</span>
+            <div key={key} className="p-4 bg-gray-50 border border-gray-200 rounded-lg flex flex-col gap-1.5">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{key}</span>
+              <span className="text-sm font-semibold text-gray-800 break-words">{displayValue}</span>
             </div>
           );
         })}
@@ -320,11 +320,11 @@ export function AdminValidationsPage() {
     const headers = Object.keys(dataset[0]);
 
     return (
-      <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+      <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-100 text-gray-600 text-xs font-bold uppercase border-b border-gray-200">
+              <tr className="bg-gray-100 text-gray-600 text-xs font-semibold uppercase border-b border-gray-200">
                 {headers.map((h) => (
                   <th key={h} className="p-4 select-none">{h}</th>
                 ))}
@@ -352,11 +352,11 @@ export function AdminValidationsPage() {
       .filter((k) => k !== 'dataset' && k !== 'id' && k !== 'standardId' && k !== 'nodeId');
 
     return (
-      <div className="border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-200 shadow-xs">
-        <div className="grid grid-cols-3 bg-gray-100 font-bold text-xs text-gray-600 uppercase p-4">
+      <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-200">
+        <div className="grid grid-cols-3 bg-gray-100 font-semibold text-xs text-gray-600 uppercase p-4">
           <div>Property</div>
-          <div>Original Value</div>
-          <div>Proposed Value</div>
+          <div>Original value</div>
+          <div>Proposed value</div>
         </div>
         {allKeys.map((key) => {
           const origVal = original[key];
@@ -376,12 +376,12 @@ export function AdminValidationsPage() {
               : "—";
 
           return (
-            <div key={key} className="grid grid-cols-3 p-4 items-center text-sm hover:bg-yellow-50/20">
-              <div className="font-bold text-gray-500 uppercase tracking-wide text-xs">{key}</div>
-              <div className="line-through text-red-600 bg-red-50/50 px-2.5 py-1.5 rounded-lg border border-red-100 font-mono inline-block max-w-max break-all">
+            <div key={key} className="grid grid-cols-3 p-4 items-center text-sm hover:bg-gray-50">
+              <div className="font-semibold text-gray-500 uppercase tracking-wide text-xs">{key}</div>
+              <div className="line-through text-red-600 bg-red-50 px-2.5 py-1.5 rounded border border-red-100 font-mono inline-block max-w-max break-all">
                 {cell(origVal, origStr)}
               </div>
-              <div className="text-emerald-700 bg-emerald-50/50 px-2.5 py-1.5 rounded-lg border border-emerald-100 font-bold font-mono inline-block max-w-max break-all">
+              <div className="text-green-700 bg-green-50 px-2.5 py-1.5 rounded border border-green-100 font-semibold font-mono inline-block max-w-max break-all">
                 {cell(propVal, propStr)}
               </div>
             </div>
@@ -399,44 +399,46 @@ export function AdminValidationsPage() {
   const activeCommitReview = useMemo(
     () =>
       activeCommit ? (
-        <div className="flex flex-col h-full divide-y-2 divide-gray-150 overflow-hidden">
-          <div className="p-6 bg-gray-50 border-b-2 border-gray-100 flex-shrink-0">
-            <span className="text-[10px] bg-indigo-150 border border-indigo-200 text-indigo-700 font-black px-2.5 py-1 rounded-md tracking-wider">
-              COMMIT CONTROLLER ID: {activeCommit.id}
+        <div className="flex flex-col h-full divide-y divide-gray-200 overflow-hidden">
+          <div className="p-5 bg-gray-50 flex-shrink-0">
+            <span className="inline-block text-[10px] bg-gray-100 border border-gray-200 text-gray-500 font-mono px-2 py-0.5 rounded tracking-wide">
+              {activeCommit.id}
             </span>
-            <h3 className="font-extrabold text-gray-900 text-xl tracking-tight leading-tight mt-2">
+            <h3 className="font-semibold text-gray-900 text-base leading-tight mt-2">
               {activeCommit.commitMessage}
             </h3>
-            <p className="text-xs text-gray-400 font-semibold mt-1">
+            <p className="text-xs text-gray-400 font-medium mt-1">
               Submitted by <b className="text-gray-600">{activeCommit.author}</b> on {activeCommit.date}
             </p>
           </div>
 
-          <div className="p-6 overflow-y-auto space-y-8 flex-1">
-            <span className="text-xs font-black text-gray-400 uppercase tracking-widest block">
-              Review and Validate Items One by One
+          <div className="p-5 overflow-y-auto space-y-6 flex-1">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
+              Review each change
             </span>
 
             {activeCommit.changes.map((change) => (
-              <div key={change.id} className="border-2 border-gray-150 rounded-2xl overflow-hidden bg-white shadow-xs hover:border-gray-300 transition-all">
-                <div className="p-4 bg-gray-50 flex items-center justify-between border-b border-gray-150 flex-wrap gap-3">
+              <div key={change.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white hover:border-gray-300 transition-colors">
+                <div className="p-4 bg-gray-50 flex items-center justify-between border-b border-gray-200 flex-wrap gap-3">
                   <div>
-                    <p className="text-base font-extrabold text-gray-950">{change.name}</p>
+                    <p className="text-sm font-semibold text-gray-900">{change.name}</p>
                     <p className="text-xs text-gray-400 font-mono mt-0.5">{change.location}</p>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setRejectTarget({ commitId: activeCommit.id, changeId: change.id, name: change.name })}
-                      className="px-3.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-all active:scale-[0.98]"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-md border border-red-200 transition-colors"
                     >
-                      Reject ❌
+                      <Icon name="close" size={14} />
+                      Reject
                     </button>
                     <button
                       onClick={() => handleApproveChange(activeCommit.id, change.id, change.name)}
-                      className="px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all active:scale-[0.98]"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors"
                     >
-                      Approve & Merge ✓
+                      <Icon name="check" size={14} />
+                      Approve
                     </button>
                   </div>
                 </div>
@@ -444,17 +446,20 @@ export function AdminValidationsPage() {
                 <div className="p-5 space-y-6">
                   {change.action === "Created" && change.proposedData && (
                     <div className="space-y-6">
-                      <div className="bg-emerald-50/30 text-emerald-900 p-4 rounded-xl border border-emerald-200/60">
-                        <span className="font-extrabold text-sm block mb-1">✓ Complete Structural Addition</span>
-                        <p className="text-xs text-emerald-800">Properties proposed to be added in the database branch:</p>
+                      <div className="flex items-start gap-2 bg-green-50 text-green-800 p-3 rounded-lg border border-green-200">
+                        <Icon name="add" size={16} className="flex-shrink-0 mt-0.5 text-green-600" />
+                        <div>
+                          <span className="font-semibold text-sm block">New item</span>
+                          <p className="text-xs">Properties proposed for addition to the database.</p>
+                        </div>
                       </div>
                       <div>
-                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">Target Field Properties</h4>
+                        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Field properties</h4>
                         {renderDynamicFields(change.proposedData)}
                       </div>
                       {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
                         <div>
-                          <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Discrete Curve Dataset</h4>
+                          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Dataset</h4>
                           {renderDynamicDataset(change.proposedData.dataset)}
                         </div>
                       )}
@@ -462,20 +467,21 @@ export function AdminValidationsPage() {
                   )}
 
                   {change.action === "Deleted" && (
-                    <div className="bg-red-50 border border-red-200 text-red-800 text-sm p-4 rounded-xl font-bold">
-                      ⚠️ Warning: Approving this change will remove this taxonomy and its linked data elements.
+                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 text-sm p-3 rounded-lg font-medium">
+                      <Icon name="warning" size={16} className="flex-shrink-0 mt-0.5 text-red-600" />
+                      <span>Approving this change will remove this item and its linked data.</span>
                     </div>
                   )}
 
                   {change.action === "Modified" && change.originalData && change.proposedData && (
                     <div className="space-y-6">
                       <div>
-                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">Field Differences Mapping</h4>
+                        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Field differences</h4>
                         {renderDynamicDiff(change.originalData, change.proposedData)}
                       </div>
                       {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
                         <div>
-                          <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Proposed Structural Dataset</h4>
+                          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Proposed dataset</h4>
                           {renderDynamicDataset(change.proposedData.dataset)}
                         </div>
                       )}
@@ -487,36 +493,35 @@ export function AdminValidationsPage() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-base p-12 gap-2">
-          <span className="text-3xl">🔍</span>
-          <span>Select a submission in the queue to inspect and merge individual assets.</span>
+        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-sm p-12 gap-3 text-center">
+          <Icon name="review" size={32} className="text-gray-300" />
+          <span>Select a submission in the queue to review its changes.</span>
         </div>
       ),
     [activeCommit],
   );
 
   return (
-    <div className="h-full flex flex-col space-y-6 w-full max-w-full px-4">
-      <div className="flex items-center justify-between border-b border-gray-200 pb-4">
-        <div>
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight">Repository Validation Dashboard</h2>
-          <p className="text-base text-gray-500 mt-1">
-            Accept or reject individual modifications proposed by technical operators.
-          </p>
-        </div>
+    <div className="h-full flex flex-col space-y-6 w-full max-w-full">
+      <div className="border-b border-gray-200 pb-4">
+        <h2 className="text-lg font-semibold text-gray-900">Review submissions</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Accept or reject individual changes proposed by contributors.
+        </p>
       </div>
 
-      {pendingCommits.length === 0 && approvedHistory.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-16 text-center text-gray-400 text-base shadow-xs">
-          🎉 No pending requests and no previous approvals. Everything is fully synchronized!
-        </div>
+      {pendingCommits.length === 0 ? (
+        <EmptyState
+          title="No pending submissions"
+          message="Proposals sent for review appear here. Everything is currently synchronized."
+        />
       ) : (
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-8 min-h-0 overflow-hidden">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-6 min-h-0 overflow-hidden">
           <div className="lg:col-span-2 flex flex-col space-y-6 overflow-y-auto pr-2">
             <div>
-              <span className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-3">Pending Pull Requests</span>
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">Pending submissions</span>
               {pendingCommits.length === 0 ? (
-                <div className="bg-gray-100 text-gray-500 text-sm p-4 rounded-xl text-center font-semibold">
+                <div className="bg-gray-50 text-gray-500 text-sm p-4 rounded-lg text-center font-medium border border-gray-200">
                   Queue empty
                 </div>
               ) : (
@@ -527,21 +532,23 @@ export function AdminValidationsPage() {
                       <div
                         key={commit.id}
                         onClick={() => setSelectedCommitId(commit.id)}
-                        className={`p-5 rounded-2xl border-2 transition-all cursor-pointer text-left shadow-xs ${
+                        className={`p-4 rounded-lg border transition-colors cursor-pointer text-left ${
                           isActive
-                            ? "bg-blue-50/40 border-blue-500 shadow-md ring-1 ring-blue-500"
-                            : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/50"
+                            ? "bg-blue-50 border-blue-500 ring-1 ring-blue-500"
+                            : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-bold bg-gray-100 text-gray-700 px-3 py-0.5 rounded-full">👤 {commit.author}</span>
-                          <span className="text-xs text-gray-400 font-semibold">{commit.date}</span>
-                        </div>
-                        <h4 className="font-bold text-base text-gray-900 leading-snug mb-2">{commit.commitMessage}</h4>
-                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                          <span className="text-xs font-semibold text-blue-600">
-                            📦 {commit.changes.length} line item(s)
+                        <div className="flex items-center justify-between mb-2 gap-2">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                            <Icon name="users" size={12} className="text-gray-400" />
+                            {commit.author}
                           </span>
+                          <span className="text-xs text-gray-400 font-medium">{commit.date}</span>
+                        </div>
+                        <h4 className="font-semibold text-sm text-gray-900 leading-snug mb-2">{commit.commitMessage}</h4>
+                        <div className="flex items-center gap-1.5 pt-2 border-t border-gray-100 text-xs font-medium text-blue-600">
+                          <Icon name="review" size={12} />
+                          {commit.changes.length} change{commit.changes.length > 1 ? "s" : ""}
                         </div>
                       </div>
                     );
@@ -549,33 +556,9 @@ export function AdminValidationsPage() {
                 </div>
               )}
             </div>
-
-            {approvedHistory.length > 0 && (
-              <div className="pt-4 border-t border-gray-200">
-                <span className="text-xs font-black text-emerald-600 uppercase tracking-widest block mb-3">
-                  Approved & Merged Assets
-                </span>
-                <div className="space-y-2">
-                  {approvedHistory.map((hist) => (
-                    <div key={hist.id} className="p-4 bg-emerald-50/40 border border-emerald-200 rounded-xl flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <p className="font-bold text-sm text-slate-900 truncate max-w-[150px]">{hist.name}</p>
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-600 text-white shadow-xs uppercase tracking-wider">
-                          ✓ Official
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
-                        <span>By: <b className="text-slate-700">{hist.author}</b></span>
-                        <span>Approved by: <b className="text-emerald-700">{hist.approvedBy}</b></span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
-          <div className="lg:col-span-3 flex flex-col bg-white border-2 border-gray-200 rounded-2xl overflow-hidden shadow-sm h-full">
+          <div className="lg:col-span-3 flex flex-col bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm h-full">
             {activeCommitReview}
           </div>
         </div>
