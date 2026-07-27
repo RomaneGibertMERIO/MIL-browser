@@ -35,7 +35,7 @@ import { Badge } from "../../shared/components/ui/Badge";
 import { Icon } from "../../shared/components/ui/Icon";
 import { StatusDot } from "../../shared/components/ui/StatusBadge";
 import { AppFrame, Brand } from "../../shared/components/AppFrame";
-import { profileStatusLabel } from "../../shared/profileStatus";
+import { sourceStatusStyle } from "../../shared/profileStatus";
 import { ProfileDetail } from "../profile/ProfileDetail";
 import { getEffectiveSchema } from "../../core/engine/profileEngine";
 import { getElectronBridge } from "../../shared/electronBridge";
@@ -563,7 +563,7 @@ function SearchResultsView({ results, query, onNode, onProfile, onTogglePin, isP
           <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Profiles ({results.profiles.length})</h3>
           <div className="space-y-1.5">
             {results.profiles.map(p => {
-              const s = profileStatusLabel(p.status);
+              const s = sourceStatusStyle(p.source, p.status);
               const pinned = isPinned(p.id);
               return (
                 <div key={p.id} className="flex items-stretch gap-2 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all">
@@ -648,7 +648,7 @@ function NodeRow({ node, selected, onSelect, statusDot }: { node: TaxonomyNodeIt
 function ProfileRow({ profile, selected, pinned, onSelect, onTogglePin }: {
   profile: Profile; selected: boolean; pinned: boolean; onSelect: () => void; onTogglePin: () => void;
 }) {
-  const s = profileStatusLabel(profile.status);
+  const s = sourceStatusStyle(profile.source, profile.status);
   return (
     <div className={`px-3 py-2.5 border-b border-gray-50 group ${selected ? "bg-blue-50" : "hover:bg-blue-50/60"}`}>
       <div className="flex items-start gap-2">
