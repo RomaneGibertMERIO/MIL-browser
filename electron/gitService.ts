@@ -568,7 +568,7 @@ export async function submitProfileToGit(remoteInput: string, username: string, 
     await git.commit({
       fs,
       dir: WORKSPACE_DIR,
-      message: `Proposal: Profil "${profile.name}" soumis par ${username}`,
+      message: `Proposal: profile "${profile.name}"`,
       author: { name: username, email: `${username.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
     });
   } catch (e) {
@@ -614,7 +614,7 @@ export async function approveProfileInGit(remoteInput: string, adminUsername: st
       await git.commit({
         fs,
         dir: WORKSPACE_DIR,
-        message: `Approval: Profil "${profile.name}" approuvé par l'admin ${adminUsername}`,
+        message: `Approval: profile "${profile.name}"`,
         author: { name: adminUsername, email: `${adminUsername.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
       });
     } catch (e) {}
@@ -699,7 +699,7 @@ export async function approveStandardInGit(remoteInput: string, adminUsername: s
       await git.commit({
         fs,
         dir: WORKSPACE_DIR,
-        message: `Approval: Standard "${standard.manifest.label}" approuvé par l'admin ${adminUsername}`,
+        message: `Approval: standard "${standard.manifest.label}"`,
         author: { name: adminUsername, email: `${adminUsername.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
       });
     } catch (e) {}
@@ -752,7 +752,7 @@ export async function submitStandardToGit(remoteInput: string, username: string,
     await git.commit({
       fs,
       dir: WORKSPACE_DIR,
-      message: `Proposal: Standard "${standard.manifest.label}" proposé par ${username}`,
+      message: `Proposal: standard "${standard.manifest.label}"`,
       author: { name: username, email: `${username.toLowerCase().replace(/\s+/g, "")}@milbrowser.local` }
     });
   } catch (e) {
