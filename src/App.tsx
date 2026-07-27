@@ -9,7 +9,7 @@ import { Icon, type IconName } from './shared/components/ui/Icon';
 import { RepoBadge, RoleBadge } from './shared/components/ui/RepoBadge';
 import { StatusDot } from './shared/components/ui/StatusBadge';
 import { stripHeavyJson } from './shared/previewSafe';
-import { canAccess, roleLabel } from './shared/roles';
+import { canAccess, canAccessNow, roleLabel } from './shared/roles';
 import { AssistantPage } from './features/assistant/AssistantPage';
 import { HomePage } from './features/home/HomePage';
 import { EditProfilesPage } from './features/edit/EditProfilesPage';
@@ -17,6 +17,7 @@ import { EditTaxonomyPage } from './features/edit/EditTaxonomyPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Sidebar } from './app/Sidebar';
 import { SubmitChangesModal } from './app/SubmitChangesModal';
+import { toast } from './shared/toast/toastStore';
 import { LoadingSpinner } from './shared/components/ui/LoadingSpinner';
 import { ErrorBanner } from './shared/components/ui/ErrorBanner';
 
@@ -48,9 +49,20 @@ export default function App() {
 
 function AdminLayout() {
   const adminView   = useAppStore((s) => s.adminView);
+  const setAdminView = useAppStore((s) => s.setAdminView);
   const syncError = useAppStore((s) => s.syncError);
   const setSyncError = useAppStore((s) => s.setSyncError);
   const repoMode = useAppStore((s) => s.repoMode);
+  const isOffline = useAppStore((s) => s.isOffline);
+  const role = useAppStore((s) => s.role);
+
+  // Si la vue courante devient inaccessible (passage hors-ligne / autonome, ou
+  // rôle abaissé par une synchro), on retombe sur Home : sinon on afficherait
+  // Sync/Admin alors que leur entrée de rail a disparu.
+  const online = repoMode === "shared" && !isOffline;
+  useEffect(() => {
+    if (!canAccessNow(adminView, role, online)) setAdminView("home");
+  }, [adminView, role, online, setAdminView]);
 
   // Le nom d'utilisateur OS est désormais résolu une seule fois, dans
   // useBootstrap. L'effet qui vivait ici testait `window.electronAPI` alors que
@@ -112,14 +124,27 @@ interface ContentPaneProps {
 
 function ContentPane({ adminView }: ContentPaneProps) {
   const role = useAppStore((s) => s.role);
+  const repoMode = useAppStore((s) => s.repoMode);
+  const isOffline = useAppStore((s) => s.isOffline);
+  const online = repoMode === "shared" && !isOffline;
 
   // Second verrou d'affichage (le premier étant le filtrage du rail). Le
   // contrôle réel des écritures reste appliqué par le processus principal.
-  if (!canAccess(adminView, role)) {
+  if (!canAccessNow(adminView, role, online)) {
+    const roleOk = canAccess(adminView, role);
     return (
       <div className="flex items-center justify-center h-full text-sm text-gray-400 text-center px-6">
-        This section requires a higher role.<br />
-        Your current role is "{roleLabel(role)}". Contact an administrator to request more permissions.
+        {roleOk ? (
+          <span>
+            This section is only available when connected to the central repository.<br />
+            You are currently {repoMode === "local" ? "in standalone mode" : "offline"}.
+          </span>
+        ) : (
+          <span>
+            This section requires a higher role.<br />
+            Your current role is "{roleLabel(role)}". Contact an administrator to request more permissions.
+          </span>
+        )}
       </div>
     );
   }
@@ -293,7 +318,7 @@ export function AdminValidationsPage() {
   const handleApproveChange = async (commitId: string, changeId: string, name: string) => {
     const result = await resolveSingleChange(commitId, changeId, 'approve');
     if (result.success) {
-      alert(`Success: "${name}" has been approved and marked as Official!`);
+      toast.success(`"${name}" has been approved and marked as Official.`);
     }
     // En cas d'échec, le message détaillé est déjà affiché par la bannière
     // syncError d'AdminLayout, et la proposition reste dans la file.
@@ -306,7 +331,7 @@ export function AdminValidationsPage() {
 
     const result = await resolveSingleChange(commitId, changeId, 'reject', reason);
     if (result.success) {
-      alert(`Discarded: "${name}" has been rejected. Its author will be notified on next sync.`);
+      toast.success(`"${name}" has been rejected. Its author will be notified on next sync.`);
     }
   };
 

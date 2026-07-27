@@ -11,8 +11,10 @@
  *    locaux. Les résidus « partagés » d'un dépôt précédemment configuré sont
  *    masqués.
  *  - En mode PARTAGÉ (dépôt configuré) : standards partagés + MES brouillons
- *    locaux (visibles pour leur auteur jusqu'au push, badgés « Local »). Le
- *    socle d'usine est masqué : le dépôt central est la source de vérité.
+ *    locaux (badgés « Local ») + le SOCLE d'usine (builtin), qui reste la base
+ *    de travail. Autrement dit : le dépôt + mes modifications locales. (Le socle
+ *    n'est plus masqué : le cacher faisait disparaître des normes livrées comme
+ *    MIL-STD dès qu'un dépôt central était branché.)
  *
  * Le filtrage est appliqué ICI, et non dans chaque écran, parce que toute
  * l'interface (assistant, bibliothèque, sidebar, configuration des normes)
@@ -27,23 +29,17 @@ import { useAppStore } from "../../store/appStore";
 /**
  * Un standard est-il visible dans l'espace de travail courant ?
  *
- * Un brouillon local (créé sur ce poste, non builtin) reste visible pour son
- * auteur même en mode partagé — c'est la différence avec l'ancienne règle, qui
- * masquait toute création tant qu'elle n'était pas poussée.
+ * PARTAGÉ  : tout — le dépôt central, mes brouillons locaux ET le socle d'usine
+ *            (builtin), qui reste la base. « Le dépôt + mes modifications. »
+ * AUTONOME : socle d'usine + brouillons locaux ; on masque le résidu « shared »
+ *            laissé par un dépôt précédemment configuré.
  */
 export function isVisibleInWorkspace(
-  standard: { workspace?: "local" | "shared"; manifest: { isBuiltin: boolean } },
+  standard: { workspace?: "local" | "shared" },
   repoMode: "local" | "shared",
 ): boolean {
-  const ws = standardWorkspace(standard);
-  const isBuiltin = standard.manifest?.isBuiltin === true;
-
-  if (repoMode === "shared") {
-    // Standards du dépôt + mes brouillons locaux ; le socle d'usine est masqué.
-    return ws === "shared" || !isBuiltin;
-  }
-  // Mode autonome : tout ce qui est d'origine locale (socle + brouillons).
-  return ws === "local";
+  if (repoMode === "shared") return true;
+  return standardWorkspace(standard) === "local";
 }
 
 /**

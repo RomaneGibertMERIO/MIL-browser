@@ -75,6 +75,37 @@ export async function updateStandardNodes(standardId: string, nodes: StandardNod
   await reconcileNodeImages(standardId, nodes);
 }
 
+/**
+ * Met à jour l'identité (le manifeste) d'un standard SANS toucher à son `id`
+ * (clé Dexie + clé étrangère Profile.standardId) ni à ses nœuds/images.
+ *
+ * Comme toute édition locale, elle marque le standard « local » (brouillon
+ * poussable) et le détache du socle d'usine (isBuiltin = false), à l'identique
+ * d'updateStandardNodes. `id` et `schemaVersion` (sémantique de migration)
+ * restent inchangés.
+ */
+export async function updateStandardManifest(
+  id: string,
+  patch: { label: string; organization: string; description: string; version: string },
+): Promise<void> {
+  const standard = await getStandardById(id);
+  if (standard === undefined) throw new Error(`Standard "${id}" not found.`);
+
+  const updated: StandardPlugin = {
+    ...standard,
+    manifest: {
+      ...standard.manifest,
+      label: patch.label,
+      organization: patch.organization,
+      description: patch.description,
+      version: patch.version,
+      isBuiltin: false,
+    },
+    status: "local",
+  };
+  await upsertStandard(updated);
+}
+
 export async function createStandard(standard: StandardPlugin): Promise<void> {
   const existing = await getStandardById(standard.manifest.id);
   if (existing !== undefined) throw new Error(`Standard "${standard.manifest.id}" already exists.`);
@@ -98,20 +129,36 @@ export async function createStandard(standard: StandardPlugin): Promise<void> {
 export async function deleteStandardAndProfiles(id: string): Promise<void> {
   const standard = await getStandardById(id);
   if (!standard) return;
-  if (standard.manifest.isBuiltin) {
-    throw new Error(`Cannot delete builtin standard "${id}".`);
-  }
+  // Le socle d'usine (builtin) est désormais supprimable comme tout autre : le
+  // hook « deleting » n'émet pas de tombstone pour un builtin (suppression
+  // purement locale), et le bootstrap ne réinstalle le socle que si l'espace
+  // local redevient vide (filet de sécurité).
 
   const profileKeys = await db.profiles
     .where("standardId")
     .equals(id)
     .primaryKeys();
 
-  if (profileKeys.length > 0) {
-    await Promise.all(profileKeys.map(key => db.profiles.delete(key)));
+  // Autonome : suppression PUREMENT locale. On neutralise les hooks "deleting"
+  // (sinon ils déposeraient des pierres tombales qui « fuiraient » vers un dépôt
+  // lors d'une future connexion) et on purge les événements de synchro des
+  // entités retirées. En partagé, les tombales sont créées et propagées au
+  // prochain push (comportement inchangé).
+  const standalone = useAppStore.getState().repoMode === "local";
+  if (standalone) db.isSyncingInternal = true;
+  try {
+    if (profileKeys.length > 0) {
+      await Promise.all(profileKeys.map((key) => db.profiles.delete(key)));
+    }
+    await db.standards.delete(id);
+  } finally {
+    if (standalone) db.isSyncingInternal = false;
   }
 
-  await db.standards.delete(id);
+  if (standalone) {
+    await db.syncEvents.bulkDelete([id, ...profileKeys.map((k) => String(k))]);
+  }
+
   await deleteNodeImagesForStandard(id); // GC des images du standard supprimé
   await useAppStore.getState().refreshLocalChanges();
 }

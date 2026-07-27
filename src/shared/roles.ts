@@ -37,6 +37,25 @@ export function canAccess(view: AdminView, role: UserRole): boolean {
 }
 
 /**
+ * Vues de COLLABORATION qui n'existent qu'EN LIGNE : pousser des propositions
+ * (Sync) et les valider (Admin) suppose un dépôt central joignable. En autonome
+ * ou hors-ligne, il n'y a personne avec qui synchroniser — ces destinations sont
+ * masquées plutôt que présentées puis vouées à l'échec.
+ */
+export const REQUIRES_ONLINE: readonly AdminView[] = ["sync", "admin"];
+
+/**
+ * Accès EFFECTIF à une vue : rôle suffisant ET, pour les vues de collaboration,
+ * connexion active. `online` = un dépôt central est configuré ET joignable
+ * (repoMode "shared" et non hors-ligne).
+ */
+export function canAccessNow(view: AdminView, role: UserRole, online: boolean): boolean {
+  if (!canAccess(view, role)) return false;
+  if (!online && REQUIRES_ONLINE.includes(view)) return false;
+  return true;
+}
+
+/**
  * Libellé du rôle présenté à l'utilisateur. En interne le rôle reste
  * "testing" (cf. access.json, gitService), mais l'interface le nomme "Write"
  * pour rester lisible par un ingénieur.

@@ -13,7 +13,7 @@ import type { Profile } from "../../core/domain/profile";
 import type { ProfileDefinition } from "../../core/domain/standard";
 import { Card } from "../../shared/components/ui/Card";
 import { Badge } from "../../shared/components/ui/Badge";
-import { profileStatusLabel } from "../../shared/profileStatus";
+import { sourceStatusStyle } from "../../shared/profileStatus";
 import { TimeSeriesChart } from "../../shared/components/charts/TimeSeriesChart";
 import type { FieldGroup } from "../../core/domain/standard";
 
@@ -72,7 +72,7 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: P
             {profile.name}
           </h2>
           {(() => {
-            const s = profileStatusLabel(profile.status);
+            const s = sourceStatusStyle(profile.source, profile.status);
             return <Badge variant={s.variant}>{s.label}</Badge>;
           })()}
         </div>

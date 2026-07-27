@@ -34,6 +34,8 @@ import { useAppStore } from "../../store/appStore";
 import { ProfileForm } from "../library/ProfileForm";
 import { Icon } from "../../shared/components/ui/Icon";
 import { StatusDot } from "../../shared/components/ui/StatusBadge";
+import { useConfirm } from "../../shared/components/ui/ConfirmDialog";
+import { StandardInfoPanel } from "./StandardInfoPanel";
 import {
   MillerColumn,
   StandardRow,
@@ -68,6 +70,14 @@ export function EditProfilesPage() {
   // plus le parent. `editedRef` note simplement qu'une saisie a eu lieu, pour la
   // garde anti-perte à la navigation.
   const editedRef = useRef(false);
+
+  // Confirmation « discard » in-app (remplace window.confirm, qui gèle le
+  // renderer main thread) — voir docs/UI-UX-SPEC.md §21.
+  const { confirm, dialog: confirmDialog } = useConfirm();
+
+  // Édition non sauvegardée du panneau d'infos standard (affiché quand aucun
+  // profil n'est sélectionné) ; portée par le panneau, remontée pour la garde.
+  const [infoDirty, setInfoDirty] = useState(false);
   useEffect(() => () => resizeAbortRef.current?.abort(), []);
 
   // Store
@@ -141,11 +151,23 @@ export function EditProfilesPage() {
     return null;
   }, [standard, isCreating, creatingNodeId, selectedProfile]);
 
-  function confirmDiscardIfDirty(): boolean {
-    if (editedRef.current) {
-      return window.confirm("You have unsaved updates. Are you sure you want to discard your changes?");
+  async function confirmDiscardIfDirty(): Promise<boolean> {
+    if (editedRef.current || infoDirty) {
+      return confirm({
+        title: "Unsaved changes",
+        message: "You have unsaved updates. Discard your changes?",
+        confirmLabel: "Discard",
+        destructive: true,
+      });
     }
     return true;
+  }
+
+  // Après suppression d'un standard depuis le panneau d'infos : plus de norme
+  // active (la live-query retire la ligne ; l'effet sur activeStandardId réinitialise).
+  function handleStandardDeleted() {
+    setActiveStandard(null);
+    void saveActiveStandard(null);
   }
 
   // Le ProfileForm signale une saisie ; le rendu (graphe/dataset) se fait chez
@@ -174,15 +196,21 @@ export function EditProfilesPage() {
     setFormKey((k) => k + 1);
   }
 
-  function selectStandard(id: string) {
-    if (!confirmDiscardIfDirty()) return;
+  async function selectStandard(id: string) {
+    if (!(await confirmDiscardIfDirty())) return;
     setActiveStandard(id);
     void saveActiveStandard(id);
-    // Le reset de navigation est piloté par l'effet sur activeStandardId.
+    // Toujours revenir au niveau « norme » (affiche la carte d'infos), même en
+    // re-cliquant la norme déjà active : l'effet sur activeStandardId ne se
+    // déclenche pas dans ce cas et un profil resterait ouvert.
+    setSelectedProfileId(null);
+    setIsCreating(false);
+    setCreatingNodeId(null);
+    resetEditorState();
   }
 
-  function selectNode(colIdx: number, nodeId: string) {
-    if (!confirmDiscardIfDirty()) return;
+  async function selectNode(colIdx: number, nodeId: string) {
+    if (!(await confirmDiscardIfDirty())) return;
     setSelectedPath((prev) => [...prev.slice(0, colIdx), nodeId]);
     setSelectedProfileId(null);
     setIsCreating(false);
@@ -190,24 +218,24 @@ export function EditProfilesPage() {
     resetEditorState();
   }
 
-  function selectProfile(profile: Profile) {
-    if (!confirmDiscardIfDirty()) return;
+  async function selectProfile(profile: Profile) {
+    if (!(await confirmDiscardIfDirty())) return;
     setSelectedProfileId(profile.id);
     setIsCreating(false);
     setCreatingNodeId(null);
     resetEditorState();
   }
 
-  function startCreateProfile(nodeId: string) {
-    if (!confirmDiscardIfDirty()) return;
+  async function startCreateProfile(nodeId: string) {
+    if (!(await confirmDiscardIfDirty())) return;
     setSelectedProfileId(null);
     setIsCreating(true);
     setCreatingNodeId(nodeId);
     resetEditorState();
   }
 
-  function handleCancel() {
-    if (!confirmDiscardIfDirty()) return;
+  async function handleCancel() {
+    if (!(await confirmDiscardIfDirty())) return;
     if (isCreating) {
       setIsCreating(false);
       setCreatingNodeId(null);
@@ -249,7 +277,7 @@ export function EditProfilesPage() {
   // C'est la façon d'obtenir une copie modifiable d'un profil builtin.
   async function handleDuplicate() {
     if (selectedProfile === null) return;
-    if (!confirmDiscardIfDirty()) return;
+    if (!(await confirmDiscardIfDirty())) return;
     const copy: Profile = {
       ...selectedProfile,
       id: crypto.randomUUID(),
@@ -315,6 +343,7 @@ export function EditProfilesPage() {
     // horizontalement au lieu de rogner l'aperçu hors écran (la fenêtre
     // Electron n'a pas de largeur mini).
     <div className="flex h-full select-none overflow-x-auto">
+      {confirmDialog}
       {/* Miller (flexible) */}
       <div className="flex-1 min-w-0" style={{ minWidth: MIN_MILLER }}>
         <div className="flex h-full overflow-x-auto overflow-y-hidden">
@@ -412,10 +441,9 @@ export function EditProfilesPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => selectedProfile.source !== "builtin" && setDeletingId(selectedProfile.id)}
-                      disabled={selectedProfile.source === "builtin"}
-                      title={selectedProfile.source === "builtin" ? "Built-in profiles cannot be deleted — duplicate it first" : "Delete profile"}
-                      className="p-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      onClick={() => setDeletingId(selectedProfile.id)}
+                      title="Delete profile"
+                      className="p-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
                     >
                       <Icon name="delete" size={16} />
                     </button>
@@ -453,13 +481,22 @@ export function EditProfilesPage() {
               />
             </div>
           </>
+        ) : standard != null ? (
+          <div className="flex-1 overflow-y-auto">
+            <StandardInfoPanel
+              key={standard.manifest.id}
+              standard={standard}
+              onDeleted={handleStandardDeleted}
+              onDirtyChange={setInfoDirty}
+            />
+          </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-8">
             <Icon name="edit" size={40} className="text-gray-200" />
             <div>
-              <p className="text-base font-semibold text-gray-500">Select a profile to edit</p>
+              <p className="text-base font-semibold text-gray-500">Select a standard to begin</p>
               <p className="text-sm text-gray-400 mt-1">
-                Navigate to a node, then pick a profile or click <strong className="text-gray-600">+ New profile</strong>.
+                Pick a standard in the first column, then a node and a profile.
               </p>
             </div>
           </div>

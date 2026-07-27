@@ -15,7 +15,7 @@ import type { ReactNode } from "react";
 import type { StandardPlugin } from "../../../core/domain/standard";
 import type { TaxonomyNodeItem } from "../../../core/domain/tree";
 import type { Profile } from "../../../core/domain/profile";
-import { statusStyle } from "../../profileStatus";
+import { sourceStatusStyle } from "../../profileStatus";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 
@@ -141,7 +141,9 @@ export function AddRow({ label, onClick, disabled = false }: { label: string; on
 export function EditProfileRow({ profile, selected, onSelect }: {
   profile: Profile; selected: boolean; onSelect: () => void;
 }) {
-  const s = statusStyle(profile.status);
+  // Source-aware : un profil builtin s'affiche « Built-in » (gris), jamais
+  // « Official » (vert) réservé aux profils approuvés du dépôt central.
+  const s = sourceStatusStyle(profile.source, profile.status);
   return (
     <button onClick={onSelect} title={profile.name}
       className={`w-full text-left px-3 py-2.5 border-b border-gray-50 transition-colors ${selected ? "bg-blue-50 border-l-2 border-l-blue-500 pl-2.5" : "hover:bg-blue-50/60"}`}>

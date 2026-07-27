@@ -11,7 +11,7 @@ import {
   Pin, PinOff, X, Settings, ShieldCheck, Users, UploadCloud, ArrowLeft,
   ExternalLink, ChevronRight, ChevronDown, ChevronUp, Minus, SquarePen, ListTree, Search,
   Plus, Check, GitBranch, GitCommit, AppWindow, Home, RefreshCw, Trash2,
-  Download, Upload, AlertTriangle, type LucideIcon,
+  Download, Upload, AlertTriangle, Info, type LucideIcon,
 } from "lucide-react";
 
 const ICONS = {
@@ -42,6 +42,7 @@ const ICONS = {
   download: Download,
   upload: Upload,
   warning: AlertTriangle,
+  info: Info,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

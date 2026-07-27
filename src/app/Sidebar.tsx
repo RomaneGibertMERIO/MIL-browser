@@ -2,14 +2,15 @@
  * Rail de navigation du Management (docs/UI-UX-SPEC.md §4/§5).
  *
  * Colonne claire (structure grisée) présentant les cinq destinations —
- * Home / Edit / Sync / Settings / Admin — filtrées par le rôle via `canAccess`,
- * un bouton « ← Browser » pour revenir au navigateur, et un rappel du rôle et
- * de l'état du dépôt en bas. Le sélecteur de norme et le bouton de push, jadis
- * ici, vivent désormais respectivement dans la section Edit et la section Sync.
+ * Home / Edit / Sync / Settings / Admin — filtrées par le rôle ET la connexion
+ * via `canAccessNow` (Sync et Admin, vues de collaboration, sont masqués en
+ * autonome et hors-ligne), un bouton « ← Browser » pour revenir au navigateur,
+ * et un rappel du rôle et de l'état du dépôt en bas. Le sélecteur de norme et le
+ * bouton de push, jadis ici, vivent désormais dans les sections Edit et Sync.
  */
 import { useAppStore, type AdminView } from "../store/appStore";
 import { Icon, type IconName } from "../shared/components/ui/Icon";
-import { canAccess, roleLabel } from "../shared/roles";
+import { canAccessNow, roleLabel } from "../shared/roles";
 import { RepoBadge } from "../shared/components/ui/RepoBadge";
 
 const RAIL_ITEMS: { view: AdminView; label: string; icon: IconName }[] = [
@@ -25,11 +26,15 @@ export function Sidebar() {
   const setAdminView = useAppStore((s) => s.setAdminView);
   const setMode = useAppStore((s) => s.setMode);
   const role = useAppStore((s) => s.role);
+  const repoMode = useAppStore((s) => s.repoMode);
+  const isOffline = useAppStore((s) => s.isOffline);
   const pendingCommits = useAppStore((s) => s.pendingCommits);
 
   // Gating d'affichage uniquement : le refus d'accès réel est appliqué par le
-  // processus principal, à partir du compte système (non falsifiable).
-  const items = RAIL_ITEMS.filter((it) => canAccess(it.view, role));
+  // processus principal, à partir du compte système (non falsifiable). Sync et
+  // Admin ne s'affichent qu'en ligne (dépôt configuré et joignable).
+  const online = repoMode === "shared" && !isOffline;
+  const items = RAIL_ITEMS.filter((it) => canAccessNow(it.view, role, online));
 
   return (
     <nav className="flex flex-col h-full w-56 flex-shrink-0 bg-gray-50 border-r border-gray-200">

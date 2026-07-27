@@ -565,6 +565,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const api = getElectronBridge();
 
+    // Pousser = collaboration : impossible sans dépôt central JOIGNABLE. On
+    // refuse proprement plutôt que de tenter des envois voués à l'échec. Le menu
+    // Sync est d'ailleurs masqué en autonome/hors-ligne — ceci en est la
+    // ceinture de sécurité côté action.
+    if (state.repoMode !== "shared" || state.isOffline) {
+      const error =
+        state.repoMode !== "shared"
+          ? "Standalone mode: connect a central repository (Settings) before pushing."
+          : "Offline: the central repository is unreachable. Reconnect before pushing.";
+      set({ syncError: error });
+      return { success: false, error };
+    }
+
     if (api === null) {
       set({ syncError: NO_BRIDGE_ERROR });
       await get().refreshLocalChanges();

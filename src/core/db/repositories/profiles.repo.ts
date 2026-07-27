@@ -1,5 +1,6 @@
 import { db } from "../schema";
 import type { Profile } from "../../domain/profile";
+import { useAppStore } from "../../../store/appStore";
 
 // ---------------------------------------------------------------------------
 // Reads
@@ -95,6 +96,20 @@ export async function seedBuiltinProfile(profile: Profile): Promise<void> {
  * The tombstone event is automatically handled by Dexie hooks in schema.ts
  */
 export async function deleteProfile(id: string): Promise<void> {
+  // Autonome : suppression PUREMENT locale — pas de pierre tombale (elle
+  // « fuirait » vers un dépôt à la prochaine connexion) et purge de l'événement
+  // de synchro résiduel. En partagé, le hook "deleting" crée la tombale
+  // propagée au prochain push (comportement inchangé).
+  if (useAppStore.getState().repoMode === "local") {
+    db.isSyncingInternal = true;
+    try {
+      await db.profiles.delete(id);
+    } finally {
+      db.isSyncingInternal = false;
+    }
+    await db.syncEvents.delete(id);
+    return;
+  }
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
     // Déclenche automatiquement le hook "deleting" de schema.ts
     await db.profiles.delete(id);

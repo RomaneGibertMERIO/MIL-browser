@@ -28,6 +28,7 @@ import { useStandards } from "../../shared/hooks/useStandards";
 import { useAppStore } from "../../store/appStore";
 import { Icon } from "../../shared/components/ui/Icon";
 import { StatusDot } from "../../shared/components/ui/StatusBadge";
+import { useConfirm } from "../../shared/components/ui/ConfirmDialog";
 import {
   MillerColumn,
   StandardRow,
@@ -37,6 +38,7 @@ import {
   columnHeading,
 } from "../../shared/components/miller/Miller";
 import { NodePropertiesPanel, NodeSchemaPanel } from "../standards/TaxonomyEditor";
+import { StandardInfoPanel } from "./StandardInfoPanel";
 
 const MIN_MILLER = 320;
 
@@ -82,6 +84,8 @@ export function EditTaxonomyPage() {
   const [savedFlash, setSavedFlash] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; label: string; profileCount: number } | null>(null);
   const [newStdOpen, setNewStdOpen] = useState(false);
+  // Édition non sauvegardée du panneau d'infos standard (état porté par le panneau).
+  const [infoDirty, setInfoDirty] = useState(false);
 
   const [editorWidth, setEditorWidth] = useState(560);
   const resizeAbortRef = useRef<AbortController | null>(null);
@@ -160,9 +164,21 @@ export function EditTaxonomyPage() {
     [workingNodes, selectedId],
   );
 
-  function confirmDiscardIfDirty(): boolean {
-    if (dirty) return window.confirm("You have unsaved taxonomy changes. Discard them?");
-    return true;
+  // Confirmation « discard » in-app (remplace window.confirm, qui gèle le
+  // renderer main thread) — voir docs/UI-UX-SPEC.md §21.
+  const { confirm, dialog: confirmDialog } = useConfirm();
+
+  // Garde anti-perte paramétrée : ne demande confirmation que si l'action
+  // détruit des éditions non sauvegardées. `dirty` = tampon de taxonomie ;
+  // `infoDirty` = panneau d'infos standard. Chaque appelant passe ce qu'il perd.
+  async function confirmDiscard(hasUnsaved: boolean): Promise<boolean> {
+    if (!hasUnsaved) return true;
+    return confirm({
+      title: "Unsaved changes",
+      message: "You have unsaved changes. Discard them?",
+      confirmLabel: "Discard",
+      destructive: true,
+    });
   }
 
   // --- Mutations (tampon local) ---------------------------------------------
@@ -241,15 +257,22 @@ export function EditTaxonomyPage() {
 
   // --- Navigation -----------------------------------------------------------
 
-  function selectStandard(id: string) {
-    if (!confirmDiscardIfDirty()) return;
+  async function selectStandard(id: string) {
+    if (!(await confirmDiscard(dirty || infoDirty))) return;
+    // Toujours revenir à la carte d'infos de la norme (désélectionne le nœud),
+    // même en re-cliquant la norme déjà active — l'effet sur l'identité de norme
+    // ne se déclenche alors pas, donc le nœud sélectionné resterait affiché.
+    setSelectedPath([]);
     setActiveStandard(id);
     void saveActiveStandard(id);
     // Le rechargement du tampon est piloté par l'effet sur l'identité de norme.
   }
 
-  function selectNode(colIdx: number, nodeId: string) {
-    // Pas de garde : l'édition vit dans workingNodes, changer de nœud ne perd rien.
+  async function selectNode(colIdx: number, nodeId: string) {
+    // Le tampon de nœuds (workingNodes) n'est pas perdu en changeant de nœud ; en
+    // revanche le panneau d'infos standard (affiché quand aucun nœud n'est
+    // sélectionné) a son propre état de saisie, qu'il faut protéger.
+    if (!(await confirmDiscard(infoDirty))) return;
     setSelectedPath((prev) => [...prev.slice(0, colIdx), nodeId]);
   }
 
@@ -276,8 +299,8 @@ export function EditTaxonomyPage() {
     }
   }
 
-  function handleCancel() {
-    if (!confirmDiscardIfDirty()) return;
+  async function handleCancel() {
+    if (!(await confirmDiscard(dirty))) return;
     setSelectedPath([]);
     setDirty(false);
     setSaveError(null);
@@ -292,6 +315,14 @@ export function EditTaxonomyPage() {
     setNewStdOpen(false);
     setActiveStandard(plugin.manifest.id);
     void saveActiveStandard(plugin.manifest.id);
+  }
+
+  // Après suppression d'un standard depuis le panneau d'infos : plus de norme
+  // active. La live-query retire la ligne et l'effet sur `standard` réinitialise
+  // le tampon.
+  function handleStandardDeleted() {
+    setActiveStandard(null);
+    void saveActiveStandard(null);
   }
 
   function startResize(e: React.MouseEvent) {
@@ -314,6 +345,7 @@ export function EditTaxonomyPage() {
 
   return (
     <div className="flex h-full select-none overflow-x-auto">
+      {confirmDialog}
       {/* Miller éditable (pas de colonne Profils en mode Taxonomie) */}
       <div className="flex-1 min-w-0" style={{ minWidth: MIN_MILLER }}>
         <div className="flex h-full overflow-x-auto overflow-y-hidden">
@@ -327,7 +359,7 @@ export function EditTaxonomyPage() {
                 statusDot={showStatus ? <StatusDot status={(s as { status?: string }).status} /> : null}
               />
             ))}
-            <AddRow label="New standard" onClick={() => { if (confirmDiscardIfDirty()) setNewStdOpen(true); }} />
+            <AddRow label="New standard" onClick={async () => { if (await confirmDiscard(dirty || infoDirty)) setNewStdOpen(true); }} />
           </MillerColumn>
 
           {standard !== null && columns.map((colNodes, colIdx) => {
@@ -412,6 +444,14 @@ export function EditTaxonomyPage() {
                   <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/60 flex-wrap">
                     <button
                       type="button"
+                      onClick={() => setSelectedPath([])}
+                      title="Back to standard information"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-md hover:bg-gray-100 transition-colors"
+                    >
+                      <Icon name="back" size={13} /> Standard info
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => addNode(selectedNode.id)}
                       disabled={!hydrated}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
@@ -448,15 +488,12 @@ export function EditTaxonomyPage() {
                   <NodeSchemaPanel node={selectedNode} standard={standard} onChange={(c) => updateNode(selectedNode.id, c)} />
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
-                  <Icon name="standards" size={40} className="text-gray-200" />
-                  <div>
-                    <p className="text-base font-semibold text-gray-500">Select a node to edit it</p>
-                    <p className="text-sm text-gray-400 mt-1">
-                      or use <strong className="text-gray-600">+ New node here</strong> at the bottom of a column.
-                    </p>
-                  </div>
-                </div>
+                <StandardInfoPanel
+                  key={standard.manifest.id}
+                  standard={standard}
+                  onDeleted={handleStandardDeleted}
+                  onDirtyChange={setInfoDirty}
+                />
               )}
             </div>
           </>
@@ -512,6 +549,8 @@ function NewStandardModal({ existingIds, onCancel, onCreate }: {
 }) {
   const [label, setLabel] = useState("");
   const [organization, setOrganization] = useState("");
+  const [version, setVersion] = useState("1.0");
+  const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -526,11 +565,11 @@ function NewStandardModal({ existingIds, onCancel, onCreate }: {
     const plugin: StandardPlugin = {
       manifest: {
         id,
-        version: "1.0",
+        version: version.trim() || "1.0",
         schemaVersion: 1,
         organization: organization.trim(),
         label: label.trim(),
-        description: "",
+        description: description.trim(),
         isBuiltin: false,
       },
       nodes: [],
@@ -578,6 +617,25 @@ function NewStandardModal({ existingIds, onCancel, onCreate }: {
               value={organization}
               onChange={(e) => { setOrganization(e.target.value); setError(null); }}
               placeholder="e.g. US DoD"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Version</label>
+            <input
+              value={version}
+              onChange={(e) => { setVersion(e.target.value); setError(null); }}
+              placeholder="e.g. 1.0"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => { setDescription(e.target.value); setError(null); }}
+              rows={3}
+              placeholder="What this standard covers…"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

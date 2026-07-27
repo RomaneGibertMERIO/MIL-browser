@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAppStore, type MockChangeItem } from "../store/appStore";
 import { safePreviewJson } from "../shared/previewSafe";
+import { toast } from "../shared/toast/toastStore";
 
 interface SubmitChangesModalProps {
   onClose: () => void;
@@ -62,7 +63,7 @@ export function SubmitChangesModal({ onClose }: SubmitChangesModalProps) {
       }
 
       onClose();
-      alert("Changes successfully pushed to central repository!");
+      toast.success("Changes successfully pushed to central repository.");
     } finally {
       setSubmitting(false);
     }

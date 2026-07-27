@@ -35,6 +35,23 @@ export function statusStyle(status: string | undefined): StatusStyle {
   }
 }
 
+/**
+ * Source-aware variant. A `builtin` record ships inside the application binary
+ * (the local fallback base) and is NOT a collaborative "Official" (approved)
+ * entry — it renders as a neutral grey "Built-in" pill so it is never confused
+ * with a green central-approved record. Everything else falls back to the
+ * status color. See docs/UI-UX-SPEC.md §8.
+ */
+export function sourceStatusStyle(
+  source: string | undefined,
+  status: string | undefined,
+): StatusStyle {
+  if (source === "builtin") {
+    return { label: "Built-in", variant: "gray", dot: "bg-gray-400" };
+  }
+  return statusStyle(status);
+}
+
 export interface StatusLabel {
   label: string;
   variant: BadgeVariant;
