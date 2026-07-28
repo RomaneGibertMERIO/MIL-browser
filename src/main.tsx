@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App.tsx';
 import { Toaster } from './shared/toast/Toaster';
+import { ErrorBoundary } from './shared/components/ErrorBoundary';
 import { installDialogGuards } from './shared/toast/dialogGuards';
 
 // Neutralize renderer-freezing native dialogs (window.alert/prompt) before any
@@ -16,7 +17,9 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
     <Toaster />
   </StrictMode>,
 );

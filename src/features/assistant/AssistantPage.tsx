@@ -405,7 +405,11 @@ export function AssistantPage() {
                   standard={s}
                   selected={s.manifest.id === activeStdId}
                   onSelect={() => selectStandard(s.manifest.id)}
-                  statusDot={showStatus ? <StatusDot status={(s as any).status} /> : null}
+                  statusDot={
+                    showStatus && ((s as any).status === "local" || (s as any).status === "pending")
+                      ? <StatusDot status={(s as any).status} />
+                      : null
+                  }
                 />
               ))}
             </MillerColumn>
@@ -571,7 +575,7 @@ function SearchResultsView({ results, query, onNode, onProfile, onTogglePin, isP
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className="font-medium text-sm text-gray-900 group-hover:text-blue-700">{p.name}</span>
                       <Badge variant={s.variant}>{s.label}</Badge>
-                      <span className="text-xs text-gray-400">{p.dataset.length} pts</span>
+                      <span className="text-xs text-gray-400">{p.dataset?.length ?? 0} pts</span>
                     </div>
                     {p.description !== "" && <p className="text-xs text-gray-500 line-clamp-1">{p.description}</p>}
                     {p.author && p.author !== "unknown" && <p className="text-[11px] text-gray-400 italic mt-0.5">by {p.author}</p>}
@@ -656,7 +660,7 @@ function ProfileRow({ profile, selected, pinned, onSelect, onTogglePin }: {
           <p className={`text-sm font-medium ${selected ? "text-blue-700" : "text-gray-900 group-hover:text-blue-700"}`}>{profile.name}</p>
           <div className="flex items-center gap-1.5 mt-1">
             <Badge variant={s.variant}>{s.label}</Badge>
-            <span className="text-xs text-gray-400">{profile.dataset.length} pts</span>
+            <span className="text-xs text-gray-400">{profile.dataset?.length ?? 0} pts</span>
           </div>
         </button>
         <button onClick={onTogglePin} title={pinned ? "Remove from comparison" : "Pin to compare"}
