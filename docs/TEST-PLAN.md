@@ -81,6 +81,7 @@ Les correctifs récents (History en anglais, badge « Built-in ») ne sont visib
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
+| 3.0 | 🐞 Taper une requête courante de **3+ caractères** (déclenche l'affichage des résultats) | **Aucun écran blanc** ; les résultats s'affichent. *(Régression corrigée : crash `dataset` non protégé au rendu.)* | ☐ |
 | 3.1 | Taper un mot présent dans un profil (nom/description) | Résultats en 2 sections : **Nodes** et **Profiles** | ☐ |
 | 3.2 | Chercher une valeur de champ ou une cellule de dataset | Le profil correspondant remonte (la recherche balaye **tous** les champs et cellules) | ☐ |
 | 3.3 | Cliquer un résultat | Navigue vers le nœud / ouvre le profil | ☐ |
@@ -332,8 +333,10 @@ Points déjà identifiés — vérifier qu'ils sont OK (corrigés) ou les docume
 |---|-------|--------------------------|----|
 | 22.1 | Badge des **profils built-in** (liste + recherche) | **« Built-in »** (corrigé) | ☐ |
 | 22.2 | Langue de l'onglet **History** | Anglais uniquement (corrigé) | ☐ |
-| 22.3 | **Pastille des standards built-in** | *Non corrigé :* peut afficher « Local » jaune. Décider si on traite (roll-up) avant livraison | ☐ |
+| 22.3 | **Pastille des standards built-in** | **Corrigé :** plus de pastille « Local » jaune sur un built-in (dot seulement si local/pending) | ☐ |
 | 22.4 | Onglet History **hors Electron** (si testé en navigateur) | Message « History is unavailable outside the desktop application » | ☐ |
+| 22.5 | **Error Boundary** (spec §25) | Provoquer une erreur de rendu → message d'erreur **+ bouton « Try again »** (pas d'écran blanc) | ☐ |
+| 22.6 | **Crash recherche** | Corrigé (voir 3.0) : requête longue = pas d'écran blanc | ☐ |
 
 ---
 
