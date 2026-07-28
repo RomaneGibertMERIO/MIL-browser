@@ -34,6 +34,7 @@ import { EmptyWorkspaceNotice } from "../../shared/components/ui/EmptyWorkspaceN
 import { Badge } from "../../shared/components/ui/Badge";
 import { Icon } from "../../shared/components/ui/Icon";
 import { StatusDot } from "../../shared/components/ui/StatusBadge";
+import { RepoBadge } from "../../shared/components/ui/RepoBadge";
 import { AppFrame, Brand } from "../../shared/components/AppFrame";
 import { sourceStatusStyle } from "../../shared/profileStatus";
 import { ProfileDetail } from "../profile/ProfileDetail";
@@ -337,6 +338,9 @@ export function AssistantPage() {
         <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-semibold uppercase tracking-wide">
           Read-Only
         </span>
+        {/* État du dépôt (Standalone / Shared / Offline) — même badge que le
+            Management, pour que l'utilisateur sache dans quel mode il navigue. */}
+        <RepoBadge />
         {selectedNode != null && !searchActive && (
           <div className="flex flex-wrap items-center gap-1 text-xs text-gray-400 min-w-0 overflow-hidden">
             {selectedNode.path.map((label, i) => (
@@ -484,6 +488,7 @@ export function AssistantPage() {
                 profile={selectedProfile}
                 schema={selectedProfile ? schemaForProfile(selectedProfile) : null}
                 pinned={selectedProfile ? isPinned(selectedProfile.id) : false}
+                standardIsBuiltin={standard?.manifest.isBuiltin ?? false}
                 onTogglePin={togglePin}
                 onClearProfile={() => setSelectedProfileId(null)}
               />
@@ -719,11 +724,12 @@ function useNodeImage(standardId: string | undefined, nodeId: string | undefined
   return state.key === key ? state.img : null;
 }
 
-function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile }: {
+function DetailBody({ node, profile, schema, pinned, standardIsBuiltin, onTogglePin, onClearProfile }: {
   node: TaxonomyNodeItem | null;
   profile: Profile | null;
   schema: React.ComponentProps<typeof ProfileDetail>["schema"] | null;
   pinned: boolean;
+  standardIsBuiltin: boolean;
   onTogglePin: (p: Profile) => void;
   onClearProfile: () => void;
 }) {
@@ -764,6 +770,7 @@ function DetailBody({ node, profile, schema, pinned, onTogglePin, onClearProfile
         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
           <span className="text-xs font-mono text-gray-400">{node.code}</span>
           <Badge variant="gray">{node.type}</Badge>
+          {standardIsBuiltin && <Badge variant="gray">Built-in</Badge>}
         </div>
         <h2 className="text-base font-semibold text-gray-900 leading-snug">{node.label}</h2>
       </div>

@@ -281,6 +281,9 @@ export function EditProfilesPage() {
     const targetCreatedAt = isEditingBuiltin ? new Date().toISOString() : selectedProfile?.createdAt;
 
     const profile = buildProfileFromDraft(draft, schema, targetId, targetCreatedAt);
+    // "last modified by" = l'utilisateur courant, pas le "User" codé en dur par
+    // buildProfileFromDraft (bug 9.8b).
+    profile.author = useAppStore.getState().systemUsername || "User";
     if (isEditingBuiltin) {
       profile.source = "user";
       profile.status = "local";
@@ -519,26 +522,6 @@ export function EditProfilesPage() {
                 )}
                 {selectedProfile !== null && !isCreating && (
                   <>
-                    {forkedOrigin !== null && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setViewingOriginal(forkedOrigin)}
-                          title="View the original built-in profile this copy was derived from"
-                          className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                        >
-                          View original
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { void handleRestoreBuiltin(); }}
-                          title="Discard this local copy and restore the original built-in"
-                          className="px-3 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
-                        >
-                          Restore built-in
-                        </button>
-                      </>
-                    )}
                     <button
                       type="button"
                       onClick={() => { void handleDuplicate(); }}
@@ -574,6 +557,28 @@ export function EditProfilesPage() {
                 </button>
               </div>
             </div>
+            {forkedOrigin !== null && (
+              <div className="flex-shrink-0 flex items-center gap-3 px-6 py-2.5 bg-gray-50 border-b border-gray-200">
+                <Icon name="info" size={15} className="flex-shrink-0 text-gray-400" />
+                <p className="flex-1 min-w-0 text-xs text-gray-600">
+                  This profile is a local copy of a built-in.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setViewingOriginal(forkedOrigin)}
+                  className="flex-shrink-0 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+                >
+                  View original
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { void handleRestoreBuiltin(); }}
+                  className="flex-shrink-0 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+                >
+                  Restore built-in
+                </button>
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto px-6 py-4">
               <ProfileForm
                 key={`${selectedProfileId ?? "new"}-${creatingNodeId ?? ""}-${formKey}`}
