@@ -27,6 +27,12 @@ interface ProfileDetailProps {
   /** Optionnel : sans lui, aucun bouton retour (ex. carte de comparaison épinglée). */
   onBack?: () => void;
   backLabel?: string;
+  /**
+   * Mode diff (revue/Sync, spec §13) : compare chaque champ à `previous` et
+   * colore la valeur — vert = ajouté, rouge barré = supprimé, jaune = modifié
+   * (ancienne valeur affichée entre parenthèses). Absent = affichage normal.
+   */
+  diff?: { previous: Profile | null };
 }
 
 // ---------------------------------------------------------------------------
@@ -44,7 +50,8 @@ const GROUPS: { key: FieldGroup; label: string }[] = [
   { key: "custom",         label: "Custom Fields" },
 ];
 
-export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: ProfileDetailProps) {
+export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", diff }: ProfileDetailProps) {
+  const previousFields = diff ? (diff.previous?.fields ?? {}) : null;
   const [dataView, setDataView] = useState<"chart" | "table" | "both">("both");
 
   const btnBase = "px-3 py-1 text-xs font-medium rounded border transition-colors";
@@ -99,9 +106,13 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: P
 
       {/* ── Field groups ────────────────────────────────────────────── */}
       {GROUPS.map(({ key, label }) => {
-        const groupFields = schema.fields.filter(
-          (f) => f.group === key && profile.fields[f.key] !== null && profile.fields[f.key] !== "",
-        );
+        const nonEmpty = (v: unknown) => v !== null && v !== undefined && v !== "";
+        const groupFields = schema.fields.filter((f) => {
+          if (f.group !== key) return false;
+          if (nonEmpty(profile.fields[f.key])) return true;
+          // En mode diff, on montre aussi les champs vidés (supprimés).
+          return previousFields ? nonEmpty(previousFields[f.key]) : false;
+        });
         if (groupFields.length === 0) return null;
 
         return (
@@ -115,8 +126,12 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: P
                       <span className="ml-1 font-normal">({field.unit})</span>
                     )}
                   </dt>
-                  <dd className="mt-0.5 text-sm text-gray-900">
-                    {formatFieldValue(profile.fields[field.key])}
+                  <dd className="mt-0.5 text-sm">
+                    <FieldValue
+                      current={profile.fields[field.key]}
+                      previous={previousFields ? previousFields[field.key] : undefined}
+                      diff={previousFields !== null}
+                    />
                   </dd>
                 </div>
               ))}
@@ -202,6 +217,42 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: P
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Valeur d'un champ, colorée en mode diff (spec §13) : vert = ajouté,
+ * rouge barré = supprimé, jaune = modifié (ancienne valeur entre parenthèses).
+ */
+function FieldValue({
+  current,
+  previous,
+  diff,
+}: {
+  current: unknown;
+  previous: unknown;
+  diff: boolean;
+}) {
+  const cur = formatFieldValue(current);
+  if (!diff) return <span className="text-gray-900">{cur}</span>;
+
+  const prev = formatFieldValue(previous);
+  const curEmpty = current === null || current === undefined || current === "";
+  const prevEmpty = previous === null || previous === undefined || previous === "";
+
+  if (!curEmpty && prevEmpty) {
+    return <span className="rounded bg-green-50 px-1 text-green-700">{cur}</span>;
+  }
+  if (curEmpty && !prevEmpty) {
+    return <span className="text-red-600 line-through">{prev}</span>;
+  }
+  if (cur !== prev) {
+    return (
+      <span className="rounded bg-yellow-50 px-1 text-yellow-800">
+        {cur} <span className="font-normal text-gray-400">(was: {prev})</span>
+      </span>
+    );
+  }
+  return <span className="text-gray-900">{cur}</span>;
+}
 
 function formatFieldValue(value: unknown): string {
   if (value === null || value === undefined) return "—";

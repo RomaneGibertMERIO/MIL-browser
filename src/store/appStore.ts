@@ -433,13 +433,19 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? (payload?.manifest?.organization || "Global")
           : (payload?.standardId ? `${payload.standardId}` : "Root");
 
+        const previous = (event as any).previous;
         aggregatedMap.set(event.id, {
           id: event.id,
           type: event.entity as 'profile' | 'standard',
-          action: event.operation === 'upsert' ? 'Modified' : 'Deleted',
+          // Created vs Modified : présence d'une version de référence (previous).
+          action:
+            event.operation === 'delete' ? 'Deleted' : previous ? 'Modified' : 'Created',
           name: name,
           location: location,
-          proposedData: payload
+          proposedData: payload,
+          // Version d'avant la 1re modif → active le diff « ancien → nouveau »
+          // (rouge/vert) dans la carte de comparaison (Sync).
+          originalData: previous,
         });
       }
 

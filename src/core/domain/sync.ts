@@ -56,6 +56,13 @@ export const SyncEventSchema = z.object({
    * Callers must narrow using operation before accessing.
    */
   payload: z.unknown(),
+  /**
+   * Version de référence AVANT la première modification locale non synchronisée
+   * (conservée à travers les éditions successives). Additif et optionnel : sert
+   * uniquement à afficher un diff « ancien → nouveau » dans la revue/Sync. Léger
+   * pour les standards (résumé sans images), plein pour les profils.
+   */
+  previous: z.unknown().optional(),
 });
 
 export type SyncEvent = z.infer<typeof SyncEventSchema>;

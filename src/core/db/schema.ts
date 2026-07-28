@@ -99,15 +99,24 @@ export class AppDatabase extends Dexie {
       if (profile.source === "builtin" && updatedMods.source !== "user") return;
       
       const updatedObj = { ...obj, ...mods };
+      const preImage = { ...(obj as Profile) }; // état AVANT cette modification
       setTimeout(() => {
-        this.syncEvents.put({
-          id: String(primKey),
-          deviceId: getOrCreateDeviceId(),
-          timestamp: Date.now(),
-          operation: "upsert",
-          entity: "profile",
-          payload: updatedObj
-        }).catch(err => console.error("Event error (Profile Update):", err));
+        void this.syncEvents
+          .get(String(primKey))
+          .then((existing) =>
+            this.syncEvents.put({
+              id: String(primKey),
+              deviceId: getOrCreateDeviceId(),
+              timestamp: Date.now(),
+              operation: "upsert",
+              entity: "profile",
+              payload: updatedObj,
+              // Référence du diff : la version d'avant la 1re modif non
+              // synchronisée, conservée à travers les éditions suivantes.
+              previous: existing?.previous ?? preImage,
+            }),
+          )
+          .catch((err) => console.error("Event error (Profile Update):", err));
       }, 0);
     });
 
@@ -164,16 +173,24 @@ export class AppDatabase extends Dexie {
       }
 
       const updatedObj = { ...obj, ...mods };
+      const preImage = standardSyncSummary(obj); // résumé léger d'AVANT la modif
       setTimeout(() => {
-        this.syncEvents.put({
-          id: String(primKey),
-          deviceId: getOrCreateDeviceId(),
-          timestamp: Date.now(),
-          operation: "upsert",
-          entity: "standard",
-          // Résumé léger (voir le hook "creating" ci-dessus).
-          payload: standardSyncSummary(updatedObj)
-        }).catch(err => console.error("Event error (Standard Update):", err));
+        void this.syncEvents
+          .get(String(primKey))
+          .then((existing) =>
+            this.syncEvents.put({
+              id: String(primKey),
+              deviceId: getOrCreateDeviceId(),
+              timestamp: Date.now(),
+              operation: "upsert",
+              entity: "standard",
+              // Résumé léger (voir le hook "creating" ci-dessus).
+              payload: standardSyncSummary(updatedObj),
+              // Référence du diff, conservée à travers les éditions successives.
+              previous: existing?.previous ?? preImage,
+            }),
+          )
+          .catch((err) => console.error("Event error (Standard Update):", err));
       }, 0);
     });
 

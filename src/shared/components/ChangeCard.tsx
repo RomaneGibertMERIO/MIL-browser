@@ -70,18 +70,14 @@ export function ChangeCard({
     const std = standards.find((s) => s.manifest.id === proposed.standardId);
     const schema = std ? getEffectiveSchema(std, proposed.nodeId) : null;
     if (schema) {
+      // Coloration DANS la carte (vert=ajouté, rouge=supprimé, jaune=modifié)
+      // quand la version précédente est connue (§13). Sinon, carte simple.
       return (
-        <div className="space-y-4">
-          {change.originalData && (
-            <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Field changes
-              </h4>
-              <DynamicDiff original={change.originalData} proposed={proposed} />
-            </div>
-          )}
-          <ProfileDetail profile={proposed as Profile} schema={schema} />
-        </div>
+        <ProfileDetail
+          profile={proposed as Profile}
+          schema={schema}
+          diff={change.originalData ? { previous: change.originalData as Profile } : undefined}
+        />
       );
     }
     // Fallback when the standard/schema isn't available (still no raw dump).
