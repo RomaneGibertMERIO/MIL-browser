@@ -7,7 +7,7 @@
  * de navigation reposant sur l'AppStore et le gate `canAccess`.
  */
 import { useAppStore, type AdminView } from "../../store/appStore";
-import { canAccess, roleLabel } from "../../shared/roles";
+import { canAccessNow, roleLabel } from "../../shared/roles";
 import { Icon, type IconName } from "../../shared/components/ui/Icon";
 import { RepoBadge } from "../../shared/components/ui/RepoBadge";
 
@@ -54,13 +54,17 @@ const QUICK_LINKS: QuickLink[] = [
 export function HomePage() {
   const role = useAppStore((s) => s.role);
   const repoMode = useAppStore((s) => s.repoMode);
+  const isOffline = useAppStore((s) => s.isOffline);
   const systemUsername = useAppStore((s) => s.systemUsername);
   const gitRepoPath = useAppStore((s) => s.gitRepoPath);
   const setAdminView = useAppStore((s) => s.setAdminView);
   const setMode = useAppStore((s) => s.setMode);
 
+  // Même gate que le rail (canAccessNow) : Sync/Admin n'existent qu'EN LIGNE, il
+  // ne faut donc pas proposer de raccourci non cliquable en Standalone/Offline.
+  const online = repoMode === "shared" && !isOffline;
   const links = QUICK_LINKS.filter(
-    (l) => l.view === "browser" || canAccess(l.view, role),
+    (l) => l.view === "browser" || canAccessNow(l.view, role, online),
   );
 
   function go(view: AdminView | "browser") {

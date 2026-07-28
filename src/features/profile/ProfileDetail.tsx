@@ -81,6 +81,12 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: P
             {profile.description}
           </p>
         )}
+        {profile.author && profile.author !== "unknown" && (
+          <p className="mt-1.5 text-xs text-gray-400">
+            Last modified by <span className="font-medium text-gray-600">{profile.author}</span>
+            {profile.updatedAt ? ` · ${new Date(profile.updatedAt).toLocaleDateString()}` : ""}
+          </p>
+        )}
       </Card>
 
       {/* ── Field groups ────────────────────────────────────────────── */}

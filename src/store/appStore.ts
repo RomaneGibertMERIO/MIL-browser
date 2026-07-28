@@ -349,7 +349,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         const result = toIpcResult(raw, "Réponse invalide de gitSetRepoPath.");
         if (!result.success) {
           set({ syncError: `Dépôt central inaccessible : ${result.error ?? "erreur inconnue"}` });
+          return;
         }
+        // Connexion établie : on synchronise pour récupérer l'état RÉEL du dépôt
+        // — rôle (access.json), file de validation, et le drapeau `centralIsEmpty`
+        // qui pilote la bannière de publication du socle. Sans cette synchro, on
+        // affichait "Shared" mais `centralIsEmpty` restait faux (aucune bannière)
+        // et le rôle/pending ne se chargeaient qu'au redémarrage.
+        void get().triggerGitSync();
       })
       .catch((err: unknown) => {
         set({ syncError: `Dépôt central inaccessible : ${String(err)}` });

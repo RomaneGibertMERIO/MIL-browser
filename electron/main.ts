@@ -171,8 +171,14 @@ function createWindow(opts?: { standardId?: string }) {
     win.loadURL(search ? `http://localhost:5173/?${search}` : "http://localhost:5173");
   } else {
     // En prod, le fichier index.html se trouve dans le dossier dist à la racine.
-    // `search` alimente window.location.search côté renderer (lu par useBootstrap).
-    win.loadFile(path.join(__dirname, "../dist/index.html"), search ? { search } : undefined);
+    // On passe `query` (objet) plutôt que `search` (chaîne) : Electron produit
+    // alors de façon fiable `?standard=<id>` sur l'URL file:// que useBootstrap
+    // relit (le passage par `search` pouvait, selon les versions, ne pas
+    // préfixer le "?"), ce qui empêchait la pré-sélection de la norme.
+    win.loadFile(
+      path.join(__dirname, "../dist/index.html"),
+      opts?.standardId ? { query: { standard: opts.standardId } } : undefined,
+    );
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {

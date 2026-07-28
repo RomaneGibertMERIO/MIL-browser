@@ -124,11 +124,10 @@ export function TaxonomyEditor({ standard, onSave, onCancel }: TaxonomyEditorPro
     const profileCount = (allProfiles ?? []).filter(p =>
       affected.has(p.nodeId),
     ).length;
-    if (profileCount > 0) {
-      setPendingDelete({ id, label: node.label, profileCount });
-    } else {
-      executeDelete(id);
-    }
+    // Suppression = action destructive : on confirme TOUJOURS (spec §21), même
+    // sans profil attaché. L'avertissement "profils" du dialogue reste, lui,
+    // conditionnel au nombre réel de profils concernés.
+    setPendingDelete({ id, label: node.label, profileCount });
   }
 
   function executeDelete(id: string) {
@@ -224,12 +223,14 @@ export function TaxonomyEditor({ standard, onSave, onCancel }: TaxonomyEditorPro
               <span className="font-medium text-gray-800">{pendingDelete.label}</span> and
               all its child nodes will be removed from the taxonomy.
             </p>
-            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-4">
-              ⚠ {pendingDelete.profileCount} profile
-              {pendingDelete.profileCount !== 1 ? "s are" : " is"} attached to this
-              node or its children. Those profiles will remain in the database but will
-              no longer appear in the taxonomy tree.
-            </p>
+            {pendingDelete.profileCount > 0 && (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-4">
+                ⚠ {pendingDelete.profileCount} profile
+                {pendingDelete.profileCount !== 1 ? "s are" : " is"} attached to this
+                node or its children. Those profiles will remain in the database but will
+                no longer appear in the taxonomy tree.
+              </p>
+            )}
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setPendingDelete(null)}
@@ -241,7 +242,7 @@ export function TaxonomyEditor({ standard, onSave, onCancel }: TaxonomyEditorPro
                 onClick={() => executeDelete(pendingDelete.id)}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
               >
-                Delete Anyway
+                Delete
               </button>
             </div>
           </div>

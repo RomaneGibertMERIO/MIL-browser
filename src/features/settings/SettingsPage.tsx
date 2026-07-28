@@ -21,6 +21,8 @@ import {
 import { useStandards } from "../../shared/hooks/useStandards";
 import { Card } from "../../shared/components/ui/Card";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
+import { useConfirm } from "../../shared/components/ui/ConfirmDialog";
+import { roleLabel } from "../../shared/roles";
 
 import { saveGitRepoPath } from "../../core/db/repositories/settings.repo";
 
@@ -43,6 +45,7 @@ export function SettingsPage() {
   const [localPathInput, setLocalPathInput] = useState(gitRepoPath);
   const [pathSaveSuccess, setPathSaveSuccess] = useState(false);
 
+  const { confirm, dialog } = useConfirm();
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -77,6 +80,22 @@ export function SettingsPage() {
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file === undefined) return;
+
+    // Import écrase par identifiant (upsert) : un standard/profil local portant le
+    // même id que celui du fichier est remplacé. On avertit avant, sinon une modif
+    // locale est écrasée en silence (comportement signalé en recette).
+    const ok = await confirm({
+      title: "Import database",
+      message:
+        "Importing merges the file into your local database. Any standard or profile " +
+        "that shares an id with an imported one will be overwritten. Continue?",
+      confirmLabel: "Import",
+    });
+    if (!ok) {
+      e.target.value = "";
+      return;
+    }
+
     setImporting(true);
 
     const result = await importDatabase(file);
@@ -93,6 +112,7 @@ export function SettingsPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
+      {dialog}
       <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
 
       {/* ── Git Central Repository Location Configuration ────────── */}
@@ -140,11 +160,11 @@ export function SettingsPage() {
               Connected as{" "}
               <span className="font-mono font-semibold text-gray-900">{systemUsername}</span> —{" "}
               role{" "}
-              <span className="font-semibold text-indigo-700">{role}</span>
+              <span className="font-semibold text-indigo-700">{roleLabel(role)}</span>
             </p>
             <p className="text-xs text-gray-400">
               {role === "admin"
-                ? "You manage accounts and approve proposals (the “Accounts & Roles” tab)."
+                ? "You manage accounts and approve proposals (Admin → Users)."
                 : role === "testing"
                 ? "You can create and push proposals. Approval is handled by administrators."
                 : "Read-only access: you can only check the repository path. An administrator can broaden your permissions."}

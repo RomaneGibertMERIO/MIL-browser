@@ -214,7 +214,8 @@ function handleSubmit(e: FormEvent) {
         </Card>
       )}
 
-      {/* ── Dataset ─────────────────────────────────────────────────── */}
+      {/* ── Dataset (masqué si le schéma du nœud ne définit aucune colonne) ─ */}
+      {effectiveSchema.datasetColumns.length > 0 && (
       <Card title="Dataset">
         {/* Options d'affichage des axes Logarithmiques */}
         <div className="flex items-center gap-6 p-3 bg-gray-50 border border-gray-200 rounded-lg mb-4">
@@ -252,6 +253,7 @@ function handleSubmit(e: FormEvent) {
           <p className="mt-2 text-xs text-red-600">{getError("dataset")}</p>
         )}
       </Card>
+      )}
 
       {!hideActions && (
         <div className="flex justify-end gap-3 pt-1 pb-4">
