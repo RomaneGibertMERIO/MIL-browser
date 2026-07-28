@@ -73,8 +73,16 @@ export function SettingsPage() {
     });
   }
 
+  const [exporting, setExporting] = useState(false);
   async function handleExport() {
-    await exportDatabase();
+    // Retour visuel pendant la sérialisation (grosse base + ré-attache des
+    // images) : sans lui, le clic semble « ne rien faire » un instant (11.2).
+    setExporting(true);
+    try {
+      await exportDatabase();
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -185,9 +193,10 @@ export function SettingsPage() {
             </div>
             <button
               onClick={() => { void handleExport(); }}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              disabled={exporting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50 transition-colors"
             >
-              Export
+              {exporting ? "Exporting…" : "Export"}
             </button>
           </div>
 

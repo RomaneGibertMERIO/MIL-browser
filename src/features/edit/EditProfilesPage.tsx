@@ -508,6 +508,11 @@ export function EditProfilesPage() {
                   {isCreating ? "Creating" : "Editing"}
                 </p>
                 <p className="text-base font-semibold text-gray-900 truncate">{editorTitle || "—"}</p>
+                {selectedProfile !== null && selectedProfile.author && selectedProfile.author !== "unknown" && (
+                  <p className="text-[11px] text-gray-400 truncate">
+                    Last modified by {selectedProfile.author}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {validationErrors.length > 0 && (

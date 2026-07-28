@@ -87,6 +87,14 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back" }: P
             {profile.updatedAt ? ` · ${new Date(profile.updatedAt).toLocaleDateString()}` : ""}
           </p>
         )}
+        {profile.rejectionReason && (
+          <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+            <span className="font-semibold">
+              Rejected{profile.rejectedBy ? ` by ${profile.rejectedBy}` : ""}:
+            </span>{" "}
+            {profile.rejectionReason}
+          </div>
+        )}
       </Card>
 
       {/* ── Field groups ────────────────────────────────────────────── */}

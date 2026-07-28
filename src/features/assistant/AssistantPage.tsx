@@ -488,7 +488,7 @@ export function AssistantPage() {
                 profile={selectedProfile}
                 schema={selectedProfile ? schemaForProfile(selectedProfile) : null}
                 pinned={selectedProfile ? isPinned(selectedProfile.id) : false}
-                standardIsBuiltin={standard?.manifest.isBuiltin ?? false}
+                standard={standard}
                 onTogglePin={togglePin}
                 onClearProfile={() => setSelectedProfileId(null)}
               />
@@ -724,12 +724,12 @@ function useNodeImage(standardId: string | undefined, nodeId: string | undefined
   return state.key === key ? state.img : null;
 }
 
-function DetailBody({ node, profile, schema, pinned, standardIsBuiltin, onTogglePin, onClearProfile }: {
+function DetailBody({ node, profile, schema, pinned, standard, onTogglePin, onClearProfile }: {
   node: TaxonomyNodeItem | null;
   profile: Profile | null;
   schema: React.ComponentProps<typeof ProfileDetail>["schema"] | null;
   pinned: boolean;
-  standardIsBuiltin: boolean;
+  standard: StandardPlugin | null;
   onTogglePin: (p: Profile) => void;
   onClearProfile: () => void;
 }) {
@@ -753,10 +753,35 @@ function DetailBody({ node, profile, schema, pinned, standardIsBuiltin, onToggle
   }
 
   if (node === null) {
+    // Une norme est sélectionnée mais aucun nœud : on affiche les infos de la
+    // norme (comme le panneau du Management), au lieu d'un panneau vide (2.11).
+    if (standard !== null) {
+      const m = standard.manifest;
+      return (
+        <div className="flex flex-col min-h-0">
+          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              {m.organization && <span className="text-xs font-mono text-gray-400">{m.organization}</span>}
+              {m.isBuiltin && <Badge variant="gray">Built-in</Badge>}
+            </div>
+            <h2 className="text-base font-semibold text-gray-900 leading-snug">{m.label ?? m.id}</h2>
+          </div>
+          {m.description ? (
+            <div className="px-5 py-4 border-t border-gray-100">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Description</p>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{m.description}</p>
+            </div>
+          ) : null}
+          <div className="px-5 py-4 border-t border-gray-100 text-xs text-gray-400">
+            {standard.nodes.length} node{standard.nodes.length !== 1 ? "s" : ""} · select one for its details.
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="h-full flex items-center justify-center">
         <p className="text-sm text-gray-400 text-center px-8 leading-relaxed">
-          Select a node for its details, or a profile for its card.
+          Select a standard, then a node for its details, or a profile for its card.
         </p>
       </div>
     );
@@ -770,7 +795,7 @@ function DetailBody({ node, profile, schema, pinned, standardIsBuiltin, onToggle
         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
           <span className="text-xs font-mono text-gray-400">{node.code}</span>
           <Badge variant="gray">{node.type}</Badge>
-          {standardIsBuiltin && <Badge variant="gray">Built-in</Badge>}
+          {standard?.manifest.isBuiltin && <Badge variant="gray">Built-in</Badge>}
         </div>
         <h2 className="text-base font-semibold text-gray-900 leading-snug">{node.label}</h2>
       </div>

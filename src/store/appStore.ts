@@ -16,6 +16,7 @@ import {
   type DeletionMarker,
 } from "../shared/electronBridge";
 import { standardWorkspace } from "../core/domain/standard";
+import { toast } from "../shared/toast/toastStore";
 
 export type AppMode = "assistant" | "admin";
 // Destinations de premier niveau du Management (le rail). Les anciens écrans
@@ -165,7 +166,9 @@ function sameUser(a: string | undefined, b: string | undefined): boolean {
 async function applyRejections(
   rejections: RejectionMarker[],
   systemUsername: string,
-): Promise<void> {
+): Promise<Array<{ name: string; reason: string }>> {
+  // Refus concernant l'utilisateur courant : remontés pour l'informer (toast).
+  const own: Array<{ name: string; reason: string }> = [];
   for (const marker of rejections) {
     try {
       if (marker.entity === "profile") {
@@ -185,6 +188,7 @@ async function applyRejections(
             rejectedAt: marker.rejectedAt,
             rejectionReason: marker.reason,
           });
+          own.push({ name: profile.name, reason: marker.reason });
         } else {
           await db.profiles.delete(marker.id);
         }
@@ -201,6 +205,7 @@ async function applyRejections(
             rejectedAt: marker.rejectedAt,
             rejectionReason: marker.reason,
           } as any);
+          own.push({ name: standard.manifest?.label ?? standard.manifest?.id ?? marker.id, reason: marker.reason });
         }
         // Un standard refusé chez un tiers n'est PAS supprimé : il peut s'agir
         // d'une taxonomie dont il dépend. Il repasse simplement hors validation
@@ -210,6 +215,7 @@ async function applyRejections(
       console.error(`Application du refus impossible (${marker.entity} ${marker.id}) :`, err);
     }
   }
+  return own;
 }
 
 /**
@@ -534,7 +540,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         }
 
-        await applyRejections(gitResult.rejections ?? [], state.systemUsername);
+        const rejectedOwn = await applyRejections(gitResult.rejections ?? [], state.systemUsername);
+        // Notifie l'auteur des refus le concernant (14.5) : le motif était
+        // stocké mais jamais montré. Le détail reste lisible sur la carte
+        // (bannière "Rejected") ; ici c'est l'alerte immédiate à la synchro.
+        for (const r of rejectedOwn) {
+          toast.error(`Your proposal "${r.name}" was rejected: ${r.reason || "no reason given"}`);
+        }
         await applyDeletions(gitResult.deletions ?? []);
       } finally {
         (db as any).isSyncingInternal = false;

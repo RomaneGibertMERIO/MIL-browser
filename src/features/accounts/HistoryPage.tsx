@@ -25,9 +25,16 @@ function cleanMessage(message: string): string {
   return message.replace(/^(Proposal|Approval):\s*/, "").trim();
 }
 
+const FILTERS: { value: "all" | "proposal" | "approval"; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "proposal", label: "Submitted" },
+  { value: "approval", label: "Approved" },
+];
+
 export function HistoryPage() {
   const [entries, setEntries] = useState<GitLogEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"all" | "proposal" | "approval">("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -77,10 +84,30 @@ export function HistoryPage() {
     );
   }
 
+  const shown = filter === "all" ? entries : entries.filter((e) => e.kind === filter);
+
   return (
     <div className="mx-auto max-w-3xl">
+      <div className="mb-4 flex items-center gap-1.5">
+        {FILTERS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            onClick={() => setFilter(f.value)}
+            className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+              filter === f.value ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {shown.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-400">No entries for this filter.</p>
+      ) : (
       <ol className="relative border-l border-gray-200 pl-6">
-        {entries.map((entry) => {
+        {shown.map((entry) => {
           const style = KIND_STYLE[entry.kind];
           return (
             <li key={entry.oid} className="mb-5 last:mb-0">
@@ -111,6 +138,7 @@ export function HistoryPage() {
           );
         })}
       </ol>
+      )}
     </div>
   );
 }
