@@ -581,7 +581,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           changes: [{
             id: p.id,
             type: "profile" as const,
-            action: "Created" as const,
+            // Créé vs modifié : un profil jamais réédité a createdAt === updatedAt.
+            // Heuristique suffisante pour l'étiquette de revue (14.1).
+            action: (p.createdAt && p.updatedAt && p.createdAt !== p.updatedAt
+              ? "Modified"
+              : "Created") as "Created" | "Modified",
             name: p.name,
             location: `${p.standardId}`,
             proposedData: p

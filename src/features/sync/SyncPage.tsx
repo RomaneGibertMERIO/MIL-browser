@@ -12,9 +12,11 @@
  */
 import { useMemo, useState } from "react";
 import { useAppStore, type MockChangeItem } from "../../store/appStore";
+import type { StandardPlugin } from "../../core/domain/standard";
 import { Icon } from "../../shared/components/ui/Icon";
 import { Badge, type BadgeVariant } from "../../shared/components/ui/Badge";
-import { DynamicFields, DynamicDataset } from "../../shared/components/DiffView";
+import { ChangeCard } from "../../shared/components/ChangeCard";
+import { useStandards } from "../../shared/hooks/useStandards";
 import { useConfirm } from "../../shared/components/ui/ConfirmDialog";
 import { toast } from "../../shared/toast/toastStore";
 
@@ -28,6 +30,7 @@ const ACTION_VARIANT: Record<MockChangeItem["action"], BadgeVariant> = {
 
 export function SyncPage() {
   const changes = useAppStore((s) => s.localStagedChanges);
+  const standards = useStandards();
   const submitCommit = useAppStore((s) => s.submitCommit);
   const centralIsEmpty = useAppStore((s) => s.centralIsEmpty);
   const publishBaselineToCentral = useAppStore((s) => s.publishBaselineToCentral);
@@ -207,7 +210,7 @@ export function SyncPage() {
           {/* Détail : ce qui sera envoyé */}
           <div className="min-w-0 flex-1 overflow-y-auto bg-gray-50/40 p-6">
             {selected ? (
-              <ChangeDetail change={selected} />
+              <ChangeDetail change={selected} standards={standards ?? []} />
             ) : (
               <div className="flex h-full items-center justify-center text-center text-sm text-gray-400">
                 Select a change to inspect what will be sent.
@@ -282,8 +285,7 @@ function ChangeGroup({
   );
 }
 
-function ChangeDetail({ change }: { change: MockChangeItem }) {
-  const data = change.proposedData as Record<string, any> | undefined;
+function ChangeDetail({ change, standards }: { change: MockChangeItem; standards: StandardPlugin[] }) {
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-1 flex items-center gap-2">
@@ -293,18 +295,7 @@ function ChangeDetail({ change }: { change: MockChangeItem }) {
       <p className="mb-4 font-mono text-xs text-gray-400">
         {change.type} · {change.location}
       </p>
-      {change.action === "Deleted" ? (
-        <p className="text-sm text-gray-500">
-          This {change.type} will be proposed for removal from the central repository.
-        </p>
-      ) : data ? (
-        <>
-          <DynamicFields data={data} />
-          {Array.isArray(data.dataset) && <DynamicDataset dataset={data.dataset} />}
-        </>
-      ) : (
-        <p className="text-sm text-gray-400">No preview available for this change.</p>
-      )}
+      <ChangeCard change={change} standards={standards} />
     </div>
   );
 }

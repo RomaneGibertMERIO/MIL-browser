@@ -8,7 +8,8 @@ import { HistoryPage } from './features/accounts/HistoryPage';
 import { AppFrame, Brand } from './shared/components/AppFrame';
 import { Icon, type IconName } from './shared/components/ui/Icon';
 import { RepoBadge, RoleBadge } from './shared/components/ui/RepoBadge';
-import { stripHeavyJson } from './shared/previewSafe';
+import { ChangeCard } from './shared/components/ChangeCard';
+import { useStandards } from './shared/hooks/useStandards';
 import { canAccess, canAccessNow, roleLabel } from './shared/roles';
 import { AssistantPage } from './features/assistant/AssistantPage';
 import { HomePage } from './features/home/HomePage';
@@ -253,6 +254,7 @@ function SubTab({
 export function AdminValidationsPage() {
   const pendingCommits = useAppStore((s) => s.pendingCommits);
   const resolveSingleChange = useAppStore((s) => s.resolveSingleChange);
+  const standards = useStandards();
 
   // État de sélection non figé : `pendingCommits` est rempli de façon
   // asynchrone par triggerGitSync, donc un useState initialisé au montage
@@ -288,107 +290,6 @@ export function AdminValidationsPage() {
     if (result.success) {
       toast.success(`"${name}" has been rejected. Its author will be notified on next sync.`);
     }
-  };
-
-  const renderDynamicFields = (data: Record<string, any>) => {
-    if (!data || typeof data !== 'object') return null;
-
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {Object.entries(data).map(([key, value]) => {
-          if (key === 'dataset' || key === 'id' || key === 'standardId' || key === 'nodeId') return null;
-
-          let displayValue = "";
-          if (value === null || value === undefined) displayValue = "—";
-          else if (typeof value === "object") displayValue = stripHeavyJson(value);
-          else if (key === "imageData" && typeof value === "string") displayValue = `[image — ${value.length} characters]`;
-          else displayValue = String(value);
-
-          return (
-            <div key={key} className="p-4 bg-gray-50 border border-gray-200 rounded-lg flex flex-col gap-1.5">
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{key}</span>
-              <span className="text-sm font-semibold text-gray-800 break-words">{displayValue}</span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const renderDynamicDataset = (dataset: Array<Record<string, any>>) => {
-    if (!dataset || dataset.length === 0) return null;
-    const headers = Object.keys(dataset[0]);
-
-    return (
-      <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-100 text-gray-600 text-xs font-semibold uppercase border-b border-gray-200">
-                {headers.map((h) => (
-                  <th key={h} className="p-4 select-none">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 text-sm font-medium text-gray-700">
-              {dataset.map((row, idx) => (
-                <tr key={idx} className="hover:bg-gray-50/50">
-                  {headers.map((h) => (
-                    <td key={h} className="p-4 font-mono text-gray-900">
-                      {row[h] !== null && row[h] !== undefined ? String(row[h]) : "—"}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-
-  const renderDynamicDiff = (original: Record<string, any>, proposed: Record<string, any>) => {
-    const allKeys = Array.from(new Set([...Object.keys(original), ...Object.keys(proposed)]))
-      .filter((k) => k !== 'dataset' && k !== 'id' && k !== 'standardId' && k !== 'nodeId');
-
-    return (
-      <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-200">
-        <div className="grid grid-cols-3 bg-gray-100 font-semibold text-xs text-gray-600 uppercase p-4">
-          <div>Property</div>
-          <div>Original value</div>
-          <div>Proposed value</div>
-        </div>
-        {allKeys.map((key) => {
-          const origVal = original[key];
-          const propVal = proposed[key];
-
-          // Comparaison sur la version allégée : diffuser deux chaînes base64 de
-          // plusieurs Mo via JSON.stringify gèle l'interface. Conséquence
-          // acceptée : un changement portant UNIQUEMENT sur une image n'est pas
-          // détaillé dans le diff (il reste visible via l'aperçu du nœud).
-          const origStr = stripHeavyJson(origVal);
-          const propStr = stripHeavyJson(propVal);
-          if (origStr === propStr) return null;
-
-          const cell = (v: any, s: string) =>
-            v !== null && v !== undefined
-              ? (typeof v === "object" || (typeof v === "string" && v.startsWith("data:")) ? s : String(v))
-              : "—";
-
-          return (
-            <div key={key} className="grid grid-cols-3 p-4 items-center text-sm hover:bg-gray-50">
-              <div className="font-semibold text-gray-500 uppercase tracking-wide text-xs">{key}</div>
-              <div className="line-through text-red-600 bg-red-50 px-2.5 py-1.5 rounded border border-red-100 font-mono inline-block max-w-max break-all">
-                {cell(origVal, origStr)}
-              </div>
-              <div className="text-green-700 bg-green-50 px-2.5 py-1.5 rounded border border-green-100 font-semibold font-mono inline-block max-w-max break-all">
-                {cell(propVal, propStr)}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
   };
 
   // Le rendu des diffs (stripHeavyJson sur des normes volumineuses + tableaux de
@@ -443,50 +344,8 @@ export function AdminValidationsPage() {
                   </div>
                 </div>
 
-                <div className="p-5 space-y-6">
-                  {change.action === "Created" && change.proposedData && (
-                    <div className="space-y-6">
-                      <div className="flex items-start gap-2 bg-green-50 text-green-800 p-3 rounded-lg border border-green-200">
-                        <Icon name="add" size={16} className="flex-shrink-0 mt-0.5 text-green-600" />
-                        <div>
-                          <span className="font-semibold text-sm block">New item</span>
-                          <p className="text-xs">Properties proposed for addition to the database.</p>
-                        </div>
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Field properties</h4>
-                        {renderDynamicFields(change.proposedData)}
-                      </div>
-                      {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
-                        <div>
-                          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Dataset</h4>
-                          {renderDynamicDataset(change.proposedData.dataset)}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {change.action === "Deleted" && (
-                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 text-sm p-3 rounded-lg font-medium">
-                      <Icon name="warning" size={16} className="flex-shrink-0 mt-0.5 text-red-600" />
-                      <span>Approving this change will remove this item and its linked data.</span>
-                    </div>
-                  )}
-
-                  {change.action === "Modified" && change.originalData && change.proposedData && (
-                    <div className="space-y-6">
-                      <div>
-                        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Field differences</h4>
-                        {renderDynamicDiff(change.originalData, change.proposedData)}
-                      </div>
-                      {change.proposedData.dataset && Array.isArray(change.proposedData.dataset) && (
-                        <div>
-                          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Proposed dataset</h4>
-                          {renderDynamicDataset(change.proposedData.dataset)}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                <div className="p-5">
+                  <ChangeCard change={change} standards={standards ?? []} />
                 </div>
               </div>
             ))}
@@ -498,7 +357,7 @@ export function AdminValidationsPage() {
           <span>Select a submission in the queue to review its changes.</span>
         </div>
       ),
-    [activeCommit],
+    [activeCommit, standards],
   );
 
   return (
