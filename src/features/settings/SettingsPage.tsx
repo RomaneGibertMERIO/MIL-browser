@@ -44,6 +44,7 @@ export function SettingsPage() {
   const systemUsername = useAppStore((s) => s.systemUsername);
   const [localPathInput, setLocalPathInput] = useState(gitRepoPath);
   const [pathSaveSuccess, setPathSaveSuccess] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const { confirm, dialog } = useConfirm();
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -73,7 +74,6 @@ export function SettingsPage() {
     });
   }
 
-  const [exporting, setExporting] = useState(false);
   async function handleExport() {
     // Retour visuel pendant la sérialisation (grosse base + ré-attache des
     // images) : sans lui, le clic semble « ne rien faire » un instant (11.2).
