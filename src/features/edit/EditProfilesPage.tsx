@@ -32,6 +32,7 @@ import { useProfilesByStandard } from "../../shared/hooks/useProfiles";
 import { useStandards } from "../../shared/hooks/useStandards";
 import { useAppStore } from "../../store/appStore";
 import { ProfileForm } from "../library/ProfileForm";
+import { ProfileDetail } from "../profile/ProfileDetail";
 import { Icon } from "../../shared/components/ui/Icon";
 import { StatusDot } from "../../shared/components/ui/StatusBadge";
 import { useConfirm } from "../../shared/components/ui/ConfirmDialog";
@@ -128,17 +129,45 @@ export function EditProfilesPage() {
     return findNode(tree, selectedPath[selectedPath.length - 1]!);
   }, [tree, selectedPath]);
 
+  // Built-in masqués : un built-in dont une copie locale existe (forkedFrom) est
+  // caché de la liste (mais reste en base — cf. "Restore built-in").
+  const maskedBuiltinIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of availableProfiles) if (p.forkedFrom) s.add(p.forkedFrom);
+    return s;
+  }, [availableProfiles]);
+
   // Profils attachés EXACTEMENT au nœud sélectionné (l'édition d'un profil de
   // descendant se fait en descendant dans la colonne enfant).
   const nodeProfilesExact = useMemo(
-    () => (selectedNode == null ? [] : availableProfiles.filter((p) => p.nodeId === selectedNode.id)),
-    [availableProfiles, selectedNode],
+    () =>
+      selectedNode == null
+        ? []
+        : availableProfiles.filter(
+            (p) =>
+              p.nodeId === selectedNode.id &&
+              !(p.source === "builtin" && maskedBuiltinIds.has(p.id)),
+          ),
+    [availableProfiles, selectedNode, maskedBuiltinIds],
   );
 
   const selectedProfile = useMemo(
     () => (selectedProfileId !== null ? (availableProfiles.find((p) => p.id === selectedProfileId) ?? null) : null),
     [availableProfiles, selectedProfileId],
   );
+
+  // Le built-in d'origine du profil sélectionné (si c'est une copie forkée) —
+  // toujours en base, simplement masqué de la liste.
+  const forkedOrigin = useMemo(
+    () =>
+      selectedProfile?.forkedFrom
+        ? (availableProfiles.find((p) => p.id === selectedProfile.forkedFrom) ?? null)
+        : null,
+    [selectedProfile, availableProfiles],
+  );
+
+  // Profil built-in affiché en lecture seule dans une modale ("View original").
+  const [viewingOriginal, setViewingOriginal] = useState<Profile | null>(null);
 
   // Brouillon initial : création (nœud imposé) ou édition d'un profil existant.
   const formInitialDraft = useMemo((): ProfileDraft | null => {
@@ -255,6 +284,10 @@ export function EditProfilesPage() {
     if (isEditingBuiltin) {
       profile.source = "user";
       profile.status = "local";
+      // Relie la copie à son built-in d'origine : celui-ci sera masqué de la
+      // liste tant que la copie existe, et "Restore built-in" pourra le
+      // ré-afficher (il n'est jamais supprimé).
+      profile.forkedFrom = selectedProfile?.id;
     }
 
     const result = validateProfile(profile, schema);
@@ -294,6 +327,29 @@ export function EditProfilesPage() {
     setIsCreating(false);
     setCreatingNodeId(null);
     resetEditorState();
+  }
+
+  // Restaure le built-in d'origine : on jette la copie locale (le built-in,
+  // jamais supprimé, réapparaît alors dans la liste). Les modifications locales
+  // sont perdues — d'où la confirmation.
+  async function handleRestoreBuiltin() {
+    if (selectedProfile === null || forkedOrigin === null) return;
+    if (!(await confirmDiscardIfDirty())) return;
+    const ok = await confirm({
+      title: "Restore built-in",
+      message: `Discard your local copy "${selectedProfile.name}" and restore the original built-in profile? Your local edits will be lost.`,
+      confirmLabel: "Restore",
+      destructive: true,
+    });
+    if (!ok) return;
+    const originId = forkedOrigin.id;
+    await dbDeleteProfile(selectedProfile.id);
+    await refreshLocalChanges();
+    editedRef.current = false;
+    setViewingOriginal(null);
+    setSelectedProfileId(originId);
+    setIsCreating(false);
+    setCreatingNodeId(null);
   }
 
   async function handleDeleteConfirm() {
@@ -344,6 +400,38 @@ export function EditProfilesPage() {
     // Electron n'a pas de largeur mini).
     <div className="flex h-full select-none overflow-x-auto">
       {confirmDialog}
+
+      {/* "View original" : le built-in d'origine, en lecture seule. */}
+      {viewingOriginal !== null && standard != null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Original built-in profile"
+          onMouseDown={() => setViewingOriginal(null)}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-gray-50 p-4 shadow-xl"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-900">Original built-in profile</h3>
+              <button
+                type="button"
+                onClick={() => setViewingOriginal(null)}
+                aria-label="Close"
+                className="text-gray-400 hover:text-gray-700"
+              >
+                <Icon name="close" size={18} />
+              </button>
+            </div>
+            <ProfileDetail
+              profile={viewingOriginal}
+              schema={getEffectiveSchema(standard, viewingOriginal.nodeId)}
+            />
+          </div>
+        </div>
+      )}
       {/* Miller (flexible) */}
       <div className="flex-1 min-w-0" style={{ minWidth: MIN_MILLER }}>
         <div className="flex h-full overflow-x-auto overflow-y-hidden">
@@ -431,6 +519,26 @@ export function EditProfilesPage() {
                 )}
                 {selectedProfile !== null && !isCreating && (
                   <>
+                    {forkedOrigin !== null && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setViewingOriginal(forkedOrigin)}
+                          title="View the original built-in profile this copy was derived from"
+                          className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                        >
+                          View original
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { void handleRestoreBuiltin(); }}
+                          title="Discard this local copy and restore the original built-in"
+                          className="px-3 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+                        >
+                          Restore built-in
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={() => { void handleDuplicate(); }}

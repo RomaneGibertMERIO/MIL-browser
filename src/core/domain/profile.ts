@@ -64,6 +64,14 @@ export const ProfileSchema = z.object({
   status: ProfileStatusSchema.default("local"),
   author: z.string().default("unknown"),
 
+  /**
+   * Id du profil built-in dont cette copie locale est issue (édition d'un
+   * built-in). Purement additif : permet de MASQUER le built-in d'origine tant
+   * qu'une copie existe et d'offrir "View original / Restore built-in" sans
+   * jamais supprimer l'original (il reste en base, simplement caché).
+   */
+  forkedFrom: z.string().optional(),
+
   // ── Retour de validation ──
   // Renseignés quand un administrateur refuse la proposition. Le profil
   // repasse alors en "local" chez son auteur, qui conserve son travail et

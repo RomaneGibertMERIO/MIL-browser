@@ -191,7 +191,14 @@ export function AssistantPage() {
 
   const nodeProfiles = useMemo((): Profile[] => {
     if (selectedNode == null || allProfiles == null) return [];
-    return getProfilesForNode(selectedNode, allProfiles);
+    // Masque le built-in d'origine quand une copie locale (forkedFrom) existe :
+    // on n'affiche pas les deux. L'original reste en base (visible à nouveau si
+    // la copie est supprimée / restaurée).
+    const masked = new Set<string>();
+    for (const p of allProfiles) if (p.forkedFrom) masked.add(p.forkedFrom);
+    return getProfilesForNode(selectedNode, allProfiles).filter(
+      (p) => !(p.source === "builtin" && masked.has(p.id)),
+    );
   }, [selectedNode, allProfiles]);
 
   const selectedProfile = useMemo(
@@ -211,9 +218,13 @@ export function AssistantPage() {
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (q.length < 2) return { nodes: [] as TaxonomyNodeItem[], profiles: [] as Profile[] };
+    const masked = new Set<string>();
+    for (const p of allProfiles ?? []) if (p.forkedFrom) masked.add(p.forkedFrom);
     return {
       nodes: flattenNodes(tree).filter(n => nodeHaystack(n).includes(q)),
-      profiles: (allProfiles ?? []).filter(p => profileHaystack(p).includes(q)),
+      profiles: (allProfiles ?? []).filter(
+        p => !(p.source === "builtin" && masked.has(p.id)) && profileHaystack(p).includes(q),
+      ),
     };
   }, [searchQuery, tree, allProfiles]);
 
