@@ -1,357 +1,289 @@
-# MIL-Browser — Plan de recette guidé (pas à pas)
+# MIL-Browser — Plan de recette guidé (version de livraison)
 
-Parcours **séquentiel** pour vérifier **toutes** les fonctionnalités avant livraison,
-en partant de l'application **remise à zéro**. Chaque étape indique **l'action** à faire
-et **✅ ce que tu dois observer**. Coche `☐ → ☑` et note tout écart dans l'**Annexe
-anomalies** en bas.
+Parcours **séquentiel** pour valider **toute** l'application, en partant de l'app
+**remise à zéro**. Chaque étape : **action** + **✅ ce que tu dois observer**. Coche
+`☐ → ☑` et note tout écart dans l'**Annexe anomalies**.
 
-> **Suis les sections dans l'ordre** : elles construisent l'état les unes sur les autres
-> (Standalone → édition locale → mise en ligne → collaboration → hors-ligne).
+> Cette version intègre tous les correctifs de la recette précédente. Tout est
+> censé passer : c'est une **passe de validation complète** avant livraison.
 
-**Légende :** ✅ = résultat attendu · `☐` = à cocher · 🐞 = bug **connu** à confirmer ·
-⚠️ = piège fréquent.
+**Légende :** ✅ = attendu · `☐` = à cocher · ⚠️ = piège fréquent.
 
-**Vocabulaire d'état (important) :**
-- **Standalone** = aucun dépôt configuré (ta machine, hors collaboration). *C'est l'état
-  d'une app remise à zéro.*
-- **Online (Shared)** = dépôt central configuré **et** joignable.
-- **Offline** = dépôt configuré **mais** injoignable (on travaille sur le dernier état synchronisé).
+**États :** **Standalone** (aucun dépôt) · **Online/Shared** (dépôt configuré et
+joignable) · **Offline** (dépôt configuré mais injoignable).
 
 ---
 
-## Section 0 — Préparation (à faire une seule fois)
+## Section 0 — Préparation
 
-### 0.1 Lancer le build À JOUR
-Les correctifs récents (History en anglais, badge « Built-in ») ne sont visibles qu'avec le code à jour.
-- ☐ **Dev** : terminal 1 `npm install` puis `npm run dev` ; terminal 2 `npx electron .`
-- ☐ **Packagé** : `npm run electron:build`, puis installer/lancer l'exe généré dans `release/`.
-- ☐ Ouvrir la console de debug : `F12` (utile pour repérer les erreurs).
+### 0.1 Build À JOUR (indispensable)
+- ☐ **Dev** : `npm install` → `npm run dev` (terminal 1) + `npx electron .` (terminal 2)
+- ☐ **Packagé** : `npm run electron:build` → lancer l'exe de `release/`
+- ☐ Console debug : `F12`
 
-### 0.2 Remettre l'app à zéro (état bare)
-- ☐ **Fermer complètement l'app.**
-- ☐ Supprimer les données d'exécution :
+### 0.2 Remise à zéro
+- ☐ Fermer l'app, puis :
   ```powershell
   Remove-Item "$env:APPDATA\mil-browser" -Recurse -Force
   ```
-  > Version packagée (productName « MIL Browser ») → vider aussi `%APPDATA%\MIL Browser` si présent.
+- ☐ **Créer** un dossier central de test **vide** : `C:\milrepo-central` (il doit exister — l'app ne le crée plus toute seule).
 
-### 0.3 Outils pour la recette
-- ☐ **Dossier central de test** (pour la partie collaboration) : créer un dossier vide, ex. `C:\milrepo-central`.
-- ☐ **Simuler des identités** (rôles) sur un seul poste, via la variable `MIL_BROWSER_USER` :
-  ```powershell
-  $env:MIL_BROWSER_USER="alice"; npx electron .      # (ou lancer l'exe portable)
-  ```
-- ☐ **Journal** en cas de souci : `%APPDATA%\mil-browser\logs\renderer.log`.
+> Identités multiples (rôles) : via `MIL_BROWSER_USER` si tu peux lancer des scripts ; sinon, teste avec ton compte courant.
 
 ---
 
 ## Section 1 — Premier lancement (Standalone)
 
-**Précondition :** app remise à zéro (0.2), build à jour lancé.
+| # | Action | ✅ Attendu | ☐ |
+|---|--------|-----------|----|
+| 1.1 | Lancer l'app | Browser + standards built-in en colonne 1 ; aucune erreur | ☐ |
+| 1.2 | En-tête du Browser | Badge **« Read-Only »** **+ badge « Standalone »** (gris) | ☐ |
+| 1.3 | Manage → rail | **Sync et Admin absents** (Standalone) ; Home/Edit/Settings présents | ☐ |
+| 1.4 | Pied de page | Version + crédits | ☐ |
+
+---
+
+## Section 2 — Browser : navigation & cartes
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 1.1 | Lancer l'app | Le **Browser** s'ouvre, les **standards built-in** sont présents en colonne 1 (ex. MIL-STD-810H). Aucune erreur, pas d'écran blanc | ☐ |
-| 1.2 | Regarder l'en-tête / badge dépôt | Badge **Standalone** (gris). Le bouton **Manage** est visible | ☐ |
-| 1.3 | Ouvrir Manage → regarder le rail | **Sync et Admin ABSENTS** du rail (normal en Standalone). Présents : Home, Edit, Settings | ☐ |
-| 1.4 | Regarder le pied de page | **Version** + **crédits** affichés | ☐ |
-| 1.5 | Revenir au Browser | Bouton retour fonctionne | ☐ |
+| 2.1 | Sélectionner une norme | **Panneau info = infos du standard** (organisation, label, description, nb de nœuds, badge **Built-in**) | ☐ |
+| 2.2 | Descendre dans l'arbre | Colonnes enfants ; défilement auto | ☐ |
+| 2.3 | Sélectionner un nœud | Info nœud (code, type, **badge Built-in**, image/description) | ☐ |
+| 2.4 | Sélectionner un profil | **Carte** : nom + badge **Built-in** + **« Last modified by »** + groupes de champs | ☐ |
+| 2.5 | Badge profil built-in (liste + carte) | **« Built-in »** (gris) partout — jamais « Official » | ☐ |
+| 2.6 | Toggle graphe / table / les deux | OK ; table zébrée, mono | ☐ |
+| 2.7 | Arbre grisé vs contenu | Structure plus grise que le panneau info | ☐ |
 
 ---
 
-## Section 2 — Browser : navigation Miller (lecture seule)
+## Section 3 — Browser : recherche
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 2.1 | Cliquer une norme (col. 1) | Sélection en **bleu** ; la colonne des nœuds racine apparaît à droite | ☐ |
-| 2.2 | Descendre dans l'arbre (nœuds) | Chaque clic révèle la colonne enfant ; défilement auto vers la nouvelle colonne | ☐ |
-| 2.3 | Atteindre une feuille | Une colonne **Profils** apparaît (profils rattachés au nœud) | ☐ |
-| 2.4 | Regarder le badge d'un profil built-in | 🐞 Doit afficher **« Built-in »** (gris) — **PAS** « Official » (vert). *(C'était le bug corrigé.)* | ☐ |
-| 2.5 | Comparer l'aspect arbre vs contenu | La zone taxonomie (structure) est **plus grise / moins contrastée** que le panneau Informations | ☐ |
-| 2.6 | Sélectionner un nœud (pas un profil) | Le panneau **Informations** affiche le nœud (guidage / image éventuelle) | ☐ |
-| 2.7 | Sélectionner un profil | **Carte Profil** : nom + badge **Built-in** + « last modified by » + groupes de champs | ☐ |
-| 2.8 | Vérifier la cohérence carte vs liste | La carte et la ligne de liste affichent **le même** libellé (« Built-in ») | ☐ |
-| 2.9 | Basculer graphe / table / les deux | La vue change ; table zébrée, cellules numériques en police mono | ☐ |
-| 2.10 | Cliquer « expand » sur le graphe | Overlay plein écran ; fermeture OK | ☐ |
-| 2.11 | 🐞 Regarder la **pastille** de la ligne standard | *Point de vigilance connu :* un standard built-in peut afficher une pastille **jaune « Local »** (statut non défini). À signaler si gênant (correctif roll-up prévu) | ☐ |
+| 3.1 | Requête 3+ caractères courants | **Aucun écran blanc** ; résultats Nodes + Profiles | ☐ |
+| 3.2 | Valeur de champ / cellule dataset | Le profil remonte (balaye tout) | ☐ |
+| 3.3 | Cliquer un résultat | Navigue / ouvre | ☐ |
+| 3.4 | Croix de recherche | Retour browser | ☐ |
 
 ---
 
-## Section 3 — Browser : recherche globale
+## Section 4 — Browser : épingles & redimensionnement
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 3.0 | 🐞 Taper une requête courante de **3+ caractères** (déclenche l'affichage des résultats) | **Aucun écran blanc** ; les résultats s'affichent. *(Régression corrigée : crash `dataset` non protégé au rendu.)* | ☐ |
-| 3.1 | Taper un mot présent dans un profil (nom/description) | Résultats en 2 sections : **Nodes** et **Profiles** | ☐ |
-| 3.2 | Chercher une valeur de champ ou une cellule de dataset | Le profil correspondant remonte (la recherche balaye **tous** les champs et cellules) | ☐ |
-| 3.3 | Cliquer un résultat | Navigue vers le nœud / ouvre le profil | ☐ |
-| 3.4 | Badge des profils dans les résultats | 🐞 Built-in = **« Built-in »** (même correctif qu'en 2.4) | ☐ |
-| 3.5 | Cliquer la croix de recherche | Retour au browser normal | ☐ |
+| 4.1 | Épingler 2-3 profils | Cartes comparatives, largeur égale | ☐ |
+| 4.2 | Replier / retirer une épingle | Redistribution sans débordement | ☐ |
+| 4.3 | Glisser le séparateur | Poignée bleue au survol ; largeurs mini respectées | ☐ |
+| 4.4 | Relâcher hors fenêtre | Pas de drag « collé » | ☐ |
 
 ---
 
-## Section 4 — Browser : épingles & comparaison
+## Section 5 — Multi-fenêtre
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 4.1 | Épingler un profil (icône pin) | Une carte de comparaison apparaît à droite | ☐ |
-| 4.2 | Épingler un 2e / 3e profil | Cartes côte à côte, largeur égale | ☐ |
-| 4.3 | Replier une épingle | Réduite à une barre fine ; ré-ouverture OK | ☐ |
-| 4.4 | Retirer une épingle | Panneau retiré ; les autres se **redistribuent** sans débordement | ☐ |
-| 4.5 | Épingler depuis les résultats de recherche | Fonctionne aussi depuis la recherche | ☐ |
+| 5.1 | Bouton **« New window »** dans la barre d'outils | Présent (app de bureau) | ☐ |
+| 5.2 | Sélectionner une norme → New window | 2e fenêtre Browser **pré-sélectionnée sur cette norme** (norme en bleu + infos affichées) | ☐ |
+| 5.3 | Déplacer la 2e fenêtre sur un autre écran | 2 normes en parallèle | ☐ |
+
+> ⚠️ 5.2 : à confirmer sur le build à jour (correctif de passage de paramètre + infos standard). Si la norme n'est pas pré-sélectionnée, note-le.
 
 ---
 
-## Section 5 — Browser : redimensionnement (docking)
+## Section 6 — Management : coquille
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 5.1 | Glisser le séparateur Miller / zone droite | Redimensionne ; la poignée **reste atteignable** ; largeurs mini respectées (aucun panneau ne disparaît) | ☐ |
-| 5.2 | Survoler une poignée | Elle passe en **bleu** au survol | ☐ |
-| 5.3 | Démarrer un glissement et relâcher **hors** de la fenêtre | Le geste se termine proprement (pas de drag « collé ») | ☐ |
-| 5.4 | Réduire fortement la fenêtre | Les panneaux gardent leur largeur mini ; contenu toujours accessible | ☐ |
+| 6.1 | Manage / rail / ← Browser | Navigation OK ; item actif bleu ; titre correct | ☐ |
+| 6.2 | Badges en-tête (Standalone) | Standalone ; pas de badge rôle | ☐ |
+| 6.3 | Home | Identité (rôle, dépôt, session) ; cartes gatées | ☐ |
+| 6.4 | Home en Standalone | **Sync et Admin ABSENTS** des cartes (pas de liens morts) | ☐ |
 
 ---
 
-## Section 6 — Multi-fenêtre (Phase 7)
+## Section 7 — Edit : Taxonomie (à faire AVANT les profils)
+
+**Précondition :** Manage → Edit → onglet **Taxonomy**. *(On crée d'abord un standard + son schéma pour pouvoir créer des profils ensuite.)*
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 6.1 | Dans le Browser, repérer le bouton **« New window »** | Présent dans la barre d'outils (app de bureau) | ☐ |
-| 6.2 | Sélectionner une norme puis cliquer « New window » | Une **2e fenêtre** s'ouvre sur le Browser, **pré-sélectionnée sur cette norme** | ☐ |
-| 6.3 | Cliquer « New window » sans norme active | 2e fenêtre s'ouvre sur l'accueil Browser | ☐ |
-| 6.4 | Déplacer la 2e fenêtre sur un autre écran | Deux normes consultables en parallèle | ☐ |
-| 6.5 | Faire une modif de données via Manage dans une fenêtre | Après rafraîchissement, l'autre fenêtre reflète la même base (base partagée) | ☐ |
+| 7.1 | Basculer sur Taxonomy | Miller éditable des nœuds ; profils masqués | ☐ |
+| 7.2 | Créer un standard + des nœuds (`+`) | Créés en **Local** | ☐ |
+| 7.3 | Fin de branche → « Customize expected fields » | Édition du schéma par nœud (champs + colonnes dataset) | ☐ |
+| 7.4 | Ajouter une **image** à un nœud | Upload OK, image affichée ; ⚠️ pas de gel | ☐ |
+| 7.5 | Supprimer un nœud **avec** profils attachés | **Bloqué** avec message (« déplacer/supprimer les profils d'abord ») | ☐ |
+| 7.6 | Supprimer un nœud **sans** profil | **Confirmation** puis suppression | ☐ |
+| 7.7 | Save / Cancel | Zone d'action cohérente | ☐ |
 
 ---
 
-## Section 7 — Management : coquille & navigation
+## Section 8 — Edit : Profils
+
+**Précondition :** Manage → Edit → onglet **Profiles**.
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 7.1 | Ouvrir Manage | Rail à gauche ; en-tête avec titre de la page + badges | ☐ |
-| 7.2 | Cliquer chaque destination du rail | Item actif en **bleu** ; titre de page correct | ☐ |
-| 7.3 | Bouton « ← Browser » | Revient au Browser | ☐ |
-| 7.4 | Badges d'en-tête (Standalone) | Badge **Standalone** ; pas de badge rôle (normal hors Shared) | ☐ |
+| 8.1 | Colonnes avec ligne `+` | + New standard / node / profile | ☐ |
+| 8.2 | Créer un profil, remplir | Aperçu vivant (chart/table/champs) | ☐ |
+| 8.3 | Schéma **sans** colonnes dataset | La zone Dataset est **masquée** | ☐ |
+| 8.4 | Coller un tableau dans DatasetEditor | Parseur détecte le séparateur | ☐ |
+| 8.5 | Save | Statut **Local (jaune)** ; **« Last modified by » = ton nom de session** (pas « User ») | ☐ |
+| 8.6 | Rouvrir, modifier, Cancel | Modifs annulées ; zone Save/Cancel fixe | ☐ |
+| 8.7 | Éditer un profil **built-in** → Save | Copie **Local** ; l'original built-in est **masqué** ; bandeau **« copie d'un built-in »** avec **View original** + **Restore built-in** (couleur neutre) | ☐ |
+| 8.8 | View original / Restore built-in | View = carte du built-in ; Restore = confirmation → l'original réapparaît | ☐ |
+| 8.9 | Supprimer un profil | Dialogue in-app ; suppression effective | ☐ |
 
 ---
 
-## Section 8 — Home
+## Section 9 — Settings
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 8.1 | Ouvrir Home | Carte d'identité : « You are … », lien du dépôt, **nom de session** (lecture seule) | ☐ |
-| 8.2 | Regarder les cartes « what you can do » | Liens vers Edit/Settings (et Sync/Admin **seulement** si accessibles) | ☐ |
+| 9.1 | Cartes Data / Git / Session / About | Présentes | ☐ |
+| 9.2 | **Export** | Bouton passe à **« Exporting… »** puis fichier JSON | ☐ |
+| 9.3 | **Import** d'un JSON | **Confirmation d'écrasement** avant import ; puis import | ☐ |
+| 9.4 | Session name | Lecture seule | ☐ |
 
 ---
 
-## Section 9 — Edit database : mode Profils (création locale)
-
-**Précondition :** toujours en Standalone. Manage → **Edit** → onglet **Profiles**.
+## Section 10 — Passage en Online + publication du socle
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 9.1 | Regarder les colonnes | Miller éditable avec une **ligne `+`** en bas de chaque colonne | ☐ |
-| 9.2 | « + New standard » | Crée une nouvelle norme **locale** | ☐ |
-| 9.3 | « + New node here » sur une colonne | Ajoute un nœud enfant à ce niveau | ☐ |
-| 9.4 | Aller en fin de branche → « + New profile » | Ouvre l'éditeur de profil | ☐ |
-| 9.5 | Remplir des champs | L'**aperçu vivant** (chart/table/champs) se met à jour | ☐ |
-| 9.6 | Dans DatasetEditor, **coller** un tableau (depuis Excel/CSV) | Le parseur détecte le séparateur (tab/virgule/espace) et remplit les lignes | ☐ |
-| 9.7 | Taper rapidement / gros dataset | ⚠️ **Pas de gel** ni de lag de frappe | ☐ |
-| 9.8 | Cliquer **Save** | Le profil est enregistré ; statut **Local (jaune)** ; « last modified by » = toi | ☐ |
-| 9.9 | Rouvrir un profil, modifier, **Cancel** | Les modifs sont annulées ; zone Save/Cancel **fixe** (haut-droite) | ☐ |
-| 9.10 | Éditer un profil **built-in** puis Save | Il devient une **copie locale** : badge **Built-in → Local (jaune)** | ☐ |
-| 9.11 | Supprimer un profil | **Dialogue de confirmation in-app** (pas de popup natif) ; suppression effective | ☐ |
+| 10.1 | Settings → chemin `C:\milrepo-central` → Save | Badge **Shared (vert)** ; **Sync et Admin apparaissent** ; carte « Your access » cohérente (« Admin → Users », rôle en clair) | ☐ |
+| 10.2 | Aller sur **Synchronization** | **Bannière « dépôt vide → Publish »** présente | ☐ |
+| 10.3 | Cliquer **Publish** → confirmer | Bannière disparaît | ☐ |
+| 10.4 | Vérifier `C:\milrepo-central` | Dossiers **`standards/` ET `profiles/` remplis** (tout le socle publié, pas seulement les standards) | ☐ |
 
 ---
 
-## Section 10 — Edit database : mode Taxonomie (engrenage)
-
-**Précondition :** Manage → Edit → onglet **Taxonomy**.
+## Section 11 — Cycle collaboratif : soumission (Write)
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 10.1 | Basculer sur Taxonomy | Miller éditable des **nœuds** ; **profils masqués** | ☐ |
-| 10.2 | Ajouter / renommer / supprimer un nœud | Modifications appliquées ; suppression confirmée par dialogue | ☐ |
-| 10.3 | Fin de branche → « Customize expected fields » | Édition du **schéma par nœud** (champs profil + colonnes dataset) | ☐ |
-| 10.4 | Ajouter une **image** à un nœud | Upload OK ; l'image s'affiche ; ⚠️ **pas de gel** | ☐ |
-| 10.5 | Éditer un profil d'un standard **avec images** | ⚠️ **Pas de gel** à l'ouverture/édition (fix images) | ☐ |
-| 10.6 | Save / Cancel | Même **zone d'action** qu'en mode Profils (cohérence) | ☐ |
+| 11.1 | Créer/modifier un profil | Statut Local (jaune) | ☐ |
+| 11.2 | Synchronization : 3 colonnes, cases décochées | Liste des changements | ☐ |
+| 11.3 | Cliquer un profil **modifié** | **Carte colorée** : vert = ajouté, rouge barré = supprimé, **jaune = modifié avec `(was: …)`** | ☐ |
+| 11.4 | Cliquer un standard modifié | Diff manifeste (grille, pas de JSON brut) | ☐ |
+| 11.5 | Filtre / tri | La liste se filtre/trie | ☐ |
+| 11.6 | Cocher → « Send modifications to admin » | Objets → **Pending (orange)** ; fichiers dans `C:\milrepo-central\profiles` | ☐ |
 
 ---
 
-## Section 11 — Settings (données)
+## Section 12 — Admin : Review
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 11.1 | Manage → Settings | Cartes : Data, Git repository, Session, About/version | ☐ |
-| 11.2 | **Export merged** | Fichier JSON téléchargé (local + online combinés) | ☐ |
-| 11.3 | **Export online-only** | Fichier JSON des seuls enregistrements officiels (vide/limité en Standalone) | ☐ |
-| 11.4 | **Import** d'un JSON | Import OK ; dialogue d'écrasement si conflit | ☐ |
-| 11.5 | Champ **Session name** | Affiché en **lecture seule** | ☐ |
+| 12.1 | Admin → Review | File cohérente ; libellés **Created / Modified** corrects | ☐ |
+| 12.2 | Sélectionner une soumission | **Carte** (profil = carte + graphe ; standard = grille manifeste) — plus de JSON brut | ☐ |
+| 12.3 | Une modification | **Diff coloré** dans la carte (comme 11.3) | ☐ |
+| 12.4 | **Approve** | Objet **Official (vert)** ; toast ; retiré de la file | ☐ |
+| 12.5 | **Reject** + motif | Modale in-app ; motif obligatoire ; pas de gel ; Echap ferme | ☐ |
 
 ---
 
-## Section 12 — Passage en Online : créer le dépôt central
-
-**Objectif :** transformer le Standalone en collaboration.
+## Section 13 — Admin : History
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 12.1 | Créer un dossier vide `C:\milrepo-central` (fait en 0.3) | — | ☐ |
-| 12.2 | Settings → « Git Network Repository Location » → saisir `C:\milrepo-central` → **Save** | Chemin enregistré ; l'app crée `profiles/` et `standards/` dans le dossier | ☐ |
-| 12.3 | Regarder le badge dépôt | Passe à **Shared (vert)** ; **Sync et Admin APPARAISSENT** dans le rail | ☐ |
-| 12.4 | Aller sur **Synchronization** | Une **bannière** signale que le dépôt central est **vide** et propose **« Publish »** | ☐ |
-| 12.5 | Cliquer « Publish » → confirmer | Le socle built-in est **publié** comme base officielle partagée ; la bannière disparaît | ☐ |
-| 12.6 | Vérifier le dossier `C:\milrepo-central\standards` | Contient des fichiers `standard-*.json` | ☐ |
+| 13.1 | Onglet History | Timeline des commits réels | ☐ |
+| 13.2 | Filtre **All / Submitted / Approved** | Filtre la liste | ☐ |
+| 13.3 | Entrées | Badge **Submitted** (orange) / **Approved** (vert) + auteur + date + hash | ☐ |
+| 13.4 | Langue | **Anglais uniquement** | ☐ |
 
 ---
 
-## Section 13 — Cycle collaboratif : soumission (rôle Write)
-
-**Précondition :** Online. *(Absence d'`admins.json` ⇒ tu es admin ; c'est OK pour la recette.)*
+## Section 14 — Admin : Users
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 13.1 | Créer/éditer un profil (Section 9) | Statut **Local (jaune)** | ☐ |
-| 13.2 | Aller sur **Synchronization** | Colonnes Standards / Taxonomy / Profiles listant tes changements ; cases **décochées par défaut** | ☐ |
-| 13.3 | Cliquer un objet modifié | **Comparaison DiffView** : ancien **barré (rouge)** / nouveau **coloré** | ☐ |
-| 13.4 | Tester **filtre / tri** (standard/date/type/statut) | La liste se filtre/trie | ☐ |
-| 13.5 | Cocher des objets → **« Send modifications to admin »** | Les objets passent en **Pending (orange)** | ☐ |
-| 13.6 | Vérifier `C:\milrepo-central\profiles` | Le fichier proposé y est copié | ☐ |
+| 14.1 | Users | Sessions listées | ☐ |
+| 14.2 | Libellés rôle | **Read Only / Write / Admin** | ☐ |
+| 14.3 | Changer un rôle | Icône check sur l'actif | ☐ |
+| 14.4 | Ta session | Marquée « (you) » | ☐ |
+| 14.5 | Retirer le dernier admin | **Refusé** avec message | ☐ |
 
 ---
 
-## Section 14 — Admin : Review (validation)
-
-**Précondition :** Manage → **Admin** → onglet **Review**.
+## Section 15 — Refus : retour à l'auteur
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 14.1 | Regarder l'écran | Liste des soumissions ; style **design system** (pas d'emoji, coins `rounded-lg`, couleurs sémantiques) | ☐ |
-| 14.2 | Sélectionner une soumission « Created » | Propriétés proposées + dataset éventuel | ☐ |
-| 14.3 | Sélectionner une « Modified » | **Diff champ par champ** (original barré rouge / proposé vert) | ☐ |
-| 14.4 | Cliquer **Approve** | L'objet devient **Official (vert)** ; toast succès ; retiré de la file | ☐ |
-| 14.5 | Sur une autre, cliquer **Reject** | **Modale de motif** in-app (pas de `prompt` natif) ; motif obligatoire | ☐ |
-| 14.6 | Taper dans la modale de refus | ⚠️ **Pas de gel** de la zone de texte ; **Echap** ferme | ☐ |
-| 14.7 | Confirmer le refus | Toast ; l'objet quitte la file | ☐ |
-| 14.8 | (Optionnel) Rendre le dossier central injoignable puis approuver | Bannière d'erreur ; **la proposition RESTE** dans la file (aucun faux succès) | ☐ |
+| 15.1 | Admin rejette une proposition avec un motif | — | ☐ |
+| 15.2 | L'auteur (même poste ou autre identité) resynchronise | **Toast** « Your proposal … was rejected: motif » | ☐ |
+| 15.3 | Ouvrir le profil refusé (carte) | **Bannière « Rejected by … : motif »** | ☐ |
 
 ---
 
-## Section 15 — Admin : History (git:log)
-
-**Précondition :** avoir fait ≥ 1 soumission et ≥ 1 validation (Sections 13-14).
+## Section 16 — États Offline & transitions
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 15.1 | Ouvrir l'onglet **History** | Timeline des commits réels (spinner bref puis liste) | ☐ |
-| 15.2 | Regarder une entrée de soumission | Badge **« Submitted »** (orange), auteur, date, hash court | ☐ |
-| 15.3 | Regarder une entrée de validation | Badge **« Approved »** (vert) | ☐ |
-| 15.4 | 🐞 Vérifier la **langue** | **Tout en anglais** (`Proposal: profile "…"`, `Approval: standard "…"`) — **aucun français** | ☐ |
-| 15.5 | Ordre | Du plus récent au plus ancien | ☐ |
-
-> ⚠️ Si tu vois encore du français ici : tu testes probablement d'anciens commits générés avant reset, **ou** un build non reconstruit. Refais 0.2 (reset) + relance le build à jour.
+| 16.1 | **Renommer** `C:\milrepo-central` (injoignable) puis agir/synchro | Badge **Offline** ; **Sync/Admin masqués** ; **push refusé avec message** (plus de push « dans le vide ») | ☐ |
+| 16.2 | Créer une modif Offline | S'accumule en Local | ☐ |
+| 16.3 | Restaurer le dossier + resynchro | Repasse Shared ; push possible | ☐ |
+| 16.4 | Saisir un chemin **inexistant** dans Settings | Passe **Offline** (dossier requis, non créé) | ☐ |
+| 16.5 | Effacer le chemin | Repasse **Standalone** ; brouillons locaux conservés | ☐ |
 
 ---
 
-## Section 16 — Admin : Users (comptes & rôles)
+## Section 17 — Rôles & permissions (si identités multiples possibles)
 
-**Précondition :** pour voir plusieurs sessions, relance l'app sous une 2e identité (0.3, `MIL_BROWSER_USER`) et laisse-la se synchroniser une fois.
+| # | Rôle | ✅ Attendu | ☐ |
+|---|------|-----------|----|
+| 17.1 | Read Only | Browse ; pas d'Edit/Sync/Admin ; accès Settings/chemin | ☐ |
+| 17.2 | Write | + Edit + Sync ; pas d'Admin | ☐ |
+| 17.3 | Admin | + Admin | ☐ |
+| 17.4 | Rôle abaissé en cours de session | Vue inaccessible → redirection Home | ☐ |
+
+---
+
+## Section 18 — Suppressions & propagation (idéalement 2 identités)
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 16.1 | Ouvrir **Users** | Liste des sessions ayant contacté le dépôt | ☐ |
-| 16.2 | Regarder les libellés de rôle | **Read Only / Write / Admin** (le rôle interne `testing` s'affiche **« Write »**) | ☐ |
-| 16.3 | Changer le rôle d'une session | Mise à jour ; **icône check** sur l'actif (pas de glyphe ☑/☐) | ☐ |
-| 16.4 | Repérer ta propre session | Marquée **« (you) »** | ☐ |
-| 16.5 | Tenter de te retirer le **dernier** rôle admin | **Refusé** avec message explicite | ☐ |
+| 18.1 | Supprimer un objet officiel (Online) | Suppression + tombstone dans le dépôt | ☐ |
+| 18.2 | Synchroniser une autre identité | L'objet disparaît aussi | ☐ |
 
 ---
 
-## Section 17 — Rôles & permissions (matrice guidée)
-
-**Méthode :** relancer l'app sous différentes identités (`MIL_BROWSER_USER`) en **Online**, après leur avoir attribué un rôle (Section 16).
-
-| # | Rôle simulé | ✅ Attendu | ☐ |
-|---|-------------|-----------|----|
-| 17.1 | **Read Only** | Browse OK ; **pas** d'Edit/Sync/Admin dans le rail ; peut quand même ouvrir Settings et régler le chemin du dépôt | ☐ |
-| 17.2 | **Write** | + Edit + Sync (push de propositions) ; **pas** d'Admin | ☐ |
-| 17.3 | **Admin** | + Admin (Review/History/Users) | ☐ |
-| 17.4 | Forcer l'UI d'une action interdite (ex. rôle abaissé pendant la session) | La vue devient inaccessible → **redirection vers Home** | ☐ |
-
----
-
-## Section 18 — État Offline (vrai) & transitions
+## Section 19 — Robustesse / non-régression
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 18.1 | App Online, puis **renommer** `C:\milrepo-central` (le rendre injoignable) et relancer | Badge **Offline (orange)** ; **Sync et Admin masqués** ; données du dernier état synchronisé visibles | ☐ |
-| 18.2 | Créer une modif en Offline | S'accumule en **Local** (poussable plus tard) | ☐ |
-| 18.3 | Restaurer le dossier central et relancer | Repasse **Shared** ; Sync/Admin reviennent ; tu peux pousser les modifs accumulées | ☐ |
-| 18.4 | Effacer le chemin du dépôt (Settings) | Repasse **Standalone** ; contenu officiel disparaît ; brouillons locaux conservés ; socle réinstallé si besoin | ☐ |
+| 19.1 | Suppressions / refus / imports | Toujours des dialogues in-app (jamais alert/confirm/prompt natifs) | ☐ |
+| 19.2 | Dépôt sur lecteur lent/injoignable | UI reste réactive (pas de gel 30-60 s) | ☐ |
+| 19.3 | Éditer un profil d'un standard illustré | Pas de gel | ☐ |
+| 19.4 | Provoquer une erreur de rendu | **Error Boundary** : message + « Try again » (pas d'écran blanc) | ☐ |
 
 ---
 
-## Section 19 — Suppressions & propagation (idéalement 2 identités)
+## Section 20 — Accessibilité (vérifs rapides)
 
 | # | Action | ✅ Attendu | ☐ |
 |---|--------|-----------|----|
-| 19.1 | En Online, supprimer un objet **officiel** | Suppression locale **+ tombstone** déposée dans le dépôt central | ☐ |
-| 19.2 | Synchroniser une **autre** identité | L'objet disparaît aussi chez elle (propagation de la suppression) | ☐ |
-| 19.3 | Refuser une proposition (14.5) puis synchroniser l'auteur | L'auteur voit le **refus + motif** | ☐ |
-
----
-
-## Section 20 — Robustesse / non-régression (transverse)
-
-| # | Action | ✅ Attendu | ☐ |
-|---|--------|-----------|----|
-| 20.1 | Parcourir suppressions / refus / imports | Toujours des **dialogues in-app** (jamais `alert`/`confirm`/`prompt` natifs) | ☐ |
-| 20.2 | Pointer le dépôt sur un lecteur **lent/injoignable** et agir | L'UI **reste réactive** (clavier + souris), pas de blocage de 30-60 s | ☐ |
-| 20.3 | Éditer un profil d'un standard **illustré** | Pas de gel (images hors payloads) | ☐ |
-| 20.4 | Provoquer une erreur (si possible) | **Error Boundary** contient l'erreur (pas de page blanche globale) | ☐ |
-
----
-
-## Section 21 — Accessibilité (vérifs rapides)
-
-| # | Action | ✅ Attendu | ☐ |
-|---|--------|-----------|----|
-| 21.1 | Regarder les statuts | Toujours **couleur + texte/pastille** (jamais couleur seule) | ☐ |
-| 21.2 | Naviguer au **clavier** (Tab) | Tous les contrôles atteignables ; **anneau de focus** visible | ☐ |
-| 21.3 | Boutons icône (pin, close, collapse) | `aria-label` présent (lecteur d'écran) | ☐ |
-| 21.4 | Ouvrir un dialogue | Focus piégé dans le dialogue ; **Echap** ferme | ☐ |
-
----
-
-## Section 22 — Bugs connus à confirmer / clore
-
-Points déjà identifiés — vérifier qu'ils sont OK (corrigés) ou les documenter :
-
-| # | Point | Attendu après correctifs | ☐ |
-|---|-------|--------------------------|----|
-| 22.1 | Badge des **profils built-in** (liste + recherche) | **« Built-in »** (corrigé) | ☐ |
-| 22.2 | Langue de l'onglet **History** | Anglais uniquement (corrigé) | ☐ |
-| 22.3 | **Pastille des standards built-in** | **Corrigé :** plus de pastille « Local » jaune sur un built-in (dot seulement si local/pending) | ☐ |
-| 22.4 | Onglet History **hors Electron** (si testé en navigateur) | Message « History is unavailable outside the desktop application » | ☐ |
-| 22.5 | **Error Boundary** (spec §25) | Provoquer une erreur de rendu → message d'erreur **+ bouton « Try again »** (pas d'écran blanc) | ☐ |
-| 22.6 | **Crash recherche** | Corrigé (voir 3.0) : requête longue = pas d'écran blanc | ☐ |
+| 20.1 | Statuts | Couleur **+ texte/pastille** | ☐ |
+| 20.2 | Clavier (Tab) | Contrôles atteignables ; focus visible | ☐ |
+| 20.3 | Boutons icône | `aria-label` présent | ☐ |
+| 20.4 | Dialogue | Focus piégé ; Echap ferme | ☐ |
 
 ---
 
 ## Annexe — Journal des anomalies
 
-| # | Section/# | Sévérité (bloquant/majeur/mineur) | Description | Étapes de repro | Statut |
-|---|-----------|-----------------------------------|-------------|------------------|--------|
-|  |  |  |  |  |  |
+| # | Section/# | Sévérité | Description | Repro | Statut |
+|---|-----------|----------|-------------|-------|--------|
 |  |  |  |  |  |  |
 |  |  |  |  |  |  |
 
 ---
 
-### Rappel final avant livraison
-- ☐ Toutes les sections 1→21 cochées.
-- ☐ Aucun bug **bloquant/majeur** ouvert dans l'annexe.
-- ☐ Décision prise sur le point 22.3 (pastille standards built-in).
-- ☐ Test refait au moins une fois sur la **version packagée** (pas seulement en dev).
+### Points à confirmer sur ce build (résolus en code, à valider en vrai)
+- ☐ **5.2** multi-fenêtre : la 2e fenêtre s'ouvre bien pré-sélectionnée sur la norme.
+- ☐ **11.3 / 12.3** diff coloré (le jaune « modifié » n'apparaît que sur des objets **modifiés après ce build**, le temps que la version de référence se capture).
+
+### Checklist finale de livraison
+- ☐ Sections 1→20 cochées.
+- ☐ Aucune anomalie bloquante/majeure ouverte.
+- ☐ Testé au moins une fois sur la **version packagée**.

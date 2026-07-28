@@ -501,6 +501,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (gitResult.pulledProfiles && gitResult.pulledStandards) {
       (db as any).isSyncingInternal = true;
       const skipped: string[] = [];
+      // Version OFFICIELLE locale AVANT que le pull ne l'écrase : sert de
+      // référence pour colorer le diff côté Admin (14.3), sans rien transmettre
+      // de plus par le protocole — l'admin compare à sa propre copie d'avant.
+      const previousById = new Map<string, any>();
       try {
         for (const rawStd of gitResult.pulledStandards) {
           const std = rawStd as any;
@@ -518,6 +522,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
 
           try {
+            if ((std.status || "approved") === "pending") {
+              const existing = await db.standards.get(std.manifest.id);
+              if (existing) previousById.set(std.manifest.id, existing);
+            }
             await upsertStandard({
               ...std,
               manifest: { ...std.manifest, isBuiltin: false },
@@ -539,6 +547,10 @@ export const useAppStore = create<AppState>((set, get) => ({
             continue;
           }
           try {
+            if (prof.status === "pending") {
+              const existing = await db.profiles.get(prof.id);
+              if (existing) previousById.set(prof.id, existing);
+            }
             await upsertProfile(prof);
           } catch (err) {
             skipped.push(prof.id);
@@ -579,38 +591,44 @@ export const useAppStore = create<AppState>((set, get) => ({
       );
 
       const reconstructedCommits: AdminCommitRequest[] = [
-        ...pendingProfiles.map((p: any) => ({
-          id: `commit-${p.id}`,
-          author: p.author || "Collaborateur",
-          date: p.updatedAt ? p.updatedAt.split('T')[0] : new Date().toISOString().split('T')[0],
-          commitMessage: `Proposition de profil : ${p.name}`,
-          changes: [{
-            id: p.id,
-            type: "profile" as const,
-            // Créé vs modifié : un profil jamais réédité a createdAt === updatedAt.
-            // Heuristique suffisante pour l'étiquette de revue (14.1).
-            action: (p.createdAt && p.updatedAt && p.createdAt !== p.updatedAt
-              ? "Modified"
-              : "Created") as "Created" | "Modified",
-            name: p.name,
-            location: `${p.standardId}`,
-            proposedData: p
-          }]
-        })),
-        ...pendingStandards.map((s: any) => ({
-          id: `commit-${s.manifest.id}`,
-          author: s.lastModifiedBy || "Collaborateur",
-          date: s.updatedAt ? s.updatedAt.split('T')[0] : new Date().toISOString().split('T')[0],
-          commitMessage: `Proposition de taxonomie : ${s.manifest.name || s.manifest.id}`,
-          changes: [{
-            id: s.manifest.id,
-            type: "standard" as const,
-            action: "Modified" as const,
-            name: s.manifest.name || s.manifest.id,
-            location: s.manifest.organization || "Global",
-            proposedData: s
-          }]
-        }))
+        ...pendingProfiles.map((p: any) => {
+          // Version d'avant-pull capturée plus haut : référence du diff + permet
+          // de distinguer Created (aucune version officielle antérieure) de Modified.
+          const previous = previousById.get(p.id);
+          return {
+            id: `commit-${p.id}`,
+            author: p.author || "Collaborateur",
+            date: p.updatedAt ? p.updatedAt.split('T')[0] : new Date().toISOString().split('T')[0],
+            commitMessage: `Proposition de profil : ${p.name}`,
+            changes: [{
+              id: p.id,
+              type: "profile" as const,
+              action: (previous ? "Modified" : "Created") as "Created" | "Modified",
+              name: p.name,
+              location: `${p.standardId}`,
+              proposedData: p,
+              originalData: previous,
+            }],
+          };
+        }),
+        ...pendingStandards.map((s: any) => {
+          const previous = previousById.get(s.manifest.id);
+          return {
+            id: `commit-${s.manifest.id}`,
+            author: s.lastModifiedBy || "Collaborateur",
+            date: s.updatedAt ? s.updatedAt.split('T')[0] : new Date().toISOString().split('T')[0],
+            commitMessage: `Proposition de taxonomie : ${s.manifest.name || s.manifest.id}`,
+            changes: [{
+              id: s.manifest.id,
+              type: "standard" as const,
+              action: (previous ? "Modified" : "Created") as "Created" | "Modified",
+              name: s.manifest.name || s.manifest.id,
+              location: s.manifest.organization || "Global",
+              proposedData: s,
+              originalData: previous,
+            }],
+          };
+        }),
       ];
 
       set({ pendingCommits: reconstructedCommits });
