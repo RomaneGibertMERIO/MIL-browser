@@ -230,24 +230,57 @@ async function seedCentralRepositoryFromBuiltin(
   repoPath: string,
   username: string,
 ): Promise<number> {
-  const candidates = (await db.standards.toArray()).filter(
+  const standards = (await db.standards.toArray()).filter(
     (s: any) => standardWorkspace(s) === "local" && s.manifest?.isBuiltin === true,
   );
-  if (candidates.length === 0) return 0;
+  // Le socle inclut AUSSI les profils built-in : sans eux, le dépôt central ne
+  // reçoit que la taxonomie, et les profils resteraient builtin (invisibles pour
+  // les autres postes). Bug remonté en recette (12.4-6).
+  const profiles = (await getAllProfiles()).filter((p: any) => p.source === "builtin");
+  if (standards.length === 0 && profiles.length === 0) return 0;
 
   let pushed = 0;
-  for (const standard of candidates) {
+
+  // Standards : soumettre PUIS approuver → publiés en OFFICIEL. Le socle est la
+  // base de référence partagée, pas une proposition « pending ».
+  for (const standard of standards) {
     // Ré-attache les images (no-op pour les builtin qui utilisent des chemins).
     const withImages = await attachNodeImages(standard);
-    const result = toIpcResult(
+    const sub = toIpcResult(
       await api.gitSubmitStandard({ repoPath, username, standard: withImages }),
       "gitSubmitStandard n'a renvoyé aucun résultat.",
     );
-    if (result.success) pushed++;
-    else console.error(`Amorçage : "${standard.manifest.id}" non publié — ${result.error}`);
+    if (!sub.success) {
+      console.error(`Amorçage : standard "${standard.manifest.id}" non publié — ${sub.error}`);
+      continue;
+    }
+    const appr = toIpcResult(
+      await api.gitApproveStandard({ repoPath, standardId: standard.manifest.id }),
+      "gitApproveStandard n'a renvoyé aucun résultat.",
+    );
+    if (appr.success) pushed++;
+    else console.error(`Amorçage : standard "${standard.manifest.id}" non approuvé — ${appr.error}`);
   }
 
-  console.log(`Amorçage du dépôt central : ${pushed}/${candidates.length} normes publiées.`);
+  // Profils built-in : même logique (soumission + approbation → officiel).
+  for (const profile of profiles) {
+    const sub = toIpcResult(
+      await api.gitSubmitProfile({ username, profile }),
+      "gitSubmitProfile n'a renvoyé aucun résultat.",
+    );
+    if (!sub.success) {
+      console.error(`Amorçage : profil "${(profile as any).id}" non publié — ${sub.error}`);
+      continue;
+    }
+    const appr = toIpcResult(
+      await api.gitApproveProfile((profile as any).id),
+      "gitApproveProfile n'a renvoyé aucun résultat.",
+    );
+    if (appr.success) pushed++;
+    else console.error(`Amorçage : profil "${(profile as any).id}" non approuvé — ${appr.error}`);
+  }
+
+  console.log(`Amorçage du dépôt central : ${pushed} élément(s) du socle publié(s) en officiel.`);
   return pushed;
 }
 
@@ -348,7 +381,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       .then((raw) => {
         const result = toIpcResult(raw, "Réponse invalide de gitSetRepoPath.");
         if (!result.success) {
-          set({ syncError: `Dépôt central inaccessible : ${result.error ?? "erreur inconnue"}` });
+          // Dépôt injoignable/inexistant : on RESTE en "shared" (le chemin est
+          // configuré) mais on passe Offline → le rail masque Sync/Admin et les
+          // écritures sont refusées, au lieu de laisser croire à une connexion.
+          set({ syncError: `Dépôt central inaccessible : ${result.error ?? "erreur inconnue"}`, isOffline: true });
           return;
         }
         // Connexion établie : on synchronise pour récupérer l'état RÉEL du dépôt
@@ -359,7 +395,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         void get().triggerGitSync();
       })
       .catch((err: unknown) => {
-        set({ syncError: `Dépôt central inaccessible : ${String(err)}` });
+        set({ syncError: `Dépôt central inaccessible : ${String(err)}`, isOffline: true });
       });
   },
   
@@ -755,7 +791,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const message =
         `${failures.length} modification(s) sur ${events.length} n'ont pas pu être poussées — ` +
         failures.join(" | ");
-      set({ syncError: message });
+      // Si l'échec vient d'un dépôt injoignable, on bascule Offline : le badge
+      // le reflète et les écritures suivantes sont refusées (au lieu de pousser
+      // dans le vide en silence).
+      const offline = /introuvable|injoignable|unreachable|not found|ENOENT/i.test(failures.join(" "));
+      set({ syncError: message, ...(offline ? { isOffline: true } : {}) });
       return { success: false, error: message };
     }
 
@@ -807,7 +847,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const message =
         `Impossible de ${action === "approve" ? "valider" : "rejeter"} "${changeItem?.name ?? changeId}" : ` +
         `${result.error ?? "erreur inconnue"}. Aucune modification n'a été appliquée.`;
-      set({ syncError: message });
+      // Dépôt injoignable → Offline (masque Admin/Sync, refuse les écritures).
+      const offline = /introuvable|injoignable|unreachable|not found|ENOENT/i.test(result.error ?? "");
+      set({ syncError: message, ...(offline ? { isOffline: true } : {}) });
       // La proposition RESTE dans la file : elle n'a pas été traitée.
       return { success: false, error: message };
     }

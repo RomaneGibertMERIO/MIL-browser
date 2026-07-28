@@ -301,6 +301,13 @@ async function doSync(remoteInput: string): Promise<void> {
   await ensureDirectories();
 
   const centralPath = getFsPath(remoteInput);
+  // On EXIGE que le dépôt central existe déjà — on ne le crée JAMAIS à la volée.
+  // Un chemin absent = dépôt injoignable ou mal saisi : on lève, l'appelant
+  // bascule alors en Offline et refuse les écritures, au lieu de « réussir » en
+  // fabriquant un dossier fantôme et de laisser pousser dans le vide (bug 14.8).
+  if (!(await exists(centralPath))) {
+    throw new Error(`Dépôt central introuvable ou injoignable : ${centralPath}`);
+  }
   await ensureDirectories(centralPath);
 
   // Initialisation du Git local s'il n'existe pas pour garder l'arborescence propre
