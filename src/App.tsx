@@ -8,6 +8,7 @@ import { HistoryPage } from './features/accounts/HistoryPage';
 import { AppFrame, Brand } from './shared/components/AppFrame';
 import { Icon, type IconName } from './shared/components/ui/Icon';
 import { RepoBadge, RoleBadge } from './shared/components/ui/RepoBadge';
+import { Badge, type BadgeVariant } from './shared/components/ui/Badge';
 import { ChangeCard } from './shared/components/ChangeCard';
 import { useStandards } from './shared/hooks/useStandards';
 import { canAccess, canAccessNow, roleLabel } from './shared/roles';
@@ -251,6 +252,13 @@ function SubTab({
   );
 }
 
+/** Colored action badge for the review (Created=green, Modified=yellow, Deleted=red). */
+const ADMIN_ACTION_VARIANT: Record<string, BadgeVariant> = {
+  Created: "green",
+  Modified: "yellow",
+  Deleted: "red",
+};
+
 export function AdminValidationsPage() {
   const pendingCommits = useAppStore((s) => s.pendingCommits);
   const resolveSingleChange = useAppStore((s) => s.resolveSingleChange);
@@ -322,7 +330,11 @@ export function AdminValidationsPage() {
               <div key={change.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white hover:border-gray-300 transition-colors">
                 <div className="p-4 bg-gray-50 flex items-center justify-between border-b border-gray-200 flex-wrap gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">{change.name}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant={ADMIN_ACTION_VARIANT[change.action] ?? "gray"}>{change.action}</Badge>
+                      <span className="text-xs text-gray-400 uppercase tracking-wide">{change.type}</span>
+                      <p className="text-sm font-semibold text-gray-900">{change.name}</p>
+                    </div>
                     <p className="text-xs text-gray-400 font-mono mt-0.5">{change.location}</p>
                   </div>
 
