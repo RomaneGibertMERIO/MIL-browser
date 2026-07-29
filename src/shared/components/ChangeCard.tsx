@@ -5,10 +5,11 @@
  * Goal (from QA 13.3/14.2): stop showing raw JSON manifests. A profile change is
  * shown as the real Profile Card (grouped fields + chart), a standard/taxonomy
  * change as a clean manifest field grid — the same visual language as everywhere
- * else. When the previous version is available (`originalData`), a field-level
- * diff (old struck red → new green) is shown above the card; today the sync
- * journal does not capture the previous version, so most changes render as the
- * proposed card only (the diff section appears automatically once it does).
+ * else. When the previous version is available (`originalData`), the card is
+ * rendered in diff mode (changed field = yellow "was: …", added = green, removed
+ * = red struck). The sync journal captures the pre-edit version on modification
+ * (schema.ts "updating" hooks), so a modified item shows the diff; a newly
+ * created item has no previous and renders as the plain proposed card.
  */
 import type { StandardPlugin } from "../../core/domain/standard";
 import type { Profile } from "../../core/domain/profile";

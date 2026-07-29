@@ -98,24 +98,30 @@ export class AppDatabase extends Dexie {
 
       if (profile.source === "builtin" && updatedMods.source !== "user") return;
       
-      const updatedObj = { ...obj, ...mods };
       const preImage = { ...(obj as Profile) }; // état AVANT cette modification
       setTimeout(() => {
-        void this.syncEvents
-          .get(String(primKey))
-          .then((existing) =>
-            this.syncEvents.put({
+        // On relit l'objet RÉEL post-écriture. Reconstruire le nouvel objet via
+        // { ...obj, ...mods } casse les changements imbriqués : Dexie représente
+        // une modif de champ imbriqué en clé pointée ("fields.temperature"), donc
+        // le spread garderait l'ancien objet `fields` et le diff ne verrait rien.
+        void Promise.all([
+          this.profiles.get(String(primKey)),
+          this.syncEvents.get(String(primKey)),
+        ])
+          .then(([fresh, existing]) => {
+            if (!fresh) return;
+            return this.syncEvents.put({
               id: String(primKey),
               deviceId: getOrCreateDeviceId(),
               timestamp: Date.now(),
               operation: "upsert",
               entity: "profile",
-              payload: updatedObj,
+              payload: fresh,
               // Référence du diff : la version d'avant la 1re modif non
               // synchronisée, conservée à travers les éditions suivantes.
               previous: existing?.previous ?? preImage,
-            }),
-          )
+            });
+          })
           .catch((err) => console.error("Event error (Profile Update):", err));
       }, 0);
     });
@@ -172,24 +178,28 @@ export class AppDatabase extends Dexie {
         return;
       }
 
-      const updatedObj = { ...obj, ...mods };
       const preImage = standardSyncSummary(obj); // résumé léger d'AVANT la modif
       setTimeout(() => {
-        void this.syncEvents
-          .get(String(primKey))
-          .then((existing) =>
-            this.syncEvents.put({
+        // On relit l'objet RÉEL post-écriture (voir le hook profil "updating") :
+        // { ...obj, ...mods } casse les changements imbriqués du manifeste.
+        void Promise.all([
+          this.standards.get(String(primKey)),
+          this.syncEvents.get(String(primKey)),
+        ])
+          .then(([fresh, existing]) => {
+            if (!fresh) return;
+            return this.syncEvents.put({
               id: String(primKey),
               deviceId: getOrCreateDeviceId(),
               timestamp: Date.now(),
               operation: "upsert",
               entity: "standard",
               // Résumé léger (voir le hook "creating" ci-dessus).
-              payload: standardSyncSummary(updatedObj),
+              payload: standardSyncSummary(fresh),
               // Référence du diff, conservée à travers les éditions successives.
               previous: existing?.previous ?? preImage,
-            }),
-          )
+            });
+          })
           .catch((err) => console.error("Event error (Standard Update):", err));
       }, 0);
     });
