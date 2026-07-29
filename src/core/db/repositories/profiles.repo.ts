@@ -84,8 +84,14 @@ export async function seedBuiltinProfile(profile: Profile): Promise<void> {
 
   await db.transaction("rw", db.profiles, async () => {
     const existing = await db.profiles.get(profile.id);
+    // Un profil de même id mais avec une source non-builtin ("user"/shared) est
+    // la version PUBLIÉE/synchronisée de ce même profil du socle : publier le
+    // socle built-in vers un dépôt conserve l'id mais bascule source -> "user"
+    // (pour qu'il s'affiche "Official"). On la PRÉSERVE — on n'écrase jamais la
+    // version synchronisée de l'utilisateur et on ne crashe pas le démarrage sur
+    // cette collision d'id (même logique que seedStandards pour les standards).
     if (existing !== undefined && existing.source !== "builtin") {
-      throw new Error(`Builtin profile id conflicts with user profile: ${profile.id}`);
+      return;
     }
     await db.profiles.put(profile);
   });
