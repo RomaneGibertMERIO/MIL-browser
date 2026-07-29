@@ -52,6 +52,11 @@ const GROUPS: { key: FieldGroup; label: string }[] = [
 
 export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", diff }: ProfileDetailProps) {
   const previousFields = diff ? (diff.previous?.fields ?? {}) : null;
+  const prev = diff?.previous ?? null;
+  // Un profil dont le schéma ne définit AUCUNE colonne dataset ne doit pas
+  // afficher de zone graphe/table (vide et trompeuse) — cohérent avec l'éditeur
+  // (8.3) et corrige la carte de comparaison « seulement un dataset vide » (11.4).
+  const hasDataset = (schema.datasetColumns?.length ?? 0) > 0;
   const [dataView, setDataView] = useState<"chart" | "table" | "both">("both");
 
   const btnBase = "px-3 py-1 text-xs font-medium rounded border transition-colors";
@@ -75,17 +80,33 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
       {/* ── Header ──────────────────────────────────────────────────── */}
       <Card>
         <div className="flex items-start gap-2 flex-wrap mb-1">
-          <h2 className="text-base font-semibold text-gray-900 leading-snug">
-            {profile.name}
+          <h2 className="text-base font-semibold leading-snug">
+            {prev && prev.name !== profile.name ? (
+              <span className="rounded bg-yellow-50 px-1 text-yellow-800">
+                {profile.name}{" "}
+                <span className="text-xs font-normal text-gray-400">(was: {prev.name})</span>
+              </span>
+            ) : (
+              <span className="text-gray-900">{profile.name}</span>
+            )}
           </h2>
           {(() => {
             const s = sourceStatusStyle(profile.source, profile.status);
             return <Badge variant={s.variant}>{s.label}</Badge>;
           })()}
         </div>
-        {profile.description !== "" && (
-          <p className="mt-0.5 text-sm text-gray-500 leading-relaxed">
-            {profile.description}
+        {(profile.description !== "" || (prev != null && prev.description !== profile.description)) && (
+          <p className="mt-0.5 text-sm leading-relaxed">
+            {prev && prev.description !== profile.description ? (
+              <span className="rounded bg-yellow-50 px-1 text-yellow-800">
+                {profile.description || "—"}
+                {prev.description ? (
+                  <span className="ml-1 text-xs font-normal text-gray-400">(was: {prev.description})</span>
+                ) : null}
+              </span>
+            ) : (
+              <span className="text-gray-500">{profile.description}</span>
+            )}
           </p>
         )}
         {profile.author && profile.author !== "unknown" && (
@@ -140,16 +161,18 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
         );
       })}
 
-      {/* ── Data view toggle + chart + table ────────────────────────── */}
+      {/* ── Data view toggle + chart + table (masqué si pas de dataset) ─ */}
+      {hasDataset && (
       <div className="flex items-center gap-2">
         <span className="text-xs text-gray-400 font-medium">Show:</span>
         <button className={`${btnBase} ${dataView === "both" ? btnActive : btnInactive}`} onClick={() => setDataView("both")}>Both</button>
         <button className={`${btnBase} ${dataView === "chart" ? btnActive : btnInactive}`} onClick={() => setDataView("chart")}>Chart</button>
         <button className={`${btnBase} ${dataView === "table" ? btnActive : btnInactive}`} onClick={() => setDataView("table")}>Table</button>
       </div>
+      )}
 
       {/* ── Chart ───────────────────────────────────────────────────── */}
-      {dataView !== "table" && (
+      {hasDataset && dataView !== "table" && (
       <Card title="Chart">
       <TimeSeriesChart
         columns={schema.datasetColumns}
@@ -160,7 +183,7 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
       )}
 
       {/* ── Data table ──────────────────────────────────────────────── */}
-      {dataView !== "chart" && (
+      {hasDataset && dataView !== "chart" && (
       <Card title={`Dataset — ${profile.dataset.length} rows`}>
         {profile.dataset.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-8">

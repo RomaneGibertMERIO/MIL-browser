@@ -80,12 +80,13 @@ export class AppDatabase extends Dexie {
       
       setTimeout(() => {
         this.syncEvents.put({
-          id: String(primKey), 
+          id: String(primKey),
           deviceId: getOrCreateDeviceId(),
           timestamp: Date.now(),
           operation: "upsert",
           entity: "profile",
-          payload: obj
+          payload: obj,
+          origin: "create",
         }).catch(err => console.error("Event error (Profile Create):", err));
       }, 0);
     });
@@ -120,6 +121,8 @@ export class AppDatabase extends Dexie {
               // Référence du diff : la version d'avant la 1re modif non
               // synchronisée, conservée à travers les éditions suivantes.
               previous: existing?.previous ?? preImage,
+              // Un objet créé localement reste "Created" même après édition.
+              origin: existing?.origin ?? "update",
             });
           })
           .catch((err) => console.error("Event error (Profile Update):", err));
@@ -162,7 +165,8 @@ export class AppDatabase extends Dexie {
           // images base64 (jusqu'à ~16 Mo). Les stocker ici gonflait chaque
           // événement et gelait refreshLocalChanges à la moindre modification.
           // submitCommit relit la version complète depuis db.standards au push.
-          payload: standardSyncSummary(obj)
+          payload: standardSyncSummary(obj),
+          origin: "create",
         }).catch(err => console.error("Event error (Standard Create):", err));
       }, 0);
     });
@@ -198,6 +202,8 @@ export class AppDatabase extends Dexie {
               payload: standardSyncSummary(fresh),
               // Référence du diff, conservée à travers les éditions successives.
               previous: existing?.previous ?? preImage,
+              // Un standard créé localement reste "Created" même après édition.
+              origin: existing?.origin ?? "update",
             });
           })
           .catch((err) => console.error("Event error (Standard Update):", err));

@@ -93,8 +93,9 @@ export function DynamicDiff({
 
   if (rows.length === 0) {
     return (
-      <p className="text-sm italic text-gray-400">
-        No field-level differences (an image-only change is shown in the node preview).
+      <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+        No changes to the standard's top-level fields. This change affects a node's
+        structure or image, which is visible when browsing the standard's taxonomy.
       </p>
     );
   }

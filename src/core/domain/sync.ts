@@ -63,6 +63,14 @@ export const SyncEventSchema = z.object({
    * pour les standards (résumé sans images), plein pour les profils.
    */
   previous: z.unknown().optional(),
+  /**
+   * Nature du changement, figée à la 1re écriture et conservée à travers les
+   * éditions successives : "create" = objet créé localement (jamais officiel),
+   * "update" = modification d'un objet existant. Pilote le libellé Created /
+   * Modified de la revue/Sync, indépendamment de la présence d'un `previous`
+   * (un objet créé puis édité a un `previous` mais reste bien "Created").
+   */
+  origin: z.enum(["create", "update"]).optional(),
 });
 
 export type SyncEvent = z.infer<typeof SyncEventSchema>;

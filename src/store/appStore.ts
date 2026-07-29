@@ -436,18 +436,23 @@ export const useAppStore = create<AppState>((set, get) => ({
           : (payload?.standardId ? `${payload.standardId}` : "Root");
 
         const previous = (event as any).previous;
+        const origin = (event as any).origin as "create" | "update" | undefined;
+        // "Created" quand l'objet a été créé localement (marqueur figé à la
+        // création). Un objet créé puis édité a un `previous` mais reste Created.
+        // Repli sur l'ancienne heuristique (présence de `previous`) pour les
+        // événements enregistrés avant l'ajout du marqueur `origin`.
+        const isCreated = origin ? origin === "create" : !previous;
         aggregatedMap.set(event.id, {
           id: event.id,
           type: event.entity as 'profile' | 'standard',
-          // Created vs Modified : présence d'une version de référence (previous).
           action:
-            event.operation === 'delete' ? 'Deleted' : previous ? 'Modified' : 'Created',
+            event.operation === 'delete' ? 'Deleted' : isCreated ? 'Created' : 'Modified',
           name: name,
           location: location,
           proposedData: payload,
           // Version d'avant la 1re modif → active le diff « ancien → nouveau »
-          // (rouge/vert) dans la carte de comparaison (Sync).
-          originalData: previous,
+          // (rouge/vert). Pas de diff pour un objet créé (tout est neuf).
+          originalData: isCreated ? undefined : previous,
         });
       }
 
@@ -535,6 +540,13 @@ export const useAppStore = create<AppState>((set, get) => ({
               // Vient du dépôt central : c'est la version qui fait autorité.
               workspace: "shared",
             } as any);
+            // Réconciliation : quand le central renvoie cet item comme OFFICIEL
+            // (approved), toute proposition locale résiduelle le concernant a été
+            // acceptée/supersédée. On purge l'événement de synchro fantôme, sinon
+            // il « revient » dans la liste au refresh (15.2 / 11.3b).
+            if ((std.status || "approved") === "approved") {
+              await db.syncEvents.delete(std.manifest.id);
+            }
           } catch (err) {
             skipped.push(std.manifest.id);
             console.error(`[sync] Standard "${std.manifest.id}" non importé :`, err);
@@ -558,6 +570,11 @@ export const useAppStore = create<AppState>((set, get) => ({
             // son statut (Official/Pending) et non « Built-in » — y compris pour
             // les dépôts déjà publiés dont le fichier porte encore source="builtin".
             await upsertProfile({ ...prof, source: "user" });
+            // Réconciliation (voir le bloc standards) : un profil officiel
+            // renvoyé par le central purge son événement de synchro résiduel.
+            if ((prof.status || "approved") === "approved") {
+              await db.syncEvents.delete(prof.id);
+            }
           } catch (err) {
             skipped.push(prof.id);
             console.error(`[sync] Profil "${prof.id}" non importé :`, err);
