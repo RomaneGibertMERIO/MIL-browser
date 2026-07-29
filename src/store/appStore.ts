@@ -442,11 +442,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         // Repli sur l'ancienne heuristique (présence de `previous`) pour les
         // événements enregistrés avant l'ajout du marqueur `origin`.
         const isCreated = origin ? origin === "create" : !previous;
+        // Demande de suppression d'un objet officiel : passe par le hook "upsert"
+        // (marqueur pendingDeletion) mais doit s'afficher comme "Deleted".
+        const isPendingDeletion = (payload as any)?.pendingDeletion === true;
         aggregatedMap.set(event.id, {
           id: event.id,
           type: event.entity as 'profile' | 'standard',
           action:
-            event.operation === 'delete' ? 'Deleted' : isCreated ? 'Created' : 'Modified',
+            event.operation === 'delete' || isPendingDeletion
+              ? 'Deleted'
+              : isCreated ? 'Created' : 'Modified',
           name: name,
           location: location,
           proposedData: payload,
@@ -626,7 +631,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             changes: [{
               id: p.id,
               type: "profile" as const,
-              action: (previous ? "Modified" : "Created") as "Created" | "Modified",
+              action: (p.pendingDeletion ? "Deleted" : previous ? "Modified" : "Created") as "Created" | "Modified" | "Deleted",
               name: p.name,
               location: `${p.standardId}`,
               proposedData: p,
@@ -644,7 +649,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             changes: [{
               id: s.manifest.id,
               type: "standard" as const,
-              action: (previous ? "Modified" : "Created") as "Created" | "Modified",
+              action: (s.pendingDeletion ? "Deleted" : previous ? "Modified" : "Created") as "Created" | "Modified" | "Deleted",
               name: s.manifest.name || s.manifest.id,
               location: s.manifest.organization || "Global",
               proposedData: s,
@@ -877,13 +882,30 @@ export const useAppStore = create<AppState>((set, get) => ({
     const commit = state.pendingCommits.find((c) => c.id === commitId);
     const changeItem = commit?.changes.find((c) => c.id === changeId);
     const entityType = changeItem ? changeItem.type : "profile";
+    // Demande de suppression (spec §17) : approve = suppression réelle, reject =
+    // restauration en "approved" (l'objet reste officiel).
+    const isDeletion = changeItem?.action === "Deleted";
 
     const nextStatus = action === "approve" ? "approved" : "local";
 
     // 1. Appel Git — on ne touche à RIEN tant qu'il n'a pas explicitement réussi.
     let result: IpcResult;
     try {
-      if (entityType === "profile") {
+      if (isDeletion) {
+        result = toIpcResult(
+          action === "approve"
+            ? entityType === "profile"
+              ? await api.gitDeleteProfile(changeId)
+              : await api.gitDeleteStandard({ repoPath: state.gitRepoPath, standardId: changeId })
+            : await api.gitRejectDeletion({
+                repoPath: state.gitRepoPath,
+                entity: entityType === "profile" ? "profile" : "standard",
+                id: changeId,
+                reason: reason ?? "",
+              }),
+          `The "${action}" operation is not available on this Electron bridge.`,
+        );
+      } else if (entityType === "profile") {
         result = toIpcResult(
           action === "approve"
             ? await api.gitApproveProfile(changeId)
@@ -920,7 +942,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 2. Le dépôt a accepté : on répercute en base locale.
     (db as any).isSyncingInternal = true;
     try {
-      if (entityType === "profile") {
+      if (isDeletion && action === "approve") {
+        // Suppression validée : on efface réellement en base locale.
+        if (entityType === "profile") {
+          await db.profiles.delete(changeId);
+          await db.syncEvents.delete(changeId);
+        } else {
+          const profileKeys = await db.profiles.where("standardId").equals(changeId).primaryKeys();
+          await Promise.all(profileKeys.map((k) => db.profiles.delete(k)));
+          await db.standards.delete(changeId);
+          await db.syncEvents.bulkDelete([changeId, ...profileKeys.map((k) => String(k))]);
+          await deleteNodeImagesForStandard(changeId);
+        }
+      } else if (isDeletion && action === "reject") {
+        // Suppression refusée : l'objet redevient officiel (approved), flag effacé.
+        if (entityType === "profile") {
+          const p = await db.profiles.get(changeId);
+          if (p) await upsertProfile({ ...p, status: "approved", pendingDeletion: false });
+        } else {
+          const s: any = await db.standards.get(changeId);
+          if (s) await upsertStandard({ ...s, status: "approved", pendingDeletion: false } as any);
+        }
+        await db.syncEvents.delete(changeId);
+      } else if (entityType === "profile") {
         const targetProfile = await db.profiles.get(changeId);
         if (targetProfile) {
           await upsertProfile({ ...targetProfile, status: nextStatus });

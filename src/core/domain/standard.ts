@@ -287,6 +287,9 @@ export const StandardPluginSchema = z.object({
   /** ISO-8601, positionné lors des soumissions/validations Git. */
   updatedAt: z.string().optional(),
 
+  /** Demande de suppression en attente de validation admin (voir ProfileSchema). */
+  pendingDeletion: z.boolean().optional(),
+
   // ── Retour de validation (voir ProfileSchema pour la sémantique) ──
   rejectedBy: z.string().optional(),
   rejectedAt: z.string().optional(),

@@ -130,6 +130,13 @@ export interface ElectronBridge {
     standardId: string;
     reason: string;
   }) => Promise<IpcResult>;
+  /** Refuse une demande de suppression : restaure l'objet officiel (approved). */
+  gitRejectDeletion: (payload: {
+    repoPath: string;
+    entity: "profile" | "standard";
+    id: string;
+    reason: string;
+  }) => Promise<IpcResult>;
 
   gitListSessions: (repoPath?: string) => Promise<SessionsResult>;
   gitSetRole: (payload: { repoPath?: string; username: string; role: UserRole }) => Promise<IpcResult>;

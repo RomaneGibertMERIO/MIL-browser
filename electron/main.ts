@@ -11,6 +11,7 @@ import {
   approveProfileInGit,
   rejectProfileInGit,
   rejectStandardInGit,
+  rejectDeletionInGit,
   readAdmins,
   isAdminUser,
   deleteProfileFromGit,
@@ -456,6 +457,24 @@ ipcMain.handle("git:reject-standard", async (_event, payload) => {
     return await rejectStandardInGit(targetPath, currentUser(), standardId, reason ?? "");
   } catch (error: any) {
     console.error("Erreur git:reject-standard:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("git:reject-deletion", async (_event, payload) => {
+  try {
+    const { repoPath, entity, id, reason } = payload;
+    const targetPath = repoPath || activeRemotePath;
+
+    if (!targetPath) {
+      return { success: false, error: "No Git repository configured." };
+    }
+
+    const denied = await assertAdmin(targetPath);
+    if (denied) return denied;
+    return await rejectDeletionInGit(targetPath, currentUser(), entity, id, reason ?? "");
+  } catch (error: any) {
+    console.error("Erreur git:reject-deletion:", error);
     return { success: false, error: error.message };
   }
 });

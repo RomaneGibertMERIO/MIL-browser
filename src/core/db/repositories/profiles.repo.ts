@@ -116,6 +116,18 @@ export async function deleteProfile(id: string): Promise<void> {
     await db.syncEvents.delete(id);
     return;
   }
+
+  // Partagé : supprimer un objet OFFICIEL (approved) doit passer par la revue
+  // admin (spec §17). On ne l'efface pas — on le marque en demande de
+  // suppression, qui part comme proposition "pending" via le hook "updating".
+  // L'admin approuve (suppression réelle) ou refuse (retour en approved).
+  const existing = await db.profiles.get(id);
+  if (existing && existing.status === "approved") {
+    await upsertProfile({ ...existing, status: "pending", pendingDeletion: true });
+    return;
+  }
+
+  // Objet local/pending jamais officiel : suppression directe (rien à réviser).
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
     // Déclenche automatiquement le hook "deleting" de schema.ts
     await db.profiles.delete(id);

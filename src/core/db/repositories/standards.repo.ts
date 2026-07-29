@@ -134,6 +134,15 @@ export async function deleteStandardAndProfiles(id: string): Promise<void> {
   // purement locale), et le bootstrap ne réinstalle le socle que si l'espace
   // local redevient vide (filet de sécurité).
 
+  // Partagé : supprimer un standard OFFICIEL (approved) passe par la revue admin
+  // (spec §17). On marque seulement le standard en demande de suppression (les
+  // profils restent en place) ; à l'approbation, la cascade réelle s'exécute.
+  if (useAppStore.getState().repoMode !== "local" && (standard as any).status === "approved") {
+    await upsertStandard({ ...standard, status: "pending", pendingDeletion: true } as any);
+    await useAppStore.getState().refreshLocalChanges();
+    return;
+  }
+
   const profileKeys = await db.profiles
     .where("standardId")
     .equals(id)

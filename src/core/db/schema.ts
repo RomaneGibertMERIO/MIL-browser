@@ -28,6 +28,9 @@ export function standardSyncSummary(std: any): any {
     status: std?.status,
     source: std?.source,
     lastModifiedBy: std?.lastModifiedBy,
+    // Nécessaire pour classer une demande de suppression comme "Deleted" dans la
+    // synchro/revue à partir du seul résumé de l'événement.
+    pendingDeletion: std?.pendingDeletion,
   };
 }
 

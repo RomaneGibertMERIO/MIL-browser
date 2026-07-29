@@ -72,6 +72,14 @@ export const ProfileSchema = z.object({
    */
   forkedFrom: z.string().optional(),
 
+  /**
+   * Demande de suppression en attente de validation admin (spec §17) : quand un
+   * contributeur supprime un objet OFFICIEL, on ne l'efface pas — on le marque
+   * ainsi et il part comme proposition "pending". L'admin approuve (suppression
+   * réelle) ou refuse (retour en approved). Optionnel/additif.
+   */
+  pendingDeletion: z.boolean().optional(),
+
   // ── Retour de validation ──
   // Renseignés quand un administrateur refuse la proposition. Le profil
   // repasse alors en "local" chez son auteur, qui conserve son travail et

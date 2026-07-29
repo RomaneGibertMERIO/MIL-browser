@@ -937,5 +937,66 @@ export async function rejectStandardInGit(
   }
 }
 
+/**
+ * Refuse une DEMANDE DE SUPPRESSION (spec §17) : contrairement à un refus de
+ * proposition (rejectProfileInGit / rejectStandardInGit) qui SUPPRIME le fichier,
+ * refuser une suppression doit CONSERVER l'objet officiel. On restaure donc son
+ * statut "approved" et on efface le marqueur `pendingDeletion`.
+ */
+export async function rejectDeletionInGit(
+  remoteInput: string,
+  adminUsername: string,
+  entity: "profile" | "standard",
+  id: string,
+  reason: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await ensureDirectories();
+    await initOrCloneRepository(remoteInput);
+    const centralPath = getFsPath(remoteInput);
+
+    const subDir = entity === "profile" ? "profiles" : "standards";
+    const fileName = `${entity}-${id}.json`;
+    const centralFile = path.join(centralPath, subDir, fileName);
+    const localFile = path.join(WORKSPACE_DIR, subDir, fileName);
+
+    let raw: any;
+    try {
+      raw = JSON.parse(await fsp.readFile(centralFile, "utf8"));
+    } catch {
+      try {
+        raw = JSON.parse(await fsp.readFile(localFile, "utf8"));
+      } catch {
+        throw new Error(`Could not find the ${entity} to restore for id: ${id}`);
+      }
+    }
+
+    raw.status = "approved";
+    raw.pendingDeletion = false;
+    raw.updatedAt = new Date().toISOString();
+
+    await fsp.mkdir(path.dirname(centralFile), { recursive: true });
+    await fsp.writeFile(centralFile, JSON.stringify(raw, null, 2), "utf8");
+    await fsp.mkdir(path.dirname(localFile), { recursive: true });
+    await fsp.writeFile(localFile, JSON.stringify(raw, null, 2), "utf8");
+
+    const name = entity === "profile" ? (raw.name ?? id) : (raw.manifest?.label ?? id);
+    await appendHistoryEvent(centralPath, {
+      id,
+      action: "reject",
+      entity,
+      name,
+      by: adminUsername,
+      at: new Date().toISOString(),
+      reason,
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error(`Erreur rejectDeletionInGit (${entity} ${id}) :`, error);
+    return { success: false, error: error.message };
+  }
+}
+
 // L'historique n'est plus lu depuis le git local (propre à une machine) mais
 // depuis le journal d'audit CENTRAL partagé — voir readCentralHistory ci-dessus.

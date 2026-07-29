@@ -49,6 +49,9 @@ const bridge = {
 
   gitRejectStandard: (payload: { repoPath: string; standardId: string; reason: string }) =>
     ipcRenderer.invoke("git:reject-standard", payload),
+
+  gitRejectDeletion: (payload: { repoPath: string; entity: "profile" | "standard"; id: string; reason: string }) =>
+    ipcRenderer.invoke("git:reject-deletion", payload),
 };
 
 // Exposé sous les deux noms : "electron" est le nom courant, "electronAPI"
