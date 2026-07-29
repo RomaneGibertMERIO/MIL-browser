@@ -186,7 +186,12 @@ export async function readRole(remoteInput: string, username: string): Promise<U
 /** Enregistre le passage d'un poste (connexion ou pull) dans le dépôt central. */
 export async function recordSession(remoteInput: string, username: string): Promise<void> {
   try {
-    const dir = path.join(getFsPath(remoteInput), SESSIONS_SUBDIR);
+    const centralPath = getFsPath(remoteInput);
+    // Ne JAMAIS recréer le dépôt central : s'il n'existe pas (supprimé /
+    // injoignable), on n'écrit rien. Sinon enregistrer une session suffisait à
+    // fabriquer un faux dépôt, cassant la « source de vérité » partagée.
+    if (!(await exists(centralPath))) return;
+    const dir = path.join(centralPath, SESSIONS_SUBDIR);
     await fsp.mkdir(dir, { recursive: true });
     const file = path.join(dir, `${safeName(username)}.json`);
 
@@ -281,7 +286,17 @@ export function initOrCloneRepository(remoteInput: string): Promise<void> {
   }
 
   if (syncInFlight) return syncInFlight;
-  if (Date.now() - lastSyncAt < SYNC_TTL_MS) return Promise.resolve();
+  if (Date.now() - lastSyncAt < SYNC_TTL_MS) {
+    // Même dans la fenêtre de cache, on RE-VÉRIFIE que le dépôt central existe
+    // toujours. Sinon une écriture (submit/approve…) survenant juste après une
+    // synchro réussie sauterait doSync et recréerait un dépôt fantôme au lieu de
+    // refuser l'accès. Le dépôt central doit TOUJOURS préexister.
+    return exists(getFsPath(remoteInput)).then((ok) => {
+      if (!ok) {
+        throw new Error(`Dépôt central introuvable ou injoignable : ${getFsPath(remoteInput)}`);
+      }
+    });
+  }
 
   syncInFlight = doSync(remoteInput).finally(() => {
     syncInFlight = null;
