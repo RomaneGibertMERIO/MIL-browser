@@ -619,6 +619,11 @@ export async function submitProfileToGit(remoteInput: string, username: string, 
   const profileToSave = {
     ...profile,
     status: "pending",
+    // Un profil poussé au dépôt central est une contribution partagée, plus un
+    // built-in local : sans ça, un profil built-in publié gardait source
+    // "builtin" et restait étiqueté « Built-in » au lieu de « Official » une
+    // fois validé (cohérent avec submitStandardToGit).
+    source: "user",
     author: username,
     updatedAt: new Date().toISOString()
   };

@@ -551,7 +551,11 @@ export const useAppStore = create<AppState>((set, get) => ({
               const existing = await db.profiles.get(prof.id);
               if (existing) previousById.set(prof.id, existing);
             }
-            await upsertProfile(prof);
+            // Tout profil venant du dépôt central est officiel/partagé, jamais un
+            // built-in local : on force source="user" pour qu'il s'affiche selon
+            // son statut (Official/Pending) et non « Built-in » — y compris pour
+            // les dépôts déjà publiés dont le fichier porte encore source="builtin".
+            await upsertProfile({ ...prof, source: "user" });
           } catch (err) {
             skipped.push(prof.id);
             console.error(`[sync] Profil "${prof.id}" non importé :`, err);
