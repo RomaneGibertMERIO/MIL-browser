@@ -282,7 +282,7 @@ const SYNC_TTL_MS = 3000;
 
 export function initOrCloneRepository(remoteInput: string): Promise<void> {
   if (!remoteInput || remoteInput.trim() === "") {
-    return Promise.reject(new Error("Aucun chemin de dépôt central réseau n'est configuré."));
+    return Promise.reject(new Error("No central network repository path is configured."));
   }
 
   if (syncInFlight) return syncInFlight;
@@ -293,7 +293,7 @@ export function initOrCloneRepository(remoteInput: string): Promise<void> {
     // refuser l'accès. Le dépôt central doit TOUJOURS préexister.
     return exists(getFsPath(remoteInput)).then((ok) => {
       if (!ok) {
-        throw new Error(`Dépôt central introuvable ou injoignable : ${getFsPath(remoteInput)}`);
+        throw new Error(`Central repository not found or unreachable: ${getFsPath(remoteInput)}`);
       }
     });
   }
@@ -321,7 +321,7 @@ async function doSync(remoteInput: string): Promise<void> {
   // bascule alors en Offline et refuse les écritures, au lieu de « réussir » en
   // fabriquant un dossier fantôme et de laisser pousser dans le vide (bug 14.8).
   if (!(await exists(centralPath))) {
-    throw new Error(`Dépôt central introuvable ou injoignable : ${centralPath}`);
+    throw new Error(`Central repository not found or unreachable: ${centralPath}`);
   }
   await ensureDirectories(centralPath);
 
@@ -691,7 +691,7 @@ export async function approveProfileInGit(remoteInput: string, adminUsername: st
     const localPath = path.join(PROFILES_DIR, fileName);
 
     if (!(await exists(localPath))) {
-      throw new Error(`Impossible de trouver la proposition locale pour l'ID : ${profileId}`);
+      throw new Error(`Could not find the local proposal for id: ${profileId}`);
     }
 
     const profile = JSON.parse(await fsp.readFile(localPath, "utf8"));
@@ -792,7 +792,7 @@ export async function approveStandardInGit(remoteInput: string, adminUsername: s
     const localPath = path.join(STANDARDS_DIR, fileName);
 
     if (!(await exists(localPath))) {
-      throw new Error(`Impossible de trouver le standard local pour l'ID : ${standardId}`);
+      throw new Error(`Could not find the local standard for id: ${standardId}`);
     }
 
     const standard = JSON.parse(await fsp.readFile(localPath, "utf8"));
@@ -838,7 +838,7 @@ export async function submitStandardToGit(remoteInput: string, username: string,
   // produisait "standard-undefined.json", fichier corrompu qui bloquait la
   // synchronisation de tous les postes. On refuse plutôt que d'écrire.
   if (!standard?.manifest?.id || typeof standard.manifest.id !== "string") {
-    throw new Error("Standard invalide : manifest.id manquant, publication refusée.");
+    throw new Error("Invalid standard: missing manifest.id, push refused.");
   }
 
   await ensureDirectories();

@@ -32,6 +32,20 @@ export interface StandardLoadResult {
 // ---------------------------------------------------------------------------
 
 /**
+ * The bundled built-in baseline (standards + profiles) straight from
+ * database.json. This is the IMMUTABLE source of truth for the built-in base:
+ * publishing it to a central repo must read it here, never the local DB (whose
+ * built-in records get flipped to shared/official once published, so they can no
+ * longer be re-published to a new repo).
+ */
+export function getBuiltinBaseline(): { standards: any[]; profiles: any[] } {
+  return {
+    standards: (builtinDatabase as any).standards ?? [],
+    profiles: (builtinDatabase as any).profiles ?? [],
+  };
+}
+
+/**
  * Loads everything from the unique global database via the Electron bridge.
  */
 export async function loadBuiltinStandards(): Promise<StandardLoadResult[]> {

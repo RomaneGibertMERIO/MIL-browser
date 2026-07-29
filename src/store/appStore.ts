@@ -236,57 +236,59 @@ async function seedCentralRepositoryFromBuiltin(
   repoPath: string,
   username: string,
 ): Promise<number> {
-  const standards = (await db.standards.toArray()).filter(
-    (s: any) => standardWorkspace(s) === "local" && s.manifest?.isBuiltin === true,
-  );
-  // Le socle inclut AUSSI les profils built-in : sans eux, le dépôt central ne
-  // reçoit que la taxonomie, et les profils resteraient builtin (invisibles pour
-  // les autres postes). Bug remonté en recette (12.4-6).
-  const profiles = (await getAllProfiles()).filter((p: any) => p.source === "builtin");
+  // Source of truth for the baseline = the bundled database.json, NEVER the local
+  // DB: once published, the local built-in records get flipped to shared/official,
+  // so they could no longer be re-published to a fresh repo ("No built-in
+  // standards available to publish"). database.json is immutable and always here.
+  const { getBuiltinBaseline } = await import("../core/engine/standardLoader");
+  const { standards, profiles } = getBuiltinBaseline();
   if (standards.length === 0 && profiles.length === 0) return 0;
 
   let pushed = 0;
 
-  // Standards : soumettre PUIS approuver → publiés en OFFICIEL. Le socle est la
-  // base de référence partagée, pas une proposition « pending ».
+  // Standards: submit THEN approve → published as OFFICIAL (the baseline is the
+  // shared reference set, not a "pending" proposal).
   for (const standard of standards) {
-    // Ré-attache les images (no-op pour les builtin qui utilisent des chemins).
+    if (!standard?.manifest?.id) continue;
+    // Re-attach images so the central file is self-contained across machines.
     const withImages = await attachNodeImages(standard);
     const sub = toIpcResult(
       await api.gitSubmitStandard({ repoPath, username, standard: withImages }),
-      "gitSubmitStandard n'a renvoyé aucun résultat.",
+      "gitSubmitStandard returned no result.",
     );
     if (!sub.success) {
-      console.error(`Amorçage : standard "${standard.manifest.id}" non publié — ${sub.error}`);
+      console.error(`Baseline: standard "${standard.manifest.id}" not published — ${sub.error}`);
       continue;
     }
     const appr = toIpcResult(
       await api.gitApproveStandard({ repoPath, standardId: standard.manifest.id }),
-      "gitApproveStandard n'a renvoyé aucun résultat.",
+      "gitApproveStandard returned no result.",
     );
     if (appr.success) pushed++;
-    else console.error(`Amorçage : standard "${standard.manifest.id}" non approuvé — ${appr.error}`);
+    else console.error(`Baseline: standard "${standard.manifest.id}" not approved — ${appr.error}`);
   }
 
-  // Profils built-in : même logique (soumission + approbation → officiel).
+  // Built-in profiles: same flow (submit + approve → official).
   for (const profile of profiles) {
+    const pid = (profile as any)?.id;
+    if (!pid) continue;
     const sub = toIpcResult(
       await api.gitSubmitProfile({ username, profile }),
-      "gitSubmitProfile n'a renvoyé aucun résultat.",
+      "gitSubmitProfile returned no result.",
     );
     if (!sub.success) {
-      console.error(`Amorçage : profil "${(profile as any).id}" non publié — ${sub.error}`);
+      console.error(`Baseline: profile "${pid}" not published — ${sub.error}`);
       continue;
     }
     const appr = toIpcResult(
-      await api.gitApproveProfile((profile as any).id),
-      "gitApproveProfile n'a renvoyé aucun résultat.",
+      await api.gitApproveProfile(pid),
+      "gitApproveProfile returned no result.",
     );
     if (appr.success) pushed++;
-    else console.error(`Amorçage : profil "${(profile as any).id}" non approuvé — ${appr.error}`);
+    else console.error(`Baseline: profile "${pid}" not approved — ${appr.error}`);
   }
 
-  console.log(`Amorçage du dépôt central : ${pushed} élément(s) du socle publié(s) en officiel.`);
+  console.log(`Baseline publish: ${pushed} built-in item(s) published as official.`);
   return pushed;
 }
 
@@ -325,8 +327,8 @@ async function applyDeletions(deletions: DeletionMarker[]): Promise<void> {
 }
 
 const NO_BRIDGE_ERROR =
-  "Le pont Electron est indisponible : l'application tourne hors de son conteneur de bureau. " +
-  "Aucune opération sur le dépôt central n'a été effectuée.";
+  "The desktop bridge is unavailable: the app is running outside its desktop container. " +
+  "No operation was performed on the central repository.";
 
 export const useAppStore = create<AppState>((set, get) => ({
   mode: "assistant",
@@ -375,7 +377,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         .then(({ loadBuiltinStandards }) => loadBuiltinStandards())
         .then(() => get().refreshLocalChanges())
         .catch((err: unknown) => {
-          set({ syncError: `Restauration du socle impossible : ${String(err)}` });
+          set({ syncError: `Could not restore the built-in base: ${String(err)}` });
         });
     }
 
@@ -390,7 +392,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           // Dépôt injoignable/inexistant : on RESTE en "shared" (le chemin est
           // configuré) mais on passe Offline → le rail masque Sync/Admin et les
           // écritures sont refusées, au lieu de laisser croire à une connexion.
-          set({ syncError: `Dépôt central inaccessible : ${result.error ?? "erreur inconnue"}`, isOffline: true });
+          set({ syncError: `Central repository unreachable: ${result.error ?? "unknown error"}`, isOffline: true });
           return;
         }
         // Connexion établie : on synchronise pour récupérer l'état RÉEL du dépôt
@@ -401,7 +403,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         void get().triggerGitSync();
       })
       .catch((err: unknown) => {
-        set({ syncError: `Dépôt central inaccessible : ${String(err)}`, isOffline: true });
+        set({ syncError: `Central repository unreachable: ${String(err)}`, isOffline: true });
       });
   },
   
@@ -477,7 +479,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await api.gitSetRepoPath(state.gitRepoPath);
       gitResult = await api.gitSync(state.systemUsername);
     } catch (err) {
-      const message = `Synchronisation Git impossible : ${err instanceof Error ? err.message : String(err)}`;
+      const message = `Git sync failed: ${err instanceof Error ? err.message : String(err)}`;
       // On RESTE en mode partagé : l'utilisateur continue sur le dernier état
       // synchronisé plutôt que de voir les normes de l'équipe disparaître.
       set({ syncError: message, isOffline: true });
@@ -486,7 +488,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     if (!gitResult?.success) {
-      const message = `Synchronisation Git refusée : ${gitResult?.error ?? "erreur inconnue"}`;
+      const message = `Git sync refused: ${gitResult?.error ?? "unknown error"}`;
       set({ syncError: message, isOffline: true });
       await get().refreshLocalChanges();
       return { success: false, error: message };
@@ -516,7 +518,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           // la file de validation — plus aucun pending n'apparaissait, ni les
           // siens ni ceux des autres. On ignore le fichier fautif et on continue.
           if (!std?.manifest?.id || typeof std.manifest.id !== "string") {
-            skipped.push("standard sans identifiant");
+            skipped.push("standard without id");
             console.error("[sync] Standard central corrompu ignoré (manifest.id manquant) :", std);
             continue;
           }
@@ -542,7 +544,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         for (const rawProf of gitResult.pulledProfiles) {
           const prof = rawProf as any;
           if (!prof?.id || typeof prof.id !== "string") {
-            skipped.push("profil sans identifiant");
+            skipped.push("profile without id");
             console.error("[sync] Profil central corrompu ignoré (id manquant) :", prof);
             continue;
           }
@@ -577,9 +579,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (skipped.length > 0) {
         set({
           syncError:
-            `${skipped.length} enregistrement(s) du dépôt central sont corrompus et ont été ignorés ` +
+            `${skipped.length} central repository record(s) are corrupted and were skipped ` +
             `(${skipped.slice(0, 5).join(", ")}${skipped.length > 5 ? "…" : ""}). ` +
-            `La synchronisation s'est poursuivie normalement.`,
+            `Synchronization continued normally.`,
         });
       }
 
@@ -601,9 +603,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           const previous = previousById.get(p.id);
           return {
             id: `commit-${p.id}`,
-            author: p.author || "Collaborateur",
+            author: p.author || "Contributor",
             date: p.updatedAt ? p.updatedAt.split('T')[0] : new Date().toISOString().split('T')[0],
-            commitMessage: `Proposition de profil : ${p.name}`,
+            commitMessage: `Profile proposal: ${p.name}`,
             changes: [{
               id: p.id,
               type: "profile" as const,
@@ -619,9 +621,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           const previous = previousById.get(s.manifest.id);
           return {
             id: `commit-${s.manifest.id}`,
-            author: s.lastModifiedBy || "Collaborateur",
+            author: s.lastModifiedBy || "Contributor",
             date: s.updatedAt ? s.updatedAt.split('T')[0] : new Date().toISOString().split('T')[0],
-            commitMessage: `Proposition de taxonomie : ${s.manifest.name || s.manifest.id}`,
+            commitMessage: `Taxonomy proposal: ${s.manifest.name || s.manifest.id}`,
             changes: [{
               id: s.manifest.id,
               type: "standard" as const,
@@ -726,11 +728,11 @@ export const useAppStore = create<AppState>((set, get) => ({
               event.entity === "profile"
                 ? await api.gitDeleteProfile(event.id)
                 : await api.gitDeleteStandard({ repoPath: state.gitRepoPath, standardId: event.id }),
-              "La suppression n'est pas disponible sur ce pont Electron.",
+              "Deletion is not available on this Electron bridge.",
             );
 
             if (!result.success) {
-              failures.push(`${label} : ${result.error ?? "refus du dépôt central"}`);
+              failures.push(`${label}: ${result.error ?? "rejected by the central repository"}`);
               continue;
             }
 
@@ -750,11 +752,11 @@ export const useAppStore = create<AppState>((set, get) => ({
                 username: state.systemUsername,
                 profile: profileToSend
               }),
-              "gitSubmitProfile n'a renvoyé aucun résultat.",
+              "gitSubmitProfile returned no result.",
             );
 
             if (!result.success) {
-              failures.push(`${label} : ${result.error ?? "refus du dépôt central"}`);
+              failures.push(`${label}: ${result.error ?? "rejected by the central repository"}`);
               continue;
             }
 
@@ -768,7 +770,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             // dépôt central — un fichier corrompu qui bloquait ensuite la
             // synchronisation de tous les postes.
             if (!payload?.manifest?.id || typeof payload.manifest.id !== "string") {
-              failures.push(`${label} : standard sans identifiant, publication refusée`);
+              failures.push(`${label}: standard without id, push refused`);
               continue;
             }
 
@@ -777,7 +779,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             // version COMPLÈTE et à jour depuis la base avant de la pousser.
             const fullStandard = await db.standards.get(payload.manifest.id);
             if (fullStandard === undefined) {
-              failures.push(`${label} : standard introuvable en base, publication ignorée`);
+              failures.push(`${label}: standard not found in the database, push skipped`);
               continue;
             }
 
@@ -801,11 +803,11 @@ export const useAppStore = create<AppState>((set, get) => ({
                 username: state.systemUsername,
                 standard: standardToSend
               }),
-              "gitSubmitStandard n'a renvoyé aucun résultat.",
+              "gitSubmitStandard returned no result.",
             );
 
             if (!result.success) {
-              failures.push(`${label} : ${result.error ?? "refus du dépôt central"}`);
+              failures.push(`${label}: ${result.error ?? "rejected by the central repository"}`);
               continue;
             }
 
@@ -833,7 +835,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (failures.length > 0) {
       const message =
-        `${failures.length} modification(s) sur ${events.length} n'ont pas pu être poussées — ` +
+        `${failures.length} of ${events.length} change(s) could not be pushed — ` +
         failures.join(" | ");
       // Si l'échec vient d'un dépôt injoignable, on bascule Offline : le badge
       // le reflète et les écritures suivantes sont refusées (au lieu de pousser
@@ -869,7 +871,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           action === "approve"
             ? await api.gitApproveProfile(changeId)
             : await api.gitRejectProfile({ profileId: changeId, reason: reason ?? "" }),
-          `L'opération "${action}" n'est pas disponible sur ce pont Electron.`,
+          `The "${action}" operation is not available on this Electron bridge.`,
         );
       } else {
         result = toIpcResult(
@@ -880,7 +882,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 standardId: changeId,
                 reason: reason ?? "",
               }),
-          `L'opération "${action}" n'est pas disponible sur ce pont Electron.`,
+          `The "${action}" operation is not available on this Electron bridge.`,
         );
       }
     } catch (err) {
@@ -889,8 +891,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (!result.success) {
       const message =
-        `Impossible de ${action === "approve" ? "valider" : "rejeter"} "${changeItem?.name ?? changeId}" : ` +
-        `${result.error ?? "erreur inconnue"}. Aucune modification n'a été appliquée.`;
+        `Could not ${action === "approve" ? "approve" : "reject"} "${changeItem?.name ?? changeId}": ` +
+        `${result.error ?? "unknown error"}. No change was applied.`;
       // Dépôt injoignable → Offline (masque Admin/Sync, refuse les écritures).
       const offline = /introuvable|injoignable|unreachable|not found|ENOENT/i.test(result.error ?? "");
       set({ syncError: message, ...(offline ? { isOffline: true } : {}) });

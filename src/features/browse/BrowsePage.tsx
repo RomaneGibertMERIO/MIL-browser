@@ -171,17 +171,17 @@ function ProfileListItem({ profile, onSelect }: ProfileListItemProps) {
 
   // 1. On vérifie d'abord si le profil est officiellement approuvé
   if (profile.status === "approved") {
-    badgeLabel = "Officiel";
+    badgeLabel = "Official";
     badgeColor = "blue";
   } 
   // 2. On vérifie ensuite s'il est en attente de validation
   else if (profile.status === "pending") {
-    badgeLabel = "En attente";
+    badgeLabel = "Pending";
     badgeColor = "gray";
   } 
   // 3. S'il s'agit d'un profil intégré d'origine (builtin)
   else if (profile.source === "builtin") {
-    badgeLabel = "Dépôt initial";
+    badgeLabel = "Built-in";
     badgeColor = "gray";
   } 
   // 4. Par défaut, le profil est considéré comme "Local"

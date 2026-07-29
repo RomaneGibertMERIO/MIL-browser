@@ -53,7 +53,7 @@ async function assertAdmin(repoPath: string): Promise<{ success: false; error: s
   return {
     success: false,
     error:
-      `Compte "${currentUser()}" non autorise : action reservee aux administrateurs.`,
+      `Account "${currentUser()}" is not authorized: this action is reserved for administrators.`,
   };
 }
 
@@ -64,8 +64,8 @@ async function assertCanContribute(repoPath: string): Promise<{ success: false; 
   return {
     success: false,
     error:
-      `Compte "${currentUser()}" en lecture seule : la soumission de modifications ` +
-      `requiert un role "testing" ou "admin", attribue par un administrateur.`,
+      `Account "${currentUser()}" is read-only: submitting changes requires a ` +
+      `"testing" or "admin" role, granted by an administrator.`,
   };
 }
 
@@ -219,7 +219,7 @@ ipcMain.handle("window:open-browser", (_event, payload?: { standardId?: string }
 ipcMain.handle("git:get-admins", async (_event, repoPath?: string) => {
   const targetPath = repoPath || activeRemotePath;
   if (!targetPath) {
-    return { success: false, error: "Aucun dépôt Git configuré." };
+    return { success: false, error: "No Git repository configured." };
   }
   const admins = await readAdmins(targetPath);
   return {
@@ -251,7 +251,7 @@ ipcMain.handle("git:history", async (_event, limit?: number) => {
 ipcMain.handle("git:list-sessions", async (_event, repoPath?: string) => {
   const targetPath = repoPath || activeRemotePath;
   if (!targetPath) {
-    return { success: false, error: "Aucun dépôt Git configuré." };
+    return { success: false, error: "No Git repository configured." };
   }
   const denied = await assertAdmin(targetPath);
   if (denied) return denied;
@@ -263,10 +263,10 @@ ipcMain.handle("git:set-role", async (_event, payload) => {
     const { repoPath, username, role } = payload as { repoPath?: string; username: string; role: UserRole };
     const targetPath = repoPath || activeRemotePath;
     if (!targetPath) {
-      return { success: false, error: "Aucun dépôt Git configuré." };
+      return { success: false, error: "No Git repository configured." };
     }
     if (role !== "admin" && role !== "testing" && role !== "readonly") {
-      return { success: false, error: `Rôle invalide : ${role}` };
+      return { success: false, error: `Invalid role: ${role}` };
     }
     const denied = await assertAdmin(targetPath);
     if (denied) return denied;
@@ -281,7 +281,7 @@ ipcMain.handle("git:set-role", async (_event, payload) => {
       if (otherAdmins.length === 0) {
         return {
           success: false,
-          error: "Impossible : vous êtes le dernier administrateur. Promouvez d'abord un autre compte.",
+          error: "Cannot proceed: you are the last administrator. Promote another account first.",
         };
       }
     }
@@ -309,7 +309,7 @@ ipcMain.handle("git:set-path", async (_event, repoPath: string) => {
 ipcMain.handle("git:sync", async (_event, username: string) => {
   try {
     if (!activeRemotePath) {
-      return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
+      return { success: false, error: "The central repository path is not set." };
     }
     const me = currentUser();
     // Enregistre le passage de ce poste (même un simple pull) pour alimenter la
@@ -338,7 +338,7 @@ ipcMain.handle("git:sync", async (_event, username: string) => {
 ipcMain.handle("git:submit-profile", async (_event, { username, profile }) => {
   try {
     if (!activeRemotePath) {
-      return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
+      return { success: false, error: "The central repository path is not set." };
     }
     const denied = await assertCanContribute(activeRemotePath);
     if (denied) return denied;
@@ -353,7 +353,7 @@ ipcMain.handle("git:submit-profile", async (_event, { username, profile }) => {
 ipcMain.handle("git:delete-profile", async (_event, profileId: string) => {
   try {
     if (!activeRemotePath) {
-      return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
+      return { success: false, error: "The central repository path is not set." };
     }
     return await deleteProfileFromGit(activeRemotePath, currentUser(), profileId);
   } catch (error: any) {
@@ -367,7 +367,7 @@ ipcMain.handle("git:delete-standard", async (_event, payload) => {
     const { repoPath, standardId } = payload;
     const targetPath = repoPath || activeRemotePath;
     if (!targetPath) {
-      return { success: false, error: "Aucun dépôt Git configuré." };
+      return { success: false, error: "No Git repository configured." };
     }
     return await deleteStandardFromGit(targetPath, currentUser(), standardId);
   } catch (error: any) {
@@ -379,7 +379,7 @@ ipcMain.handle("git:delete-standard", async (_event, payload) => {
 ipcMain.handle("git:approve-profile", async (_event, profileId: string) => {
   try {
     if (!activeRemotePath) {
-      return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
+      return { success: false, error: "The central repository path is not set." };
     }
     const denied = await assertAdmin(activeRemotePath);
     if (denied) return denied;
@@ -396,7 +396,7 @@ ipcMain.handle("git:submit-standard", async (_event, payload) => {
     const targetPath = repoPath || activeRemotePath;
     
     if (!targetPath) {
-      return { success: false, error: "Aucun dépôt Git configuré." };
+      return { success: false, error: "No Git repository configured." };
     }
 
     const denied = await assertCanContribute(targetPath);
@@ -415,7 +415,7 @@ ipcMain.handle("git:approve-standard", async (_event, payload) => {
     const targetPath = repoPath || activeRemotePath;
 
     if (!targetPath) {
-      return { success: false, error: "Aucun dépôt Git configuré." };
+      return { success: false, error: "No Git repository configured." };
     }
 
     const denied = await assertAdmin(targetPath);
@@ -431,7 +431,7 @@ ipcMain.handle("git:reject-profile", async (_event, payload) => {
   try {
     const { profileId, reason } = payload;
     if (!activeRemotePath) {
-      return { success: false, error: "Le chemin du dépôt central n'est pas défini." };
+      return { success: false, error: "The central repository path is not set." };
     }
     const denied = await assertAdmin(activeRemotePath);
     if (denied) return denied;
@@ -448,7 +448,7 @@ ipcMain.handle("git:reject-standard", async (_event, payload) => {
     const targetPath = repoPath || activeRemotePath;
 
     if (!targetPath) {
-      return { success: false, error: "Aucun dépôt Git configuré." };
+      return { success: false, error: "No Git repository configured." };
     }
 
     const denied = await assertAdmin(targetPath);
