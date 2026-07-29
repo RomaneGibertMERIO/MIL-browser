@@ -342,20 +342,20 @@ async function doSync(remoteInput: string): Promise<void> {
       }),
     );
 
-    // PURGE : supprime du workspace local ce qui n'existe plus côté central.
-    // Sans cela, pullRepository (qui lit le workspace, pas le central) faisait
-    // ressusciter indéfiniment les propositions supprimées ou refusées.
-    //
-    // Garde-fou : on ne purge QUE si le dossier central est lisible et non vide.
-    // Un partage réseau momentanément inaccessible, ou un chemin mal saisi,
-    // ne doit jamais entraîner l'effacement du travail local.
-    if (files.length === 0) continue;
-
+    // PURGE : le workspace local doit refléter EXACTEMENT le dépôt central
+    // (pullRepository lit le workspace, pas le central). On retire les fichiers
+    // locaux absents du central — Y COMPRIS quand le central est VIDE (dossier
+    // existant mais sans fichier). Sans ça, brancher un dépôt neuf/vide laissait
+    // un ancien workspace « polluer » l'état : le dépôt n'était jamais détecté
+    // comme vide (aucune bannière de publication du socle) et d'anciennes normes
+    // ressuscitaient. L'injoignabilité, elle, est déjà écartée en amont : doSync
+    // lève si le chemin central n'existe pas (on ne purge donc jamais sur un
+    // partage momentanément inaccessible).
     const centralNames = new Set(files);
     for (const localFile of await listJson(localSub)) {
       if (!centralNames.has(localFile)) {
         await fsp.unlink(path.join(localSub, localFile)).catch(() => undefined);
-        console.log(`Workspace purge : ${localFile} n'existe plus dans le depot central.`);
+        console.log(`Workspace purge : ${localFile} absent du depot central.`);
       }
     }
   }

@@ -220,11 +220,9 @@ export function EditTaxonomyPage() {
     if (node === undefined) return;
     const affected = collectDescendantIds(workingNodes, id);
     const profileCount = (allProfiles ?? []).filter((p) => affected.has(p.nodeId)).length;
-    if (profileCount > 0) {
-      setPendingDelete({ id, label: node.label, profileCount });
-    } else {
-      executeDelete(id);
-    }
+    // On passe TOUJOURS par le dialogue : bloque si des profils sont attachés
+    // (décision de recette), confirme sinon.
+    setPendingDelete({ id, label: node.label, profileCount });
   }
 
   function executeDelete(id: string) {
@@ -504,21 +502,35 @@ export function EditTaxonomyPage() {
         )}
       </div>
 
-      {/* Confirmation de suppression */}
+      {/* Suppression : bloquée si des profils sont attachés, sinon confirmée. */}
       {pendingDelete !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm mx-4">
-            <h3 className="text-base font-semibold text-gray-900 mb-2">Delete node?</h3>
-            <p className="text-sm text-gray-500 mb-2">
-              <span className="font-medium text-gray-800">{pendingDelete.label}</span> and all its child nodes will be removed from the taxonomy.
-            </p>
-            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-4">
-              {pendingDelete.profileCount} profile{pendingDelete.profileCount !== 1 ? "s are" : " is"} attached to this node or its children. Those profiles remain in the database but no longer appear in the taxonomy.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setPendingDelete(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">Cancel</button>
-              <button onClick={() => executeDelete(pendingDelete.id)} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">Delete anyway</button>
-            </div>
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-4">
+            {pendingDelete.profileCount > 0 ? (
+              <>
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Can't delete this node</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  <span className="font-medium text-gray-800">{pendingDelete.label}</span> (or one of its
+                  child nodes) still has <span className="font-semibold text-gray-800">{pendingDelete.profileCount}</span>{" "}
+                  attached profile{pendingDelete.profileCount !== 1 ? "s" : ""}. Move or delete{" "}
+                  {pendingDelete.profileCount !== 1 ? "them" : "it"} first, then delete the node.
+                </p>
+                <div className="flex justify-end">
+                  <button onClick={() => setPendingDelete(null)} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Close</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Delete node?</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  <span className="font-medium text-gray-800">{pendingDelete.label}</span> and all its child nodes will be removed from the taxonomy.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button onClick={() => setPendingDelete(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">Cancel</button>
+                  <button onClick={() => executeDelete(pendingDelete.id)} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">Delete</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
