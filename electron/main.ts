@@ -19,7 +19,7 @@ import {
   recordSession,
   readSessions,
   setUserRole,
-  readGitLog,
+  readCentralHistory,
   type UserRole
 } from "./gitService";
 
@@ -234,16 +234,16 @@ ipcMain.handle("git:get-admins", async (_event, repoPath?: string) => {
   };
 });
 
-ipcMain.handle("git:log", async (_event, limit?: number) => {
-  // Lecture seule de l'historique du workspace local. Aucun contrôle d'accès :
-  // l'entrée est déjà réservée aux admins côté interface (onglet Admin), et le
-  // handler ne fait que LIRE des commits locaux — il n'expose rien du réseau ni
-  // n'écrit quoi que ce soit.
+ipcMain.handle("git:history", async (_event, limit?: number) => {
+  // Historique COMMUN : lit le journal d'audit central partagé (qui a soumis /
+  // validé / refusé / supprimé, tous postes confondus). Lecture seule. En
+  // Standalone (aucun dépôt), il n'y a pas d'historique partagé → liste vide.
   try {
-    const entries = await readGitLog(typeof limit === "number" ? limit : undefined);
+    if (!activeRemotePath) return { success: true, entries: [] };
+    const entries = await readCentralHistory(activeRemotePath, typeof limit === "number" ? limit : undefined);
     return { success: true, entries };
   } catch (error: any) {
-    console.error("Erreur git:log:", error);
+    console.error("Erreur git:history:", error);
     return { success: false, error: error.message };
   }
 });

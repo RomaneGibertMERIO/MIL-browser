@@ -73,19 +73,21 @@ export interface SessionsResult extends IpcResult {
 }
 
 /**
- * Une entrée de l'historique Git local (lecture seule), telle qu'exposée au
- * renderer par `gitLog`. `timestamp` est en secondes (convention isomorphic-git).
+ * Une entrée du journal d'audit CENTRAL partagé (lecture seule) : qui a soumis /
+ * validé / refusé / supprimé quoi, et quand. Commune à tous les postes.
  */
-export interface GitLogEntry {
-  oid: string;
-  message: string;
-  author: string;
-  timestamp: number;
-  kind: "proposal" | "approval" | "other";
+export interface HistoryEvent {
+  id: string;
+  action: "submit" | "approve" | "reject" | "delete";
+  entity: "profile" | "standard";
+  name: string;
+  by: string;
+  at: string; // ISO-8601
+  reason?: string;
 }
 
-export interface GitLogResult extends IpcResult {
-  entries?: GitLogEntry[];
+export interface GitHistoryResult extends IpcResult {
+  entries?: HistoryEvent[];
 }
 
 export interface AdminsResult extends IpcResult {
@@ -108,7 +110,7 @@ export interface ElectronBridge {
 
   gitSetRepoPath: (path: string) => Promise<IpcResult>;
   gitSync: (username: string) => Promise<GitSyncResult>;
-  gitLog: (limit?: number) => Promise<GitLogResult>;
+  gitHistory: (limit?: number) => Promise<GitHistoryResult>;
   gitGetAdmins: (repoPath?: string) => Promise<AdminsResult>;
 
   gitSubmitProfile: (payload: { username: string; profile: unknown }) => Promise<IpcResult>;

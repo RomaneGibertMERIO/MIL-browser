@@ -1,40 +1,38 @@
 /**
  * Admin → History tab (docs/UI-UX-SPEC.md §17, Tab 2).
  *
- * A read-only, time-ordered timeline of the local Git history that `gitService`
- * already writes on submit/approve. Data comes from the additive, read-only
- * `git:log` IPC — no Git logic is modified here. This is the "linear commit
- * list" the spec sanctions as the progressive first step before a full commit
- * graph (§26).
+ * Historique COMMUN du dépôt central : qui a soumis / validé / refusé / supprimé
+ * quoi, tous postes confondus. Lit le journal d'audit central partagé via l'IPC
+ * lecture seule `gitHistory` (et non plus le git local d'une machine), pour que
+ * chaque admin voie la même chronologie collaborative.
  */
 import { useEffect, useState } from "react";
-import { getElectronBridge, type GitLogEntry } from "../../shared/electronBridge";
+import { getElectronBridge, type HistoryEvent } from "../../shared/electronBridge";
 import { Icon } from "../../shared/components/ui/Icon";
 import { EmptyState } from "../../shared/components/ui/EmptyState";
 import { LoadingSpinner } from "../../shared/components/ui/LoadingSpinner";
 
-/** Semantic presentation per commit kind (§8 — status is color + label + dot). */
-const KIND_STYLE: Record<GitLogEntry["kind"], { dot: string; label: string; badge: string }> = {
-  approval: { dot: "bg-green-500", label: "Approved", badge: "bg-green-50 text-green-700" },
-  proposal: { dot: "bg-orange-500", label: "Submitted", badge: "bg-orange-50 text-orange-700" },
-  other: { dot: "bg-gray-400", label: "Change", badge: "bg-gray-100 text-gray-600" },
+/** Présentation sémantique par type d'action (§8 — couleur + libellé + pastille). */
+const ACTION_STYLE: Record<HistoryEvent["action"], { dot: string; label: string; badge: string }> = {
+  submit: { dot: "bg-orange-500", label: "Submitted", badge: "bg-orange-50 text-orange-700" },
+  approve: { dot: "bg-green-500", label: "Approved", badge: "bg-green-50 text-green-700" },
+  reject: { dot: "bg-red-500", label: "Rejected", badge: "bg-red-50 text-red-700" },
+  delete: { dot: "bg-gray-400", label: "Deleted", badge: "bg-gray-100 text-gray-600" },
 };
 
-/** "Proposal: …" / "Approval: …" — the kind is shown as a badge, so drop the prefix. */
-function cleanMessage(message: string): string {
-  return message.replace(/^(Proposal|Approval):\s*/, "").trim();
-}
-
-const FILTERS: { value: "all" | "proposal" | "approval"; label: string }[] = [
+type Filter = "all" | HistoryEvent["action"];
+const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "proposal", label: "Submitted" },
-  { value: "approval", label: "Approved" },
+  { value: "submit", label: "Submitted" },
+  { value: "approve", label: "Approved" },
+  { value: "reject", label: "Rejected" },
+  { value: "delete", label: "Deleted" },
 ];
 
 export function HistoryPage() {
-  const [entries, setEntries] = useState<GitLogEntry[] | null>(null);
+  const [entries, setEntries] = useState<HistoryEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "proposal" | "approval">("all");
+  const [filter, setFilter] = useState<Filter>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +46,7 @@ export function HistoryPage() {
         }
         return;
       }
-      const result = await api.gitLog();
+      const result = await api.gitHistory();
       if (cancelled) return;
       if (!result.success) {
         setError(result.error ?? "Unable to read the repository history.");
@@ -78,17 +76,17 @@ export function HistoryPage() {
   if (entries.length === 0) {
     return (
       <EmptyState
-        title="No history yet"
-        message="Submitted and approved changes appear here as a time-ordered history of what changed, when, and by whom."
+        title="No shared history yet"
+        message="Submissions, approvals, rejections and deletions on the central repository appear here — who did what, and when."
       />
     );
   }
 
-  const shown = filter === "all" ? entries : entries.filter((e) => e.kind === filter);
+  const shown = filter === "all" ? entries : entries.filter((e) => e.action === filter);
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-4 flex items-center gap-1.5">
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
         {FILTERS.map((f) => (
           <button
             key={f.value}
@@ -106,38 +104,42 @@ export function HistoryPage() {
       {shown.length === 0 ? (
         <p className="py-8 text-center text-sm text-gray-400">No entries for this filter.</p>
       ) : (
-      <ol className="relative border-l border-gray-200 pl-6">
-        {shown.map((entry) => {
-          const style = KIND_STYLE[entry.kind];
-          return (
-            <li key={entry.oid} className="mb-5 last:mb-0">
-              <span
-                className={`absolute -left-[7px] mt-1.5 h-3.5 w-3.5 rounded-full ring-4 ring-white ${style.dot}`}
-              />
-              <div className="rounded-lg border border-gray-200 bg-white p-4">
-                <div className="flex items-center gap-2">
-                  <Icon name="gitCommit" size={14} className="flex-shrink-0 text-gray-400" />
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
-                    {cleanMessage(entry.message)}
-                  </span>
-                  <span
-                    className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style.badge}`}
-                  >
-                    {style.label}
-                  </span>
+        <ol className="relative border-l border-gray-200 pl-6">
+          {shown.map((entry, i) => {
+            const style = ACTION_STYLE[entry.action];
+            return (
+              <li key={`${entry.at}-${entry.id}-${i}`} className="mb-5 last:mb-0">
+                <span
+                  className={`absolute -left-[7px] mt-1.5 h-3.5 w-3.5 rounded-full ring-4 ring-white ${style.dot}`}
+                />
+                <div className="rounded-lg border border-gray-200 bg-white p-4">
+                  <div className="flex items-center gap-2">
+                    <Icon name="gitCommit" size={14} className="flex-shrink-0 text-gray-400" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
+                      {entry.entity} · {entry.name}
+                    </span>
+                    <span
+                      className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style.badge}`}
+                    >
+                      {style.label}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    by <b className="text-gray-700">{entry.by}</b>
+                  </p>
+                  {entry.reason ? (
+                    <p className="mt-1 rounded-md border border-red-100 bg-red-50 p-1.5 text-xs text-red-700">
+                      {entry.reason}
+                    </p>
+                  ) : null}
+                  <p className="mt-0.5 font-mono text-xs text-gray-400">
+                    {entry.at ? new Date(entry.at).toLocaleString() : "—"}
+                  </p>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  by <b className="text-gray-700">{entry.author}</b>
-                </p>
-                <p className="mt-0.5 font-mono text-xs text-gray-400">
-                  {new Date(entry.timestamp * 1000).toLocaleString()}
-                  <span className="ml-2 text-gray-300">{entry.oid.slice(0, 7)}</span>
-                </p>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+              </li>
+            );
+          })}
+        </ol>
       )}
     </div>
   );

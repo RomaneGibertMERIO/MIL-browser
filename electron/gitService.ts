@@ -525,12 +525,24 @@ async function deleteEntityFromGit(
 
     const centralFile = path.join(centralPath, subDir, fileName);
     const localFile = path.join(WORKSPACE_DIR, subDir, fileName);
+
+    let deletedName = id;
+    try {
+      const raw = JSON.parse(await fsp.readFile(centralFile, "utf8"));
+      deletedName = raw.name ?? raw.manifest?.label ?? id;
+    } catch { /* fichier déjà absent : on garde l'id */ }
+
     await fsp.unlink(centralFile).catch(() => undefined);
     await fsp.unlink(localFile).catch(() => undefined);
 
     // Une entité supprimée n'a plus de refus en attente. On ne touche PAS au
     // marqueur de suppression écrit juste au-dessus.
     await clearMarker(centralPath, REJECTIONS_SUBDIR, entity, id);
+
+    await appendHistoryEvent(centralPath, {
+      id, action: "delete", entity,
+      name: deletedName, by: username, at: new Date().toISOString(),
+    });
 
     return { success: true };
   } catch (error: any) {
@@ -545,6 +557,55 @@ export function deleteProfileFromGit(remoteInput: string, username: string, prof
 
 export function deleteStandardFromGit(remoteInput: string, username: string, standardId: string) {
   return deleteEntityFromGit(remoteInput, username, "standard", standardId);
+}
+
+// ── Journal d'audit CENTRAL (partagé) ──────────────────────────────────────
+// Le dépôt central est un partage de fichiers, pas un vrai git : pour tracer
+// « qui a fait quoi » de façon COMMUNE (visible par tous les admins), on tient
+// un journal append-only dans `<central>/history/` — un fichier JSON par
+// événement, donc aucun conflit d'écriture même à plusieurs postes. L'onglet
+// History lit ce journal (et non plus le git local, propre à une machine).
+const HISTORY_SUBDIR = "history";
+
+export interface HistoryEvent {
+  id: string;
+  action: "submit" | "approve" | "reject" | "delete";
+  entity: "profile" | "standard";
+  name: string;
+  by: string;
+  at: string; // ISO-8601
+  reason?: string;
+}
+
+/** Ajoute un événement au journal central. N'échoue JAMAIS l'action métier. */
+async function appendHistoryEvent(centralPath: string, event: HistoryEvent): Promise<void> {
+  try {
+    const dir = path.join(centralPath, HISTORY_SUBDIR);
+    await fsp.mkdir(dir, { recursive: true });
+    const fname = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`;
+    await fsp.writeFile(path.join(dir, fname), JSON.stringify(event, null, 2), "utf8");
+  } catch (err) {
+    console.warn("Journal d'historique central : écriture impossible :", err);
+  }
+}
+
+/** Lit tout le journal central, du plus récent au plus ancien. */
+export async function readCentralHistory(remoteInput: string, limit = 500): Promise<HistoryEvent[]> {
+  const dir = path.join(getFsPath(remoteInput), HISTORY_SUBDIR);
+  const files = await listJson(dir);
+  const parsed = await Promise.all(
+    files.map(async (f) => {
+      try {
+        return JSON.parse(await fsp.readFile(path.join(dir, f), "utf8")) as HistoryEvent;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const events: HistoryEvent[] = [];
+  for (const e of parsed) if (e !== null) events.push(e);
+  events.sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
+  return events.slice(0, limit);
 }
 
 /**
@@ -592,6 +653,11 @@ export async function submitProfileToGit(remoteInput: string, username: string, 
   // Resoumission : le refus précédent ne s'applique plus.
   await clearRejectionMarker(centralPath, "profile", profile.id);
 
+  await appendHistoryEvent(centralPath, {
+    id: profile.id, action: "submit", entity: "profile",
+    name: profile.name ?? profile.id, by: username, at: new Date().toISOString(),
+  });
+
   console.log(`Fichier synchronisé avec succès vers le dépôt central : ${centralDestPath}`);
 }
 
@@ -631,6 +697,11 @@ export async function approveProfileInGit(remoteInput: string, adminUsername: st
     await fsp.mkdir(path.dirname(centralDestPath), { recursive: true });
     await fsp.writeFile(centralDestPath, JSON.stringify(profile, null, 2), "utf8");
 
+    await appendHistoryEvent(centralPath, {
+      id: profileId, action: "approve", entity: "profile",
+      name: profile.name ?? profileId, by: adminUsername, at: new Date().toISOString(),
+    });
+
     return { success: true };
   } catch (error: any) {
     console.error("Erreur approveProfileInGit:", error);
@@ -666,9 +737,20 @@ export async function rejectProfileInGit(
       reason,
     });
 
+    // Nom lisible pour le journal, lu AVANT de supprimer le fichier.
+    let rejectedName = profileId;
+    try {
+      rejectedName = (JSON.parse(await fsp.readFile(centralPathFile, "utf8")).name) ?? profileId;
+    } catch { /* fichier déjà absent : on garde l'id */ }
+
     // 2. Retire la proposition du dépôt central et du workspace local
     await fsp.unlink(centralPathFile).catch(() => undefined);
     await fsp.unlink(localPath).catch(() => undefined);
+
+    await appendHistoryEvent(centralPath, {
+      id: profileId, action: "reject", entity: "profile",
+      name: rejectedName, by: adminUsername, at: new Date().toISOString(), reason,
+    });
 
     return { success: true };
   } catch (error: any) {
@@ -715,6 +797,11 @@ export async function approveStandardInGit(remoteInput: string, adminUsername: s
     const centralDestPath = path.join(centralPath, "standards", fileName);
     await fsp.mkdir(path.dirname(centralDestPath), { recursive: true });
     await fsp.writeFile(centralDestPath, JSON.stringify(standard, null, 2), "utf8");
+
+    await appendHistoryEvent(centralPath, {
+      id: standardId, action: "approve", entity: "standard",
+      name: standard.manifest?.label ?? standardId, by: adminUsername, at: new Date().toISOString(),
+    });
 
     return { success: true };
   } catch (error: any) {
@@ -775,6 +862,11 @@ export async function submitStandardToGit(remoteInput: string, username: string,
 
   await clearRejectionMarker(centralPath, "standard", standard.manifest.id);
 
+  await appendHistoryEvent(centralPath, {
+    id: standard.manifest.id, action: "submit", entity: "standard",
+    name: standard.manifest.label ?? standard.manifest.id, by: username, at: new Date().toISOString(),
+  });
+
   console.log(`Standard synchronisé avec succès vers le dépôt central : ${centralDestPath}`);
 }
 
@@ -805,8 +897,18 @@ export async function rejectStandardInGit(
       reason,
     });
 
+    let rejectedName = standardId;
+    try {
+      rejectedName = (JSON.parse(await fsp.readFile(centralPathFile, "utf8")).manifest?.label) ?? standardId;
+    } catch { /* fichier déjà absent : on garde l'id */ }
+
     await fsp.unlink(centralPathFile).catch(() => undefined);
     await fsp.unlink(localPath).catch(() => undefined);
+
+    await appendHistoryEvent(centralPath, {
+      id: standardId, action: "reject", entity: "standard",
+      name: rejectedName, by: adminUsername, at: new Date().toISOString(), reason,
+    });
 
     return { success: true };
   } catch (error: any) {
@@ -815,58 +917,5 @@ export async function rejectStandardInGit(
   }
 }
 
-/**
- * Une entrée de l'historique Git local (lecture seule).
- *
- * `kind` est dérivé du préfixe de message posé par ce service ("Proposal:" /
- * "Approval:") pour que l'interface puisse colorer sémantiquement sans reparser
- * le message. `timestamp` est en secondes (convention isomorphic-git).
- */
-export interface GitLogEntry {
-  oid: string;
-  message: string;
-  author: string;
-  timestamp: number;
-  kind: "proposal" | "approval" | "other";
-}
-
-/**
- * Lit l'historique des commits du workspace local (proposals/approvals que ce
- * service écrit déjà). Purement additif et EN LECTURE SEULE : n'écrit ni ne
- * modifie aucun état Git. Alimente l'onglet Admin → History (spec §17, Tab 2).
- *
- * Renvoie un tableau vide si le workspace n'a pas encore de dépôt (jamais
- * synchronisé) plutôt que de propager une erreur : un historique vide est un
- * état normal, pas une panne.
- */
-export async function readGitLog(limit = 200): Promise<GitLogEntry[]> {
-  await ensureDirectories();
-
-  if (!(await exists(path.join(WORKSPACE_DIR, ".git")))) {
-    return [];
-  }
-
-  try {
-    const commits = await git.log({ fs, dir: WORKSPACE_DIR, depth: limit });
-    return commits.map((c) => {
-      const message = c.commit.message.trim();
-      const kind: GitLogEntry["kind"] = message.startsWith("Approval:")
-        ? "approval"
-        : message.startsWith("Proposal:")
-          ? "proposal"
-          : "other";
-      return {
-        oid: c.oid,
-        message,
-        author: c.commit.author.name,
-        timestamp: c.commit.author.timestamp,
-        kind,
-      };
-    });
-  } catch (error) {
-    // Un historique illisible (dépôt corrompu, aucun commit) ne doit pas casser
-    // l'écran : on journalise et on renvoie vide.
-    console.warn("Lecture de l'historique Git impossible :", error);
-    return [];
-  }
-}
+// L'historique n'est plus lu depuis le git local (propre à une machine) mais
+// depuis le journal d'audit CENTRAL partagé — voir readCentralHistory ci-dessus.

@@ -17,7 +17,7 @@ const bridge = {
   gitSetRepoPath: (path: string) => ipcRenderer.invoke("git:set-path", path),
   gitSync: (username: string) => ipcRenderer.invoke("git:sync", username),
 
-  gitLog: (limit?: number) => ipcRenderer.invoke("git:log", limit),
+  gitHistory: (limit?: number) => ipcRenderer.invoke("git:history", limit),
 
   gitSubmitProfile: (payload: { username: string; profile: unknown }) =>
     ipcRenderer.invoke("git:submit-profile", payload),
