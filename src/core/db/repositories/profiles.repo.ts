@@ -1,6 +1,7 @@
 import { db } from "../schema";
 import type { Profile } from "../../domain/profile";
 import { useAppStore } from "../../../store/appStore";
+import { getDeviceId } from "../../utils/deviceId";
 
 // ---------------------------------------------------------------------------
 // Reads
@@ -60,17 +61,50 @@ export async function getProfileById(id: string): Promise<Profile | undefined> {
  */
 export async function upsertProfile(profile: Profile): Promise<void> {
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
-    //const existing = await db.profiles.get(profile.id);
-    
-    // CORRECTION : Uniquement bloquer si le NOUVEAU profil que l'on essaie d'insérer prétend 
-    // toujours être un asset d'origine "builtin", ou si on tente d'écraser un builtin sans changer sa source.
-    // COMMENTE POUR TEST TEMPORAIRE
-    /*if (existing?.source === "builtin" && profile.source === "builtin") {
-      throw new Error(`Cannot overwrite deployment asset profile: ${profile.id}`);
-    }*/
+    // Synchro interne (pull/seed/soumission/résolution) : on ne stage AUCUN
+    // événement — l'appelant a positionné db.isSyncingInternal.
+    if (db.isSyncingInternal) {
+      await db.profiles.put(profile);
+      return;
+    }
 
-    // Déclenche automatiquement le hook "creating" ou "updating" de schema.ts
-    await db.profiles.put(profile);
+    // Édition/création utilisateur : on écrit l'objet ET son événement de synchro
+    // de façon DÉTERMINISTE (dans la transaction, hook neutralisé), pour qu'il
+    // soit visible dès le refreshLocalChanges que l'appelant enchaîne. Sinon les
+    // hooks "creating"/"updating" écrivent l'événement en différé (setTimeout) et
+    // le refresh immédiat le manque : la modification n'apparaissait dans la Sync
+    // qu'à l'action suivante (bug "il faut le faire deux fois").
+    const before = await db.profiles.get(profile.id);
+    const existingEvent = await db.syncEvents.get(profile.id);
+    const isNew = before === undefined;
+
+    db.isSyncingInternal = true;
+    try {
+      await db.profiles.put(profile);
+    } finally {
+      db.isSyncingInternal = false;
+    }
+
+    // Built-in d'usine non converti : pas de staging (cohérent avec les hooks).
+    if (profile.source === "builtin") return;
+
+    // "create" figé à la création, préservé ensuite (Created vs Modified).
+    const resolvedOrigin = ((existingEvent as any)?.origin ?? (isNew ? "create" : "update")) as "create" | "update";
+    await db.syncEvents.put({
+      id: profile.id,
+      deviceId: getDeviceId(),
+      timestamp: Date.now(),
+      operation: "upsert",
+      entity: "profile",
+      // Objet complet : pas de reconstruction obj+mods (pas de bug de clés
+      // pointées imbriquées), le diff voit donc bien les changements de champs.
+      payload: profile,
+      // Référence du diff : version d'avant la 1re modif non synchronisée,
+      // conservée à travers les éditions. Invariant : un item "Created" n'a pas
+      // de version antérieure (sinon un faux diff « ancien → nouveau »).
+      previous: resolvedOrigin === "create" ? undefined : ((existingEvent as any)?.previous ?? before),
+      origin: resolvedOrigin,
+    });
   });
 }
 
@@ -128,16 +162,37 @@ export async function deleteProfile(id: string): Promise<{ reviewRequested: bool
     const event = await db.syncEvents.get(id);
     const wasOfficial = existing.status === "approved" || (event as any)?.origin === "update";
     if (wasOfficial) {
+      // upsertProfile stage l'événement de façon DÉTERMINISTE (origin "update"
+      // conservé, payload portant pendingDeletion) → la demande de suppression
+      // apparaît dans la Sync dès le refreshLocalChanges que l'appelant enchaîne.
       await upsertProfile({ ...existing, status: "local", pendingDeletion: true });
       return { reviewRequested: true };
     }
   }
 
-  // Création/brouillon purement local (jamais officiel) : suppression directe.
-  await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
-    // Déclenche automatiquement le hook "deleting" de schema.ts
+  // Brouillon jamais officiel, en mode partagé : suppression directe. On écrit la
+  // pierre tombale de façon DÉTERMINISTE (hook neutralisé) — sinon le hook
+  // "deleting" différé la manque au refreshLocalChanges immédiat et la ligne
+  // « Created » restait affichée jusqu'à une 2e action (même classe de bug).
+  const was = db.isSyncingInternal;
+  db.isSyncingInternal = true;
+  try {
     await db.profiles.delete(id);
-  });
+  } finally {
+    db.isSyncingInternal = was;
+  }
+  if (existing) {
+    await db.syncEvents.put({
+      id,
+      deviceId: getDeviceId(),
+      timestamp: Date.now(),
+      operation: "delete",
+      entity: "profile",
+      payload: { id, name: existing.name, standardId: existing.standardId },
+    });
+  } else {
+    await db.syncEvents.delete(id);
+  }
   return { reviewRequested: false };
 }
 

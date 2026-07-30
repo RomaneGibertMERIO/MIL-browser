@@ -1,6 +1,7 @@
-import { db } from "../schema";
+import { db, standardSyncSummary } from "../schema";
 import { standardWorkspace, type StandardPlugin, type StandardNode } from "../../domain/standard";
 import { useAppStore } from "../../../store/appStore";
+import { getDeviceId } from "../../utils/deviceId";
 import {
   putNodeImagesAndStrip,
   reconcileNodeImages,
@@ -26,7 +27,47 @@ export async function upsertStandard(standard: StandardPlugin): Promise<void> {
   // Phase 8 : les images de nœuds partent dans db.nodeImages (non destructif) ;
   // la ligne du standard reste légère. Couvre pull/import/save/create/echo.
   const light = await putNodeImagesAndStrip(standard);
-  await db.standards.put(light);
+
+  // Synchro interne (pull/seed/soumission/résolution) : on ne stage rien.
+  if (db.isSyncingInternal) {
+    await db.standards.put(light);
+    await useAppStore.getState().refreshLocalChanges();
+    return;
+  }
+
+  // Édition/création utilisateur : écriture DÉTERMINISTE de l'objet + de son
+  // événement (hook neutralisé), pour qu'il soit visible dès le
+  // refreshLocalChanges ci-dessous — voir upsertProfile (sinon le hook différé
+  // rendait la modif invisible jusqu'à l'action suivante).
+  await db.transaction("rw", [db.standards, db.syncEvents], async () => {
+    const before: any = await db.standards.get(light.manifest.id);
+    const existingEvent = await db.syncEvents.get(light.manifest.id);
+    const isNew = before === undefined;
+
+    db.isSyncingInternal = true;
+    try {
+      await db.standards.put(light);
+    } finally {
+      db.isSyncingInternal = false;
+    }
+
+    // Built-in d'usine approuvé : pas de staging (cohérent avec les hooks).
+    if (light.manifest?.isBuiltin && (light as any).status === "approved") return;
+
+    const resolvedOrigin = ((existingEvent as any)?.origin ?? (isNew ? "create" : "update")) as "create" | "update";
+    await db.syncEvents.put({
+      id: light.manifest.id,
+      deviceId: getDeviceId(),
+      timestamp: Date.now(),
+      operation: "upsert",
+      entity: "standard",
+      payload: standardSyncSummary(light),
+      // Invariant : un item "Created" n'a pas de version antérieure.
+      previous: resolvedOrigin === "create" ? undefined : ((existingEvent as any)?.previous ?? standardSyncSummary(before)),
+      origin: resolvedOrigin,
+    });
+  });
+
   await useAppStore.getState().refreshLocalChanges();
 }
 
@@ -143,8 +184,9 @@ export async function deleteStandardAndProfiles(id: string): Promise<{ reviewReq
     const event = await db.syncEvents.get(id);
     const wasOfficial = (standard as any).status === "approved" || (event as any)?.origin === "update";
     if (wasOfficial) {
+      // upsertStandard stage l'événement de façon DÉTERMINISTE (payload avec
+      // pendingDeletion) et rafraîchit — la demande apparaît dès la 1re action.
       await upsertStandard({ ...standard, status: "local", pendingDeletion: true } as any);
-      await useAppStore.getState().refreshLocalChanges();
       return { reviewRequested: true };
     }
   }
@@ -154,24 +196,53 @@ export async function deleteStandardAndProfiles(id: string): Promise<{ reviewReq
     .equals(id)
     .primaryKeys();
 
-  // Autonome : suppression PUREMENT locale. On neutralise les hooks "deleting"
-  // (sinon ils déposeraient des pierres tombales qui « fuiraient » vers un dépôt
-  // lors d'une future connexion) et on purge les événements de synchro des
-  // entités retirées. En partagé, les tombales sont créées et propagées au
-  // prochain push (comportement inchangé).
   const standalone = useAppStore.getState().repoMode === "local";
-  if (standalone) db.isSyncingInternal = true;
+  // En mode partagé, on lit les profils AVANT la suppression pour écrire des
+  // pierres tombales DÉTERMINISTES (au lieu des hooks "deleting" différés qui
+  // rataient le refresh immédiat — même bug "à faire deux fois").
+  const affectedProfiles = standalone
+    ? []
+    : await db.profiles.where("standardId").equals(id).toArray();
+
+  // On neutralise TOUJOURS les hooks pendant la cascade (suppression
+  // déterministe) et on écrit nous-mêmes les événements ci-dessous.
+  const was = db.isSyncingInternal;
+  db.isSyncingInternal = true;
   try {
     if (profileKeys.length > 0) {
       await Promise.all(profileKeys.map((key) => db.profiles.delete(key)));
     }
     await db.standards.delete(id);
   } finally {
-    if (standalone) db.isSyncingInternal = false;
+    db.isSyncingInternal = was;
   }
 
   if (standalone) {
+    // Autonome : aucune propagation, on purge simplement les événements locaux.
     await db.syncEvents.bulkDelete([id, ...profileKeys.map((k) => String(k))]);
+  } else {
+    // Partagé : pierres tombales déterministes (standard + chacun de ses profils),
+    // propagées au prochain push (comportement conservé, mais visible tout de suite).
+    const dev = getDeviceId();
+    const now = Date.now();
+    await db.syncEvents.put({
+      id,
+      deviceId: dev,
+      timestamp: now,
+      operation: "delete",
+      entity: "standard",
+      payload: { id, label: (standard as any).manifest?.label },
+    });
+    for (const p of affectedProfiles) {
+      await db.syncEvents.put({
+        id: p.id,
+        deviceId: dev,
+        timestamp: now,
+        operation: "delete",
+        entity: "profile",
+        payload: { id: p.id, name: p.name, standardId: p.standardId },
+      });
+    }
   }
 
   await deleteNodeImagesForStandard(id); // GC des images du standard supprimé
