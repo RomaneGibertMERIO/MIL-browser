@@ -80,6 +80,14 @@ export const ProfileSchema = z.object({
    */
   pendingDeletion: z.boolean().optional(),
 
+  /**
+   * Nature de la proposition, portée jusqu'à la revue admin ("create" = objet
+   * créé localement, "update" = modification d'un objet existant). Permet à la
+   * revue d'afficher Created/Modified de façon COHÉRENTE avec la page Sync même
+   * en mono-poste (où la copie locale de l'admin est déjà la version soumise).
+   */
+  proposalOrigin: z.enum(["create", "update"]).optional(),
+
   // ── Retour de validation ──
   // Renseignés quand un administrateur refuse la proposition. Le profil
   // repasse alors en "local" chez son auteur, qui conserve son travail et

@@ -36,6 +36,7 @@ import { ProfileDetail } from "../profile/ProfileDetail";
 import { Icon } from "../../shared/components/ui/Icon";
 import { StatusDot } from "../../shared/components/ui/StatusBadge";
 import { useConfirm } from "../../shared/components/ui/ConfirmDialog";
+import { toast } from "../../shared/toast/toastStore";
 import { StandardInfoPanel } from "./StandardInfoPanel";
 import {
   MillerColumn,
@@ -357,8 +358,13 @@ export function EditProfilesPage() {
 
   async function handleDeleteConfirm() {
     if (deletingId === null) return;
-    await dbDeleteProfile(deletingId);
+    const { reviewRequested } = await dbDeleteProfile(deletingId);
     await refreshLocalChanges();
+    toast[reviewRequested ? "info" : "success"](
+      reviewRequested
+        ? "Deletion request added — review it in Synchronization and send it to the admin."
+        : "Profile deleted.",
+    );
     if (selectedProfileId === deletingId) {
       // Supprimer un profil qu'on éditait doit lever la garde anti-perte, sinon
       // fausse alerte « unsaved changes » à la navigation suivante.

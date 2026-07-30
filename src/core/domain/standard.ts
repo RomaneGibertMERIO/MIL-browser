@@ -290,6 +290,9 @@ export const StandardPluginSchema = z.object({
   /** Demande de suppression en attente de validation admin (voir ProfileSchema). */
   pendingDeletion: z.boolean().optional(),
 
+  /** Nature de la proposition portée jusqu'à la revue (voir ProfileSchema). */
+  proposalOrigin: z.enum(["create", "update"]).optional(),
+
   // ── Retour de validation (voir ProfileSchema pour la sémantique) ──
   rejectedBy: z.string().optional(),
   rejectedAt: z.string().optional(),

@@ -101,11 +101,10 @@ export async function seedBuiltinProfile(profile: Profile): Promise<void> {
  * Deletes a profile by id.
  * The tombstone event is automatically handled by Dexie hooks in schema.ts
  */
-export async function deleteProfile(id: string): Promise<void> {
+export async function deleteProfile(id: string): Promise<{ reviewRequested: boolean }> {
   // Autonome : suppression PUREMENT locale — pas de pierre tombale (elle
   // « fuirait » vers un dépôt à la prochaine connexion) et purge de l'événement
-  // de synchro résiduel. En partagé, le hook "deleting" crée la tombale
-  // propagée au prochain push (comportement inchangé).
+  // de synchro résiduel.
   if (useAppStore.getState().repoMode === "local") {
     db.isSyncingInternal = true;
     try {
@@ -114,24 +113,32 @@ export async function deleteProfile(id: string): Promise<void> {
       db.isSyncingInternal = false;
     }
     await db.syncEvents.delete(id);
-    return;
+    return { reviewRequested: false };
   }
 
-  // Partagé : supprimer un objet OFFICIEL (approved) doit passer par la revue
-  // admin (spec §17). On ne l'efface pas — on le marque en demande de
-  // suppression, qui part comme proposition "pending" via le hook "updating".
-  // L'admin approuve (suppression réelle) ou refuse (retour en approved).
+  // Partagé : supprimer un objet OFFICIEL — ou une copie locale DÉRIVÉE d'un
+  // objet officiel (édité puis sauvegardé, donc syncEvent origin "update") — doit
+  // passer par la revue admin (spec §17). On ne l'efface pas : on le marque en
+  // demande de suppression, statut "local" (= modification non soumise, donc
+  // protégée du pull qui écraserait autrement la marque avec la version centrale)
+  // portant `pendingDeletion`. Le push la fait passer "pending" ; l'admin
+  // approuve (suppression réelle) ou refuse (retour en approved).
   const existing = await db.profiles.get(id);
-  if (existing && existing.status === "approved") {
-    await upsertProfile({ ...existing, status: "pending", pendingDeletion: true });
-    return;
+  if (existing) {
+    const event = await db.syncEvents.get(id);
+    const wasOfficial = existing.status === "approved" || (event as any)?.origin === "update";
+    if (wasOfficial) {
+      await upsertProfile({ ...existing, status: "local", pendingDeletion: true });
+      return { reviewRequested: true };
+    }
   }
 
-  // Objet local/pending jamais officiel : suppression directe (rien à réviser).
+  // Création/brouillon purement local (jamais officiel) : suppression directe.
   await db.transaction("rw", [db.profiles, db.syncEvents], async () => {
     // Déclenche automatiquement le hook "deleting" de schema.ts
     await db.profiles.delete(id);
   });
+  return { reviewRequested: false };
 }
 
 /**

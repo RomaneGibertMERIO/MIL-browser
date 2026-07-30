@@ -534,9 +534,17 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
 
           try {
-            if ((std.status || "approved") === "pending") {
-              const existing = await db.standards.get(std.manifest.id);
-              if (existing) previousById.set(std.manifest.id, existing);
+            const localStd: any = await db.standards.get(std.manifest.id);
+            // On n'écrase JAMAIS un travail local NON soumis (statut "local" :
+            // édition ou demande de suppression en cours). Sans ce garde-fou, un
+            // pull (refresh, ou la resynchro de fin de push) remplaçait la version
+            // locale par la version centrale et effaçait la modification/marque
+            // avant même qu'elle puisse partir en revue. Une fois poussée (statut
+            // "pending"), elle n'est plus "local" et se synchronise normalement.
+            if (localStd?.status === "local") continue;
+
+            if ((std.status || "approved") === "pending" && localStd) {
+              previousById.set(std.manifest.id, localStd);
             }
             await upsertStandard({
               ...std,
@@ -566,9 +574,13 @@ export const useAppStore = create<AppState>((set, get) => ({
             continue;
           }
           try {
-            if (prof.status === "pending") {
-              const existing = await db.profiles.get(prof.id);
-              if (existing) previousById.set(prof.id, existing);
+            const localProf = await db.profiles.get(prof.id);
+            // On n'écrase JAMAIS un travail local NON soumis (voir le bloc
+            // standards) : édition ou demande de suppression en cours.
+            if (localProf?.status === "local") continue;
+
+            if (prof.status === "pending" && localProf) {
+              previousById.set(prof.id, localProf);
             }
             // Tout profil venant du dépôt central est officiel/partagé, jamais un
             // built-in local : on force source="user" pour qu'il s'affiche selon
@@ -631,7 +643,16 @@ export const useAppStore = create<AppState>((set, get) => ({
             changes: [{
               id: p.id,
               type: "profile" as const,
-              action: (p.pendingDeletion ? "Deleted" : previous ? "Modified" : "Created") as "Created" | "Modified" | "Deleted",
+              // Created/Modified d'après la nature portée par la proposition
+              // (cohérent avec la Sync) ; repli sur previousById pour l'ancien
+              // format sans proposalOrigin.
+              action: (p.pendingDeletion
+                ? "Deleted"
+                : p.proposalOrigin === "create"
+                  ? "Created"
+                  : p.proposalOrigin === "update"
+                    ? "Modified"
+                    : previous ? "Modified" : "Created") as "Created" | "Modified" | "Deleted",
               name: p.name,
               location: `${p.standardId}`,
               proposedData: p,
@@ -649,7 +670,13 @@ export const useAppStore = create<AppState>((set, get) => ({
             changes: [{
               id: s.manifest.id,
               type: "standard" as const,
-              action: (s.pendingDeletion ? "Deleted" : previous ? "Modified" : "Created") as "Created" | "Modified" | "Deleted",
+              action: (s.pendingDeletion
+                ? "Deleted"
+                : s.proposalOrigin === "create"
+                  ? "Created"
+                  : s.proposalOrigin === "update"
+                    ? "Modified"
+                    : previous ? "Modified" : "Created") as "Created" | "Modified" | "Deleted",
               name: s.manifest.name || s.manifest.id,
               location: s.manifest.organization || "Global",
               proposedData: s,
@@ -766,7 +793,10 @@ export const useAppStore = create<AppState>((set, get) => ({
             const profileToSend = {
               ...payload,
               author: state.systemUsername,
-              status: "pending" as const
+              status: "pending" as const,
+              // Porte la nature de la proposition jusqu'à la revue admin, pour un
+              // libellé Created/Modified cohérent avec la Sync même en mono-poste.
+              proposalOrigin: ((event as any).origin === "create" ? "create" : "update") as "create" | "update",
             };
 
             const result = toIpcResult(
@@ -813,6 +843,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               ...hydrated,
               status: "pending",
               lastModifiedBy: state.systemUsername,
+              proposalOrigin: (event as any).origin === "create" ? "create" : "update",
               manifest: {
                 ...hydrated.manifest,
                 isBuiltin: false

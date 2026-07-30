@@ -126,21 +126,27 @@ export async function createStandard(standard: StandardPlugin): Promise<void> {
 /**
  * Supprime un standard et tous les profils associés.
  */
-export async function deleteStandardAndProfiles(id: string): Promise<void> {
+export async function deleteStandardAndProfiles(id: string): Promise<{ reviewRequested: boolean }> {
   const standard = await getStandardById(id);
-  if (!standard) return;
+  if (!standard) return { reviewRequested: false };
   // Le socle d'usine (builtin) est désormais supprimable comme tout autre : le
   // hook « deleting » n'émet pas de tombstone pour un builtin (suppression
   // purement locale), et le bootstrap ne réinstalle le socle que si l'espace
   // local redevient vide (filet de sécurité).
 
-  // Partagé : supprimer un standard OFFICIEL (approved) passe par la revue admin
-  // (spec §17). On marque seulement le standard en demande de suppression (les
-  // profils restent en place) ; à l'approbation, la cascade réelle s'exécute.
-  if (useAppStore.getState().repoMode !== "local" && (standard as any).status === "approved") {
-    await upsertStandard({ ...standard, status: "pending", pendingDeletion: true } as any);
-    await useAppStore.getState().refreshLocalChanges();
-    return;
+  // Partagé : un standard OFFICIEL — ou dérivé d'un officiel (édité puis
+  // sauvegardé, syncEvent origin "update") — passe par la revue admin (spec §17).
+  // On marque seulement le standard en demande de suppression, statut "local"
+  // (protégé du pull) ; les profils restent en place et la cascade réelle
+  // s'exécute à l'approbation.
+  if (useAppStore.getState().repoMode !== "local") {
+    const event = await db.syncEvents.get(id);
+    const wasOfficial = (standard as any).status === "approved" || (event as any)?.origin === "update";
+    if (wasOfficial) {
+      await upsertStandard({ ...standard, status: "local", pendingDeletion: true } as any);
+      await useAppStore.getState().refreshLocalChanges();
+      return { reviewRequested: true };
+    }
   }
 
   const profileKeys = await db.profiles
@@ -170,4 +176,5 @@ export async function deleteStandardAndProfiles(id: string): Promise<void> {
 
   await deleteNodeImagesForStandard(id); // GC des images du standard supprimé
   await useAppStore.getState().refreshLocalChanges();
+  return { reviewRequested: false };
 }

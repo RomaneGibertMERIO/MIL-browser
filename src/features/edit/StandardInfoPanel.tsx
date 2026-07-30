@@ -109,8 +109,12 @@ export function StandardInfoPanel({
     });
     if (!ok) return;
     try {
-      await deleteStandardAndProfiles(m.id);
-      toast.success(`"${m.label}" deleted.`);
+      const { reviewRequested } = await deleteStandardAndProfiles(m.id);
+      if (reviewRequested) {
+        toast.info(`Deletion request for "${m.label}" added — send it to the admin from Synchronization.`);
+      } else {
+        toast.success(`"${m.label}" deleted.`);
+      }
       onDeleted?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete standard.");
