@@ -16,8 +16,7 @@ import { useStandards } from './shared/hooks/useStandards';
 import { canAccess, canAccessNow, roleLabel } from './shared/roles';
 import { AssistantPage } from './features/assistant/AssistantPage';
 import { HomePage } from './features/home/HomePage';
-import { EditProfilesPage } from './features/edit/EditProfilesPage';
-import { EditTaxonomyPage } from './features/edit/EditTaxonomyPage';
+import { EditDatabasePage } from './features/edit/EditDatabasePage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Sidebar } from './app/Sidebar';
 import { SyncPage } from './features/sync/SyncPage';
@@ -177,22 +176,15 @@ function ContentPane({ adminView }: ContentPaneProps) {
 // ---------------------------------------------------------------------------
 
 /**
- * Edit : bascule engrenage entre le mode Profils (EditProfilesPage) et le mode
- * Taxonomie (EditTaxonomyPage), tous deux en Miller éditable. La norme active
- * est choisie dans la 1re colonne du Miller (partagée par les deux modes).
+ * Edit database : un SEUL menu unifié (fusion des anciens onglets Profils +
+ * Taxonomie). Une seule vue Miller (Standards → nœuds → profils) avec un panneau
+ * droit contextuel (profil / nœud / infos standard) — voir EditDatabasePage.
  */
 function EditSection() {
-  const [tab, setTab] = useState<'profiles' | 'taxonomy'>('profiles');
-
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 flex items-center gap-2 px-6 py-3 border-b border-gray-200 bg-white">
-        <SubTab active={tab === 'profiles'} onClick={() => setTab('profiles')} icon="edit" label="Profiles" />
-        <SubTab active={tab === 'taxonomy'} onClick={() => setTab('taxonomy')} icon="settings" label="Taxonomy" />
-      </div>
-
       <div className="flex-1 min-h-0 overflow-hidden">
-        {tab === 'taxonomy' ? <EditTaxonomyPage /> : <EditProfilesPage />}
+        <EditDatabasePage />
       </div>
     </div>
   );
