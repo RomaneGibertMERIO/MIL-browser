@@ -14,19 +14,14 @@ import { useMemo, useState } from "react";
 import { useAppStore, type MockChangeItem } from "../../store/appStore";
 import type { StandardPlugin } from "../../core/domain/standard";
 import { Icon } from "../../shared/components/ui/Icon";
-import { Badge, type BadgeVariant } from "../../shared/components/ui/Badge";
 import { ChangeCard } from "../../shared/components/ChangeCard";
+import { ChangeTag } from "../../shared/components/ChangeTag";
+import { changeStyle } from "../../shared/changeStyle";
 import { useStandards } from "../../shared/hooks/useStandards";
 import { useConfirm } from "../../shared/components/ui/ConfirmDialog";
 import { toast } from "../../shared/toast/toastStore";
 
 type Filter = "all" | "standard" | "profile";
-
-const ACTION_VARIANT: Record<MockChangeItem["action"], BadgeVariant> = {
-  Created: "green",
-  Modified: "yellow",
-  Deleted: "red",
-};
 
 export function SyncPage() {
   const changes = useAppStore((s) => s.localStagedChanges);
@@ -260,8 +255,8 @@ function ChangeGroup({
           key={c.id}
           type="button"
           onClick={() => onSelect(c.id)}
-          className={`flex w-full items-start gap-2.5 border-b border-gray-50 px-4 py-2.5 text-left transition-colors ${
-            selectedId === c.id ? "border-l-2 border-l-blue-500 bg-blue-50 pl-3.5" : "hover:bg-gray-50"
+          className={`flex w-full items-start gap-2.5 border-b border-gray-50 border-l-4 ${changeStyle(c.action).accent} px-4 py-2.5 text-left transition-colors ${
+            selectedId === c.id ? "bg-blue-50" : "hover:bg-gray-50"
           }`}
         >
           <input
@@ -274,7 +269,7 @@ function ChangeGroup({
           />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
-              <Badge variant={ACTION_VARIANT[c.action] ?? "gray"}>{c.action}</Badge>
+              <ChangeTag action={c.action} />
               <span className="truncate text-sm font-medium text-gray-900">{c.name}</span>
             </span>
             <span className="mt-0.5 block truncate font-mono text-xs text-gray-400">{c.location}</span>
@@ -289,7 +284,7 @@ function ChangeDetail({ change, standards }: { change: MockChangeItem; standards
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-1 flex items-center gap-2">
-        <Badge variant={ACTION_VARIANT[change.action] ?? "gray"}>{change.action}</Badge>
+        <ChangeTag action={change.action} />
         <h3 className="truncate text-base font-semibold text-gray-900">{change.name}</h3>
       </div>
       <p className="mb-4 font-mono text-xs text-gray-400">

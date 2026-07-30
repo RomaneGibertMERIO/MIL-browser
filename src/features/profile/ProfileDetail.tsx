@@ -14,6 +14,7 @@ import type { ProfileDefinition } from "../../core/domain/standard";
 import { Card } from "../../shared/components/ui/Card";
 import { Badge } from "../../shared/components/ui/Badge";
 import { sourceStatusStyle } from "../../shared/profileStatus";
+import { FIELD_ADDED, FIELD_MODIFIED, FIELD_REMOVED, OLD_VALUE } from "../../shared/changeStyle";
 import { TimeSeriesChart } from "../../shared/components/charts/TimeSeriesChart";
 import type { FieldGroup } from "../../core/domain/standard";
 
@@ -28,11 +29,14 @@ interface ProfileDetailProps {
   onBack?: () => void;
   backLabel?: string;
   /**
-   * Mode diff (revue/Sync, spec §13) : compare chaque champ à `previous` et
-   * colore la valeur — vert = ajouté, rouge barré = supprimé, jaune = modifié
-   * (ancienne valeur affichée entre parenthèses). Absent = affichage normal.
+   * Mode diff (Sync/Review, spec §13) — palette « type de changement » (bleus,
+   * cf. changeStyle.ts), distincte de la palette de statut :
+   *  - action "Created" : tout champ renseigné = ajout → bleu clair.
+   *  - action "Modified" : comparaison à `previous` — ajouté (bleu clair),
+   *    modifié (bleu moyen + ancienne valeur barrée), supprimé (bleu foncé barré).
+   * Absent = affichage normal (Browser/Éditeur).
    */
-  diff?: { previous: Profile | null };
+  diff?: { action: "Created" | "Modified"; previous?: Profile | null };
 }
 
 // ---------------------------------------------------------------------------
@@ -51,8 +55,15 @@ const GROUPS: { key: FieldGroup; label: string }[] = [
 ];
 
 export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", diff }: ProfileDetailProps) {
-  const previousFields = diff ? (diff.previous?.fields ?? {}) : null;
-  const prev = diff?.previous ?? null;
+  // Mode de diff : "none" (affichage normal), "created" (tout est neuf → ajout),
+  // "modified" (comparaison champ par champ avec la version précédente).
+  const mode: "none" | "created" | "modified" = diff
+    ? diff.action === "Created"
+      ? "created"
+      : "modified"
+    : "none";
+  const prev = mode === "modified" ? (diff?.previous ?? null) : null;
+  const previousFields = mode === "modified" ? (prev?.fields ?? {}) : null;
   // Un profil dont le schéma ne définit AUCUNE colonne dataset ne doit pas
   // afficher de zone graphe/table (vide et trompeuse) — cohérent avec l'éditeur
   // (8.3) et corrige la carte de comparaison « seulement un dataset vide » (11.4).
@@ -81,10 +92,11 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
       <Card>
         <div className="flex items-start gap-2 flex-wrap mb-1">
           <h2 className="text-base font-semibold leading-snug">
-            {prev && prev.name !== profile.name ? (
-              <span className="rounded bg-yellow-50 px-1 text-yellow-800">
-                {profile.name}{" "}
-                <span className="text-xs font-normal text-gray-400">(was: {prev.name})</span>
+            {mode === "created" ? (
+              <span className={FIELD_ADDED}>{profile.name}</span>
+            ) : prev && prev.name !== profile.name ? (
+              <span className={FIELD_MODIFIED}>
+                {profile.name} <span className={`text-xs ${OLD_VALUE}`}>{prev.name}</span>
               </span>
             ) : (
               <span className="text-gray-900">{profile.name}</span>
@@ -97,11 +109,13 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
         </div>
         {(profile.description !== "" || (prev != null && prev.description !== profile.description)) && (
           <p className="mt-0.5 text-sm leading-relaxed">
-            {prev && prev.description !== profile.description ? (
-              <span className="rounded bg-yellow-50 px-1 text-yellow-800">
+            {mode === "created" ? (
+              <span className={FIELD_ADDED}>{profile.description}</span>
+            ) : prev && prev.description !== profile.description ? (
+              <span className={FIELD_MODIFIED}>
                 {profile.description || "—"}
                 {prev.description ? (
-                  <span className="ml-1 text-xs font-normal text-gray-400">(was: {prev.description})</span>
+                  <span className={`ml-1 text-xs ${OLD_VALUE}`}>{prev.description}</span>
                 ) : null}
               </span>
             ) : (
@@ -151,7 +165,7 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
                     <FieldValue
                       current={profile.fields[field.key]}
                       previous={previousFields ? previousFields[field.key] : undefined}
-                      diff={previousFields !== null}
+                      mode={mode}
                     />
                   </dd>
                 </div>
@@ -242,35 +256,43 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
 // ---------------------------------------------------------------------------
 
 /**
- * Valeur d'un champ, colorée en mode diff (spec §13) : vert = ajouté,
- * rouge barré = supprimé, jaune = modifié (ancienne valeur entre parenthèses).
+ * Valeur d'un champ, colorée selon le TYPE DE CHANGEMENT (palette bleue) :
+ *  - created : tout champ renseigné = ajout (bleu clair).
+ *  - modified : ajout (bleu clair) / modifié (bleu moyen + ancienne valeur
+ *    barrée) / supprimé (bleu foncé barré) / inchangé (neutre).
  */
 function FieldValue({
   current,
   previous,
-  diff,
+  mode,
 }: {
   current: unknown;
   previous: unknown;
-  diff: boolean;
+  mode: "none" | "created" | "modified";
 }) {
   const cur = formatFieldValue(current);
-  if (!diff) return <span className="text-gray-900">{cur}</span>;
-
-  const prev = formatFieldValue(previous);
   const curEmpty = current === null || current === undefined || current === "";
+
+  if (mode === "none") return <span className="text-gray-900">{cur}</span>;
+
+  if (mode === "created") {
+    return curEmpty ? (
+      <span className="text-gray-300">—</span>
+    ) : (
+      <span className={FIELD_ADDED}>{cur}</span>
+    );
+  }
+
+  // mode "modified" : comparaison à la version précédente.
+  const prev = formatFieldValue(previous);
   const prevEmpty = previous === null || previous === undefined || previous === "";
 
-  if (!curEmpty && prevEmpty) {
-    return <span className="rounded bg-green-50 px-1 text-green-700">{cur}</span>;
-  }
-  if (curEmpty && !prevEmpty) {
-    return <span className="text-red-600 line-through">{prev}</span>;
-  }
+  if (!curEmpty && prevEmpty) return <span className={FIELD_ADDED}>{cur}</span>;
+  if (curEmpty && !prevEmpty) return <span className={FIELD_REMOVED}>{prev}</span>;
   if (cur !== prev) {
     return (
-      <span className="rounded bg-yellow-50 px-1 text-yellow-800">
-        {cur} <span className="font-normal text-gray-400">(was: {prev})</span>
+      <span className={FIELD_MODIFIED}>
+        {cur} <span className={OLD_VALUE}>{prev}</span>
       </span>
     );
   }
