@@ -99,10 +99,12 @@ export async function upsertProfile(profile: Profile): Promise<void> {
       // Objet complet : pas de reconstruction obj+mods (pas de bug de clés
       // pointées imbriquées), le diff voit donc bien les changements de champs.
       payload: profile,
-      // Référence du diff : version d'avant la 1re modif non synchronisée,
-      // conservée à travers les éditions. Invariant : un item "Created" n'a pas
-      // de version antérieure (sinon un faux diff « ancien → nouveau »).
-      previous: resolvedOrigin === "create" ? undefined : ((existingEvent as any)?.previous ?? before),
+      // Référence du diff : état d'avant la 1re modif non synchronisée, conservé
+      // à travers les éditions. On le garde AUSSI pour un objet "Created" édité
+      // après sa création (état = version créée), afin de montrer ce qui a été
+      // changé depuis la création. `previous` ne sert QU'À L'AFFICHAGE (jamais au
+      // submit/pull/approve). Un objet fraîchement créé (isNew) n'a rien avant.
+      previous: isNew ? undefined : ((existingEvent as any)?.previous ?? before),
       origin: resolvedOrigin,
     });
   });

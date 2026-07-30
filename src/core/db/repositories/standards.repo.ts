@@ -62,8 +62,10 @@ export async function upsertStandard(standard: StandardPlugin): Promise<void> {
       operation: "upsert",
       entity: "standard",
       payload: standardSyncSummary(light),
-      // Invariant : un item "Created" n'a pas de version antérieure.
-      previous: resolvedOrigin === "create" ? undefined : ((existingEvent as any)?.previous ?? standardSyncSummary(before)),
+      // On garde l'état antérieur AUSSI pour un objet "Created" édité après sa
+      // création (= version créée), pour montrer ce qui a changé depuis. `previous`
+      // ne sert qu'à l'affichage. Un objet fraîchement créé n'a rien avant.
+      previous: isNew ? undefined : ((existingEvent as any)?.previous ?? standardSyncSummary(before)),
       origin: resolvedOrigin,
     });
   });

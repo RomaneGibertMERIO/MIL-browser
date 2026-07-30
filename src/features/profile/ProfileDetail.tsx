@@ -70,8 +70,10 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
       ? "created"
       : "modified"
     : "none";
-  const prev = mode === "modified" ? (diff?.previous ?? null) : null;
-  const previousFields = mode === "modified" ? (prev?.fields ?? {}) : null;
+  // On expose la version précédente en created ET modified : un objet créé puis
+  // édité montre ainsi les champs changés depuis sa création (le reste = neuf).
+  const prev = mode !== "none" ? (diff?.previous ?? null) : null;
+  const previousFields = mode !== "none" ? (prev?.fields ?? {}) : null;
 
   // Diff du DATASET (points de données) : on colore les cellules/lignes du
   // tableau (le graphe ne peut pas être coloré point par point → simple note).
@@ -155,13 +157,13 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
           <span className="mr-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
             Description
           </span>
-          {mode === "created" ? (
-            <span className={FIELD_ADDED}>{profile.description || "—"}</span>
-          ) : prev && prev.description !== profile.description ? (
+          {prev && prev.description !== profile.description && prev.description ? (
             <span className={FIELD_MODIFIED}>
               {profile.description || "—"}
-              {prev.description ? <span className={`ml-1 text-xs ${OLD_VALUE}`}>{prev.description}</span> : null}
+              <span className={`ml-1 text-xs ${OLD_VALUE}`}>{prev.description}</span>
             </span>
+          ) : mode === "created" || (prev != null && prev.description !== profile.description) ? (
+            <span className={FIELD_ADDED}>{profile.description || "—"}</span>
           ) : (
             <span className="text-gray-600">{profile.description}</span>
           )}
@@ -305,10 +307,13 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
 // ---------------------------------------------------------------------------
 
 /**
- * Valeur d'un champ, colorée selon le TYPE DE CHANGEMENT (palette bleue) :
- *  - created : tout champ renseigné = ajout (bleu clair).
- *  - modified : ajout (bleu clair) / modifié (bleu moyen + ancienne valeur
- *    barrée) / supprimé (bleu foncé barré) / inchangé (neutre).
+ * Valeur d'un champ, colorée selon le TYPE DE CHANGEMENT (palette bleue). Logique
+ * unifiée created/modified, en s'appuyant sur la version précédente quand elle
+ * existe :
+ *  - modifié (valeur changée)        → bleu moyen + ancienne valeur barrée.
+ *  - supprimé (valeur retirée)       → indigo barré.
+ *  - ajouté (rien avant)             → bleu clair.
+ *  - inchangé : en "created" reste « nouveau » (bleu clair) ; en "modified", neutre.
  */
 function FieldValue({
   current,
@@ -324,28 +329,25 @@ function FieldValue({
 
   if (mode === "none") return <span className="text-gray-900">{cur}</span>;
 
-  if (mode === "created") {
-    return curEmpty ? (
-      <span className="text-gray-300">—</span>
-    ) : (
-      <span className={FIELD_ADDED}>{cur}</span>
-    );
-  }
-
-  // mode "modified" : comparaison à la version précédente.
   const prev = formatFieldValue(previous);
   const prevEmpty = previous === null || previous === undefined || previous === "";
 
-  if (!curEmpty && prevEmpty) return <span className={FIELD_ADDED}>{cur}</span>;
-  if (curEmpty && !prevEmpty) return <span className={FIELD_REMOVED}>{prev}</span>;
-  if (cur !== prev) {
+  if (!curEmpty && !prevEmpty && cur !== prev) {
     return (
       <span className={FIELD_MODIFIED}>
         {cur} <span className={OLD_VALUE}>{prev}</span>
       </span>
     );
   }
-  return <span className="text-gray-900">{cur}</span>;
+  if (curEmpty && !prevEmpty) return <span className={FIELD_REMOVED}>{prev}</span>;
+  if (!curEmpty && prevEmpty) return <span className={FIELD_ADDED}>{cur}</span>;
+  if (curEmpty) return <span className="text-gray-300">—</span>;
+  // Inchangé et non vide.
+  return mode === "created" ? (
+    <span className={FIELD_ADDED}>{cur}</span>
+  ) : (
+    <span className="text-gray-900">{cur}</span>
+  );
 }
 
 function formatFieldValue(value: unknown): string {

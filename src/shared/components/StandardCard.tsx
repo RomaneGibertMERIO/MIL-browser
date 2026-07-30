@@ -24,7 +24,9 @@ export function StandardCard({
 }) {
   const m = proposed?.manifest ?? proposed ?? {};
   const mode: Mode = diff ? (diff.action === "Created" ? "created" : "modified") : "none";
-  const pm = mode === "modified" ? (diff?.previous?.manifest ?? diff?.previous ?? null) : null;
+  // Version précédente exposée en created ET modified : un standard créé puis
+  // renommé montre ainsi l'ancien titre (le reste restant marqué « nouveau »).
+  const pm = mode !== "none" ? (diff?.previous?.manifest ?? diff?.previous ?? null) : null;
   const nodeCount = Array.isArray(proposed?.nodes) ? proposed.nodes.length : undefined;
 
   return (
@@ -82,7 +84,11 @@ function Meta({ term, children }: { term: string; children: ReactNode }) {
   );
 }
 
-/** A manifest value, coloured by change type (blues). */
+/**
+ * A manifest value, coloured by change type (blues). Logique unifiée
+ * created/modified : champ modifié (bleu + ancien barré), ajouté (bleu clair),
+ * inchangé « nouveau » en created (bleu clair) sinon neutre.
+ */
 function renderValue(
   current: unknown,
   previous: unknown,
@@ -93,22 +99,25 @@ function renderValue(
   const monoCls = mono ? "font-mono" : "";
   if (mode === "none") return <span className={`${monoCls} text-gray-900`}>{cur || "—"}</span>;
 
-  if (mode === "created") {
-    return cur === "" ? (
-      <span className="text-gray-300">—</span>
-    ) : (
-      <span className={`${monoCls} ${FIELD_ADDED}`}>{cur}</span>
-    );
-  }
-
-  // modified
   const prev = previous === null || previous === undefined || previous === "" ? "" : String(previous);
-  if (cur !== prev) {
+
+  // Modifié : une valeur existait avant et a changé → bleu moyen + ancienne barrée.
+  if (cur !== "" && prev !== "" && cur !== prev) {
     return (
       <span className={`${monoCls} ${FIELD_MODIFIED}`}>
-        {cur || "—"} {prev ? <span className={OLD_VALUE}>{prev}</span> : null}
+        {cur} <span className={OLD_VALUE}>{prev}</span>
       </span>
     );
   }
-  return <span className={`${monoCls} text-gray-900`}>{cur || "—"}</span>;
+  // Ajouté (rien avant) → bleu clair.
+  if (cur !== "" && prev === "") {
+    return <span className={`${monoCls} ${FIELD_ADDED}`}>{cur}</span>;
+  }
+  if (cur === "") return <span className="text-gray-300">—</span>;
+  // Inchangé, non vide : « nouveau » en created (bleu clair), sinon neutre.
+  return mode === "created" ? (
+    <span className={`${monoCls} ${FIELD_ADDED}`}>{cur}</span>
+  ) : (
+    <span className={`${monoCls} text-gray-900`}>{cur}</span>
+  );
 }

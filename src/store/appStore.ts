@@ -455,9 +455,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           name: name,
           location: location,
           proposedData: payload,
-          // Version d'avant la 1re modif → active le diff « ancien → nouveau »
-          // (rouge/vert). Pas de diff pour un objet créé (tout est neuf).
-          originalData: isCreated ? undefined : previous,
+          // État d'avant la 1re modif non synchronisée. On le transmet aussi pour
+          // un objet "Created" édité après création, afin d'y montrer les champs
+          // changés depuis la création (le reste restant marqué « nouveau »).
+          originalData: previous,
         });
       }
 
