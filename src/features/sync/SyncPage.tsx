@@ -16,6 +16,7 @@ import type { StandardPlugin } from "../../core/domain/standard";
 import { Icon } from "../../shared/components/ui/Icon";
 import { ChangeCard } from "../../shared/components/ChangeCard";
 import { ChangeTag } from "../../shared/components/ChangeTag";
+import { ChangePanel } from "../../shared/components/ChangePanel";
 import { changeStyle } from "../../shared/changeStyle";
 import { useStandards } from "../../shared/hooks/useStandards";
 import { useConfirm } from "../../shared/components/ui/ConfirmDialog";
@@ -255,8 +256,8 @@ function ChangeGroup({
           key={c.id}
           type="button"
           onClick={() => onSelect(c.id)}
-          className={`flex w-full items-start gap-2.5 border-b border-gray-50 border-l-4 ${changeStyle(c.action).accent} px-4 py-2.5 text-left transition-colors ${
-            selectedId === c.id ? "bg-blue-50" : "hover:bg-gray-50"
+          className={`flex w-full items-start gap-2.5 border-b border-gray-100 border-l-4 ${changeStyle(c.action).accent} ${changeStyle(c.action).listBg} px-4 py-2.5 text-left transition-colors ${
+            selectedId === c.id ? "ring-2 ring-inset ring-blue-500" : ""
           }`}
         >
           <input
@@ -281,16 +282,10 @@ function ChangeGroup({
 }
 
 function ChangeDetail({ change, standards }: { change: MockChangeItem; standards: StandardPlugin[] }) {
+  // Panneau teinté + en-tête coloré (action + nom) ; contenu à plat, pleine largeur.
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="mb-1 flex items-center gap-2">
-        <ChangeTag action={change.action} />
-        <h3 className="truncate text-base font-semibold text-gray-900">{change.name}</h3>
-      </div>
-      <p className="mb-4 font-mono text-xs text-gray-400">
-        {change.type} · {change.location}
-      </p>
+    <ChangePanel change={change}>
       <ChangeCard change={change} standards={standards} />
-    </div>
+    </ChangePanel>
   );
 }

@@ -1,15 +1,13 @@
 /**
- * ChangeCard — unified, human-readable rendering of one proposed change, shared
- * by the Synchronization page and the Admin review (docs/UI-UX-SPEC.md §13/§16/§17).
- *
- * Same layout as the editor: a profile change renders the real Profile Card
- * (ProfileDetail — grouped fields + chart), a standard change the read-only
- * StandardCard (same layout as the editor's StandardInfoPanel). Colour uses the
- * CHANGE-TYPE palette (blues, changeStyle.ts), distinct from the status palette:
- *  - Created  → light blue: every populated field shown as an addition.
- *  - Modified → medium blue: changed fields highlighted, old value struck.
- *  - Deleted  → dark blue: the full card shown under a "will be removed" banner
- *    so the reviewer sees exactly what is being removed before arbitrating.
+ * ChangeCard — the CONTENT of one proposed change (no frame; the frame + coloured
+ * header live in ChangePanel). Shared by the Synchronization page and the Admin
+ * review. Same layout as the editor: a profile change renders ProfileDetail, a
+ * standard change the read-only StandardCard. Colour uses the change-type palette
+ * (blues, changeStyle.ts):
+ *  - Created  → every populated field shown as an addition (sky).
+ *  - Modified → changed fields highlighted (blue) with the old value struck.
+ *  - Deleted  → the full card shown under a "will be removed" notice so the
+ *    reviewer sees exactly what is removed before arbitrating.
  */
 import type { ReactNode } from "react";
 import type { StandardPlugin } from "../../core/domain/standard";
@@ -20,7 +18,6 @@ import { ProfileDetail } from "../../features/profile/ProfileDetail";
 import { StandardCard } from "./StandardCard";
 import { DynamicFields, DynamicDataset } from "./DiffView";
 import { Icon } from "./ui/Icon";
-import { changeStyle } from "../changeStyle";
 
 export function ChangeCard({
   change,
@@ -29,10 +26,7 @@ export function ChangeCard({
   change: MockChangeItem;
   standards: StandardPlugin[];
 }) {
-  const cs = changeStyle(change.action);
   const proposed = change.proposedData;
-  // Le diff n'est passé qu'aux cartes Created/Modified ; une suppression montre la
-  // carte telle quelle (sous un bandeau) pour qu'on voie CE QU'on retire.
   const isDeleted = change.action === "Deleted";
 
   let body: ReactNode;
@@ -52,7 +46,6 @@ export function ChangeCard({
         />
       );
     } else if (proposed) {
-      // Repli quand le standard/schéma est indisponible (toujours pas de JSON brut).
       body = (
         <div className="space-y-4">
           <DynamicFields data={proposed} />
@@ -63,7 +56,6 @@ export function ChangeCard({
       body = <p className="text-sm text-gray-400">No preview available for this change.</p>;
     }
   } else {
-    // Standard / taxonomie → carte read-only au layout de l'éditeur.
     body = proposed ? (
       <StandardCard
         proposed={proposed}
@@ -75,14 +67,14 @@ export function ChangeCard({
   }
 
   return (
-    <div className={`border-l-4 ${cs.accent} pl-4`}>
+    <>
       {isDeleted && (
-        <div className={`mb-4 flex items-start gap-2 rounded-lg p-3 text-sm ${cs.tag}`}>
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-indigo-300 bg-indigo-100 p-3 text-sm font-medium text-indigo-900">
           <Icon name="warning" size={16} className="mt-0.5 flex-shrink-0" />
           <span>This {change.type} will be removed from the central repository.</span>
         </div>
       )}
       {body}
-    </div>
+    </>
   );
 }

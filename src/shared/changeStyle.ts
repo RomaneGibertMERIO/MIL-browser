@@ -3,46 +3,56 @@
  *
  * Two independent visual axes in the app:
  *  - STATUS (profileStatus.ts): local = yellow, pending = orange, official = green.
- *    Used on the Browser/Editor cards to say WHERE an object stands.
- *  - CHANGE TYPE (this file): shades of BLUE — added = light, modified = medium,
- *    deleted = dark. Used ONLY in the change-tracking views (Synchronization and
- *    Admin Review) to say WHAT a proposed change does.
+ *    Says WHERE an object stands. Shown on the Browser/Editor.
+ *  - CHANGE TYPE (this file): three distinguishable blue-family hues — added = sky
+ *    (light), modified = blue (medium), deleted = indigo (deep). Says WHAT a
+ *    proposed change does. Used ONLY in the change-tracking views (Synchronization
+ *    and Admin Review).
  *
- * Keeping them separate is deliberate (user request): the old code reused
- * green/yellow/red for Created/Modified/Deleted, which collided with the status
- * colours and made the two meanings indistinguishable.
+ * The hues are deliberately different (sky / blue / indigo), not just three tints
+ * of the same blue, so the three actions are impossible to miss and clearly
+ * separated. Everything is tunable from this one file.
  */
 
 export type ChangeAction = "Created" | "Modified" | "Deleted";
 
 export interface ChangeStyle {
-  /** Left-accent border (list rows + detail card frame). */
-  accent: string;
-  /** Recolored action word pill (background + text + ring). No new label — it
-   *  replaces the old status-coloured badge on the SAME word. */
+  /** Soft tint for a LIST card (readable, unmissable) + hover + border. */
+  listBg: string;
+  /** Very soft tint for the DETAIL panel (so inner field cards stay readable). */
+  panelBg: string;
+  /** Stronger tint for the DETAIL header bar (action + name). */
+  header: string;
+  /** Bold action-word pill. */
   tag: string;
-  /** Card frame border. */
-  border: string;
+  /** Border/accent colour for panels and rows. */
+  accent: string;
 }
 
 const CARD: Record<ChangeAction, ChangeStyle> = {
-  // Ajout → bleu clair
+  // Ajout → SKY (bleu clair)
   Created: {
-    accent: "border-l-blue-300",
-    tag: "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200",
-    border: "border-blue-200",
+    listBg: "bg-sky-50 hover:bg-sky-100",
+    panelBg: "bg-sky-50",
+    header: "bg-sky-100 text-sky-900",
+    tag: "bg-sky-200 text-sky-900",
+    accent: "border-sky-300",
   },
-  // Modification → bleu moyen
+  // Modification → BLUE (bleu moyen)
   Modified: {
-    accent: "border-l-blue-500",
-    tag: "bg-blue-100 text-blue-800 ring-1 ring-inset ring-blue-300",
-    border: "border-blue-300",
+    listBg: "bg-blue-50 hover:bg-blue-100",
+    panelBg: "bg-blue-50",
+    header: "bg-blue-100 text-blue-900",
+    tag: "bg-blue-200 text-blue-900",
+    accent: "border-blue-400",
   },
-  // Suppression → bleu foncé
+  // Suppression → INDIGO (bleu profond)
   Deleted: {
-    accent: "border-l-blue-800",
-    tag: "bg-blue-800 text-white",
-    border: "border-blue-800",
+    listBg: "bg-indigo-50 hover:bg-indigo-100",
+    panelBg: "bg-indigo-50",
+    header: "bg-indigo-100 text-indigo-900",
+    tag: "bg-indigo-200 text-indigo-900",
+    accent: "border-indigo-400",
   },
 };
 
@@ -50,15 +60,18 @@ export function changeStyle(action: string): ChangeStyle {
   return CARD[action as ChangeAction] ?? CARD.Modified;
 }
 
-// ── Coloration AU NIVEAU DU CHAMP, à l'intérieur d'une carte de diff ──────────
-// La teinte reflète ce qui arrive AU CHAMP, indépendamment de l'action globale
-// de la carte : un champ nouvellement rempli = ajout (clair), une valeur changée
-// = modif (moyen), une valeur vidée = suppression (foncé, barrée).
-/** Champ ajouté (vide avant, rempli maintenant) → bleu clair. */
-export const FIELD_ADDED = "rounded bg-blue-50 px-1 text-blue-800";
-/** Champ modifié (valeur différente) → bleu moyen. */
+// ── Coloration AU NIVEAU DU CHAMP / DE LA CELLULE, dans une carte de diff ─────
+// La teinte reflète ce qui arrive au champ, dans la même famille que l'action :
+// ajouté = sky, modifié = blue, supprimé = indigo.
+/** Champ/cellule ajouté (vide avant, rempli maintenant) → sky. */
+export const FIELD_ADDED = "rounded bg-sky-100 px-1 text-sky-900";
+/** Champ/cellule modifié (valeur différente) → blue. */
 export const FIELD_MODIFIED = "rounded bg-blue-100 px-1 text-blue-900";
 /** Ancienne valeur rappelée à côté d'une modification (barrée, discrète). */
 export const OLD_VALUE = "font-normal text-slate-400 line-through";
-/** Champ supprimé (rempli avant, vide maintenant) → bleu foncé barré. */
-export const FIELD_REMOVED = "text-blue-900 line-through";
+/** Champ/cellule supprimé (rempli avant, vide maintenant) → indigo barré. */
+export const FIELD_REMOVED = "text-indigo-900 line-through";
+/** Fond de cellule de tableau pour chaque type (sans le rounded/px des champs). */
+export const CELL_ADDED = "bg-sky-100 text-sky-900";
+export const CELL_MODIFIED = "bg-blue-100 text-blue-900";
+export const CELL_REMOVED = "bg-indigo-50 text-indigo-900 line-through";

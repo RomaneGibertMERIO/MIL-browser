@@ -14,7 +14,15 @@ import type { ProfileDefinition } from "../../core/domain/standard";
 import { Card } from "../../shared/components/ui/Card";
 import { Badge } from "../../shared/components/ui/Badge";
 import { sourceStatusStyle } from "../../shared/profileStatus";
-import { FIELD_ADDED, FIELD_MODIFIED, FIELD_REMOVED, OLD_VALUE } from "../../shared/changeStyle";
+import {
+  FIELD_ADDED,
+  FIELD_MODIFIED,
+  FIELD_REMOVED,
+  OLD_VALUE,
+  CELL_ADDED,
+  CELL_MODIFIED,
+  CELL_REMOVED,
+} from "../../shared/changeStyle";
 import { TimeSeriesChart } from "../../shared/components/charts/TimeSeriesChart";
 import type { FieldGroup } from "../../core/domain/standard";
 
@@ -64,6 +72,28 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
     : "none";
   const prev = mode === "modified" ? (diff?.previous ?? null) : null;
   const previousFields = mode === "modified" ? (prev?.fields ?? {}) : null;
+
+  // Diff du DATASET (points de données) : on colore les cellules/lignes du
+  // tableau (le graphe ne peut pas être coloré point par point → simple note).
+  const previousDataset = mode === "modified" ? ((prev?.dataset as any[]) ?? []) : null;
+  const removedRows = previousDataset ? previousDataset.slice(profile.dataset.length) : [];
+  const datasetChanged =
+    mode === "created"
+      ? profile.dataset.length > 0
+      : mode === "modified"
+        ? JSON.stringify(profile.dataset) !== JSON.stringify(prev?.dataset ?? [])
+        : false;
+  /** Classe de fond d'une cellule selon son évolution (ajout/modif/inchangé). */
+  const cellClass = (rowIdx: number, colKey: string): string => {
+    if (mode === "created") return CELL_ADDED;
+    if (mode !== "modified" || !previousDataset) return "";
+    const prevRow = previousDataset[rowIdx];
+    if (prevRow === undefined) return CELL_ADDED; // ligne entièrement nouvelle
+    return String(profile.dataset[rowIdx]?.[colKey] ?? "") !== String(prevRow[colKey] ?? "")
+      ? CELL_MODIFIED
+      : "";
+  };
+
   // Un profil dont le schéma ne définit AUCUNE colonne dataset ne doit pas
   // afficher de zone graphe/table (vide et trompeuse) — cohérent avec l'éditeur
   // (8.3) et corrige la carte de comparaison « seulement un dataset vide » (11.4).
@@ -88,56 +118,55 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
         </button>
       )}
 
-      {/* ── Header ──────────────────────────────────────────────────── */}
-      <Card>
-        <div className="flex items-start gap-2 flex-wrap mb-1">
-          <h2 className="text-base font-semibold leading-snug">
-            {mode === "created" ? (
-              <span className={FIELD_ADDED}>{profile.name}</span>
-            ) : prev && prev.name !== profile.name ? (
-              <span className={FIELD_MODIFIED}>
-                {profile.name} <span className={`text-xs ${OLD_VALUE}`}>{prev.name}</span>
-              </span>
-            ) : (
-              <span className="text-gray-900">{profile.name}</span>
-            )}
-          </h2>
-          {(() => {
-            const s = sourceStatusStyle(profile.source, profile.status);
-            return <Badge variant={s.variant}>{s.label}</Badge>;
-          })()}
-        </div>
-        {(profile.description !== "" || (prev != null && prev.description !== profile.description)) && (
-          <p className="mt-0.5 text-sm leading-relaxed">
-            {mode === "created" ? (
-              <span className={FIELD_ADDED}>{profile.description}</span>
-            ) : prev && prev.description !== profile.description ? (
-              <span className={FIELD_MODIFIED}>
-                {profile.description || "—"}
-                {prev.description ? (
-                  <span className={`ml-1 text-xs ${OLD_VALUE}`}>{prev.description}</span>
-                ) : null}
-              </span>
-            ) : (
-              <span className="text-gray-500">{profile.description}</span>
-            )}
-          </p>
-        )}
-        {profile.author && profile.author !== "unknown" && (
-          <p className="mt-1.5 text-xs text-gray-400">
-            Last modified by <span className="font-medium text-gray-600">{profile.author}</span>
-            {profile.updatedAt ? ` · ${new Date(profile.updatedAt).toLocaleDateString()}` : ""}
-          </p>
-        )}
-        {profile.rejectionReason && (
-          <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
-            <span className="font-semibold">
-              Rejected{profile.rejectedBy ? ` by ${profile.rejectedBy}` : ""}:
-            </span>{" "}
-            {profile.rejectionReason}
+      {/* ── Header ───────────────────────────────────────────────────────
+           Hors diff : carte d'en-tête complète (nom + statut + description +
+           auteur). En mode diff : PAS de carte d'en-tête — l'en-tête coloré du
+           ChangePanel porte déjà l'action + le nom, et rappeler le statut ici
+           mélangerait les palettes. On ne garde que la description (diffée). ── */}
+      {mode === "none" ? (
+        <Card>
+          <div className="flex items-start gap-2 flex-wrap mb-1">
+            <h2 className="text-base font-semibold leading-snug text-gray-900">{profile.name}</h2>
+            {(() => {
+              const s = sourceStatusStyle(profile.source, profile.status);
+              return <Badge variant={s.variant}>{s.label}</Badge>;
+            })()}
           </div>
-        )}
-      </Card>
+          {profile.description !== "" && (
+            <p className="mt-0.5 text-sm leading-relaxed text-gray-500">{profile.description}</p>
+          )}
+          {profile.author && profile.author !== "unknown" && (
+            <p className="mt-1.5 text-xs text-gray-400">
+              Last modified by <span className="font-medium text-gray-600">{profile.author}</span>
+              {profile.updatedAt ? ` · ${new Date(profile.updatedAt).toLocaleDateString()}` : ""}
+            </p>
+          )}
+          {profile.rejectionReason && (
+            <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+              <span className="font-semibold">
+                Rejected{profile.rejectedBy ? ` by ${profile.rejectedBy}` : ""}:
+              </span>{" "}
+              {profile.rejectionReason}
+            </div>
+          )}
+        </Card>
+      ) : profile.description !== "" || (prev != null && prev.description !== profile.description) ? (
+        <p className="text-sm leading-relaxed">
+          <span className="mr-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Description
+          </span>
+          {mode === "created" ? (
+            <span className={FIELD_ADDED}>{profile.description || "—"}</span>
+          ) : prev && prev.description !== profile.description ? (
+            <span className={FIELD_MODIFIED}>
+              {profile.description || "—"}
+              {prev.description ? <span className={`ml-1 text-xs ${OLD_VALUE}`}>{prev.description}</span> : null}
+            </span>
+          ) : (
+            <span className="text-gray-600">{profile.description}</span>
+          )}
+        </p>
+      ) : null}
 
       {/* ── Field groups ────────────────────────────────────────────── */}
       {GROUPS.map(({ key, label }) => {
@@ -188,6 +217,11 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
       {/* ── Chart ───────────────────────────────────────────────────── */}
       {hasDataset && dataView !== "table" && (
       <Card title="Chart">
+      {datasetChanged && (
+        <p className={`mb-3 rounded-md px-3 py-2 text-xs font-semibold ${mode === "created" ? CELL_ADDED : CELL_MODIFIED}`}>
+          Dataset {mode === "created" ? "added" : "modified"} — the chart shows the new data; see the table below for the exact changes.
+        </p>
+      )}
       <TimeSeriesChart
         columns={schema.datasetColumns}
         data={profile.dataset}
@@ -199,7 +233,7 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
       {/* ── Data table ──────────────────────────────────────────────── */}
       {hasDataset && dataView !== "chart" && (
       <Card title={`Dataset — ${profile.dataset.length} rows`}>
-        {profile.dataset.length === 0 ? (
+        {profile.dataset.length === 0 && removedRows.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-8">
             No data points available.
           </p>
@@ -227,14 +261,29 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
                 {profile.dataset.map((row, idx) => (
                   <tr
                     key={idx}
-                    className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"}
+                    className={mode === "none" ? (idx % 2 === 0 ? "bg-white" : "bg-gray-50/60") : ""}
                   >
                     {schema.datasetColumns
                       .filter((c) => c.axis !== "none")
                       .map((col) => (
                         <td
                           key={col.key}
-                          className="px-5 py-2 text-gray-700 font-mono whitespace-nowrap tabular-nums"
+                          className={`px-5 py-2 font-mono whitespace-nowrap tabular-nums ${cellClass(idx, col.key) || "text-gray-700"}`}
+                        >
+                          {String(row[col.key] ?? "")}
+                        </td>
+                      ))}
+                  </tr>
+                ))}
+                {/* Lignes présentes AVANT et retirées → indigo barré (suppression). */}
+                {removedRows.map((row, i) => (
+                  <tr key={`removed-${i}`} className={CELL_REMOVED}>
+                    {schema.datasetColumns
+                      .filter((c) => c.axis !== "none")
+                      .map((col) => (
+                        <td
+                          key={col.key}
+                          className="px-5 py-2 font-mono whitespace-nowrap tabular-nums"
                         >
                           {String(row[col.key] ?? "")}
                         </td>

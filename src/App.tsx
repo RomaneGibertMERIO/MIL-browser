@@ -10,6 +10,7 @@ import { Icon, type IconName } from './shared/components/ui/Icon';
 import { RepoBadge, RoleBadge } from './shared/components/ui/RepoBadge';
 import { ChangeCard } from './shared/components/ChangeCard';
 import { ChangeTag } from './shared/components/ChangeTag';
+import { ChangePanel } from './shared/components/ChangePanel';
 import { changeStyle } from './shared/changeStyle';
 import { useStandards } from './shared/hooks/useStandards';
 import { canAccess, canAccessNow, roleLabel } from './shared/roles';
@@ -321,39 +322,30 @@ export function AdminValidationsPage() {
             </span>
 
             {activeCommit.changes.map((change) => (
-              <div key={change.id} className={`border border-l-4 ${changeStyle(change.action).accent} border-gray-200 rounded-lg overflow-hidden bg-white hover:border-gray-300 transition-colors`}>
-                <div className="p-4 bg-gray-50 flex items-center justify-between border-b border-gray-200 flex-wrap gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <ChangeTag action={change.action} />
-                      <span className="text-xs text-gray-400 uppercase tracking-wide">{change.type}</span>
-                      <p className="text-sm font-semibold text-gray-900">{change.name}</p>
-                    </div>
-                    <p className="text-xs text-gray-400 font-mono mt-0.5">{change.location}</p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
+              <ChangePanel
+                key={change.id}
+                change={change}
+                actions={
+                  <>
                     <button
                       onClick={() => setRejectTarget({ commitId: activeCommit.id, changeId: change.id, name: change.name })}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-md border border-red-200 transition-colors"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 shadow-sm transition-colors hover:bg-red-50"
                     >
-                      <Icon name="close" size={14} />
+                      <Icon name="close" size={16} />
                       Reject
                     </button>
                     <button
                       onClick={() => handleApproveChange(activeCommit.id, change.id, change.name)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-green-700"
                     >
-                      <Icon name="check" size={14} />
+                      <Icon name="check" size={16} />
                       Approve
                     </button>
-                  </div>
-                </div>
-
-                <div className="p-5">
-                  <ChangeCard change={change} standards={standards ?? []} />
-                </div>
-              </div>
+                  </>
+                }
+              >
+                <ChangeCard change={change} standards={standards ?? []} />
+              </ChangePanel>
             ))}
           </div>
         </div>
@@ -393,27 +385,26 @@ export function AdminValidationsPage() {
                 <div className="space-y-3">
                   {pendingCommits.map((commit) => {
                     const isActive = commit.id === selectedCommitId;
+                    // Une soumission = un changement : on colore la carte de la file
+                    // par son type d'action (impossible à manquer).
+                    const action = commit.changes[0]?.action ?? "Modified";
+                    const cs = changeStyle(action);
                     return (
                       <div
                         key={commit.id}
                         onClick={() => setSelectedCommitId(commit.id)}
-                        className={`p-4 rounded-lg border transition-colors cursor-pointer text-left ${
-                          isActive
-                            ? "bg-blue-50 border-blue-500 ring-1 ring-blue-500"
-                            : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                        className={`p-4 rounded-lg border border-l-4 ${cs.accent} ${cs.listBg} transition-colors cursor-pointer text-left ${
+                          isActive ? "ring-2 ring-inset ring-blue-500" : ""
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2 gap-2">
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
-                            <Icon name="users" size={12} className="text-gray-400" />
-                            {commit.author}
-                          </span>
-                          <span className="text-xs text-gray-400 font-medium">{commit.date}</span>
+                          <ChangeTag action={action} />
+                          <span className="text-xs text-gray-500 font-medium">{commit.date}</span>
                         </div>
-                        <h4 className="font-semibold text-sm text-gray-900 leading-snug mb-2">{commit.commitMessage}</h4>
-                        <div className="flex items-center gap-1.5 pt-2 border-t border-gray-100 text-xs font-medium text-blue-600">
-                          <Icon name="review" size={12} />
-                          {commit.changes.length} change{commit.changes.length > 1 ? "s" : ""}
+                        <h4 className="font-semibold text-sm text-gray-900 leading-snug mb-1.5">{commit.commitMessage}</h4>
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                          <Icon name="users" size={12} className="text-gray-400" />
+                          {commit.author}
                         </div>
                       </div>
                     );
