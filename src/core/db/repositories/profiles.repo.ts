@@ -162,7 +162,15 @@ export async function deleteProfile(id: string): Promise<{ reviewRequested: bool
   const existing = await db.profiles.get(id);
   if (existing) {
     const event = await db.syncEvents.get(id);
-    const wasOfficial = existing.status === "approved" || (event as any)?.origin === "update";
+    // "Officiel" = déjà approuvé, OU dérivé d'un officiel. Le 2e cas se lit via
+    // l'événement (origin "update") tant qu'il existe, ET via `proposalOrigin`
+    // ("update") qui SURVIT à la soumission (l'événement, lui, est purgé au push).
+    // Sans ce dernier, supprimer un officiel édité PUIS poussé le hard-supprimait
+    // sans revue (viole spec §17).
+    const wasOfficial =
+      existing.status === "approved" ||
+      (event as any)?.origin === "update" ||
+      (existing as any).proposalOrigin === "update";
     if (wasOfficial) {
       // upsertProfile stage l'événement de façon DÉTERMINISTE (origin "update"
       // conservé, payload portant pendingDeletion) → la demande de suppression
@@ -172,10 +180,14 @@ export async function deleteProfile(id: string): Promise<{ reviewRequested: bool
     }
   }
 
-  // Brouillon jamais officiel, en mode partagé : suppression directe. On écrit la
-  // pierre tombale de façon DÉTERMINISTE (hook neutralisé) — sinon le hook
-  // "deleting" différé la manque au refreshLocalChanges immédiat et la ligne
-  // « Created » restait affichée jusqu'à une 2e action (même classe de bug).
+  // Non-officiel, en mode partagé — deux cas :
+  //  • Brouillon LOCAL jamais poussé (status "local") : ABSENT du dépôt central →
+  //    aucune trace à laisser. On purge simplement son événement de synchro : il
+  //    DISPARAÎT de la liste de synchro (rien à « supprimer » côté central).
+  //  • Soumission déjà poussée (status "pending") : PRÉSENTE au central → pierre
+  //    tombale, pour la retirer au prochain push (= retrait de la proposition).
+  // Écriture DÉTERMINISTE (hook neutralisé) pour être visible dès le refresh.
+  const wasPushed = existing?.status === "pending";
   const was = db.isSyncingInternal;
   db.isSyncingInternal = true;
   try {
@@ -183,7 +195,7 @@ export async function deleteProfile(id: string): Promise<{ reviewRequested: bool
   } finally {
     db.isSyncingInternal = was;
   }
-  if (existing) {
+  if (existing && wasPushed) {
     await db.syncEvents.put({
       id,
       deviceId: getDeviceId(),

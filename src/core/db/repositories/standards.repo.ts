@@ -184,7 +184,13 @@ export async function deleteStandardAndProfiles(id: string): Promise<{ reviewReq
   // s'exécute à l'approbation.
   if (useAppStore.getState().repoMode !== "local") {
     const event = await db.syncEvents.get(id);
-    const wasOfficial = (standard as any).status === "approved" || (event as any)?.origin === "update";
+    // "Officiel" = approuvé, OU dérivé d'un officiel (origin "update" tant que
+    // l'événement existe, ou `proposalOrigin` "update" qui survit à la soumission
+    // — l'événement étant purgé au push). Cf. deleteProfile.
+    const wasOfficial =
+      (standard as any).status === "approved" ||
+      (event as any)?.origin === "update" ||
+      (standard as any).proposalOrigin === "update";
     if (wasOfficial) {
       // upsertStandard stage l'événement de façon DÉTERMINISTE (payload avec
       // pendingDeletion) et rafraîchit — la demande apparaît dès la 1re action.
@@ -199,9 +205,18 @@ export async function deleteStandardAndProfiles(id: string): Promise<{ reviewReq
     .primaryKeys();
 
   const standalone = useAppStore.getState().repoMode === "local";
-  // En mode partagé, on lit les profils AVANT la suppression pour écrire des
-  // pierres tombales DÉTERMINISTES (au lieu des hooks "deleting" différés qui
-  // rataient le refresh immédiat — même bug "à faire deux fois").
+  // Un standard DÉJÀ poussé (status "pending") existe au dépôt central : le
+  // supprimer laisse des pierres tombales (retrait de la proposition). Un
+  // brouillon LOCAL jamais poussé (comme en autonome) n'existe pas au central →
+  // on purge simplement, il DISPARAÎT (aucune entrée « Deleted » dans la Sync).
+  // « Existe au dépôt central » = déjà poussé (status "pending" ou "approved").
+  // Décision tombale-vs-purge PAR OBJET (standard ET chaque profil enfant) : leurs
+  // états de push peuvent différer (brouillon de standard local avec un enfant
+  // déjà poussé, ou standard "pending" avec des enfants jamais poussés). Décider
+  // d'après le seul statut du standard laissait des ghosts « Deleted » et des
+  // propositions orphelines au central.
+  const existsCentrally = (st?: string) => st === "pending" || st === "approved";
+  // Lecture des enfants AVANT suppression (leur statut pilote la décision).
   const affectedProfiles = standalone
     ? []
     : await db.profiles.where("standardId").equals(id).toArray();
@@ -220,30 +235,30 @@ export async function deleteStandardAndProfiles(id: string): Promise<{ reviewReq
   }
 
   if (standalone) {
-    // Autonome : aucune propagation, on purge simplement les événements locaux.
+    // Autonome : aucune propagation, purge de tous les événements locaux.
     await db.syncEvents.bulkDelete([id, ...profileKeys.map((k) => String(k))]);
   } else {
-    // Partagé : pierres tombales déterministes (standard + chacun de ses profils),
-    // propagées au prochain push (comportement conservé, mais visible tout de suite).
     const dev = getDeviceId();
     const now = Date.now();
-    await db.syncEvents.put({
-      id,
-      deviceId: dev,
-      timestamp: now,
-      operation: "delete",
-      entity: "standard",
-      payload: { id, label: (standard as any).manifest?.label },
-    });
-    for (const p of affectedProfiles) {
+    // Standard : tombale s'il existe au central (retrait), sinon purge (vanish).
+    if (existsCentrally((standard as any).status)) {
       await db.syncEvents.put({
-        id: p.id,
-        deviceId: dev,
-        timestamp: now,
-        operation: "delete",
-        entity: "profile",
-        payload: { id: p.id, name: p.name, standardId: p.standardId },
+        id, deviceId: dev, timestamp: now, operation: "delete", entity: "standard",
+        payload: { id, label: (standard as any).manifest?.label },
       });
+    } else {
+      await db.syncEvents.delete(id);
+    }
+    // Chaque profil enfant selon SON propre état de push.
+    for (const p of affectedProfiles) {
+      if (existsCentrally((p as any).status)) {
+        await db.syncEvents.put({
+          id: p.id, deviceId: dev, timestamp: now, operation: "delete", entity: "profile",
+          payload: { id: p.id, name: p.name, standardId: p.standardId },
+        });
+      } else {
+        await db.syncEvents.delete(p.id);
+      }
     }
   }
 

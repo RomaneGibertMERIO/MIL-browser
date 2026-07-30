@@ -923,19 +923,37 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 1. Appel Git — on ne touche à RIEN tant qu'il n'a pas explicitement réussi.
     let result: IpcResult;
     try {
-      if (isDeletion) {
+      if (isDeletion && action === "approve") {
+        if (entityType === "profile") {
+          result = toIpcResult(
+            await api.gitDeleteProfile(changeId),
+            `The "approve" operation is not available on this Electron bridge.`,
+          );
+        } else {
+          // Standard : on cascade la suppression des profils enfants AU CENTRAL
+          // (sinon leurs fichiers y subsistent et ressuscitent au prochain pull,
+          // orphelins sous un standard supprimé). La cascade LOCALE est faite plus bas.
+          const children = await db.profiles.where("standardId").equals(changeId).toArray();
+          for (const child of children) {
+            if ((child as any).status === "pending" || (child as any).status === "approved") {
+              await api.gitDeleteProfile(child.id);
+            }
+          }
+          result = toIpcResult(
+            await api.gitDeleteStandard({ repoPath: state.gitRepoPath, standardId: changeId }),
+            `The "approve" operation is not available on this Electron bridge.`,
+          );
+        }
+      } else if (isDeletion) {
+        // Refus d'une demande de suppression → restauration en "approved".
         result = toIpcResult(
-          action === "approve"
-            ? entityType === "profile"
-              ? await api.gitDeleteProfile(changeId)
-              : await api.gitDeleteStandard({ repoPath: state.gitRepoPath, standardId: changeId })
-            : await api.gitRejectDeletion({
-                repoPath: state.gitRepoPath,
-                entity: entityType === "profile" ? "profile" : "standard",
-                id: changeId,
-                reason: reason ?? "",
-              }),
-          `The "${action}" operation is not available on this Electron bridge.`,
+          await api.gitRejectDeletion({
+            repoPath: state.gitRepoPath,
+            entity: entityType === "profile" ? "profile" : "standard",
+            id: changeId,
+            reason: reason ?? "",
+          }),
+          `The "reject" operation is not available on this Electron bridge.`,
         );
       } else if (entityType === "profile") {
         result = toIpcResult(
