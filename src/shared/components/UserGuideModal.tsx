@@ -163,6 +163,32 @@ function Chip({ tone, label }: { tone: string; label: string }) {
   );
 }
 
+/**
+ * Capture d'écran + légende. Les fichiers vivent dans public/help/ (copiés tels
+ * quels dans dist/ par Vite) et sont référencés en chemin relatif, comme le
+ * favicon. Si un fichier manque, `onError` masque la figure au lieu d'afficher
+ * une image cassée — le manuel reste propre même sans toutes les captures.
+ */
+function Figure({ src, alt, caption }: { src: string; alt: string; caption: string }) {
+  return (
+    <figure className="my-2 overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        className="block w-full"
+        onError={(e) => {
+          const fig = e.currentTarget.closest("figure");
+          if (fig instanceof HTMLElement) fig.style.display = "none";
+        }}
+      />
+      <figcaption className="border-t border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+        {caption}
+      </figcaption>
+    </figure>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Manual content
 // ---------------------------------------------------------------------------
@@ -208,9 +234,19 @@ function GuideBody() {
           requires the <B>Admin</B> role. <B>Synchronization</B> and <B>Admin</B> only appear when
           connected to a central repository.
         </P>
+        <Figure
+          src="./help/workspaces.png"
+          alt="Management screen with the left navigation rail"
+          caption="Management: the left rail lists the available sections; use ← Browser (top-left) to return to the catalog."
+        />
       </Section>
 
       <Section id="modes" title="Standalone vs Shared (central repository)">
+        <Figure
+          src="./help/repo-badge.png"
+          alt="Top bar showing the role badge and the repository badge"
+          caption="Top bar: your role (e.g. Read-only) and the repository badge (Standalone / Shared / Offline)."
+        />
         <P>The badge in the top-right corner always tells you which mode you are in:</P>
         <UL>
           <li>
@@ -230,9 +266,14 @@ function GuideBody() {
         </UL>
         <P>
           To connect, open <B>Settings → Git</B>, enter the path of the shared central repository
-          folder and save. The badge switches to <B>Shared</B>, and the <B>Synchronization</B> and
-          (if you are an admin) <B>Admin</B> sections appear.
+          folder and click <B>Update Path</B>. The badge switches to <B>Shared</B>, and the{" "}
+          <B>Synchronization</B> and (if you are an admin) <B>Admin</B> sections appear.
         </P>
+        <Figure
+          src="./help/settings-git.png"
+          alt="Settings screen with the Git repository path field"
+          caption="Settings → Git: enter the central repository path to switch to Shared mode. Data can also be imported here."
+        />
         <Tip>
           <P>
             The central repository is the single source of truth. The app never recreates a missing
@@ -261,6 +302,11 @@ function GuideBody() {
           administrator in <B>Admin → Users</B>. When a brand-new repository has no administrator
           declared yet, access is open until the first admin is set.
         </P>
+        <Figure
+          src="./help/roles-users.png"
+          alt="Admin Users tab listing connected accounts and their roles"
+          caption="Admin → Users: every account that has connected, with buttons to set Read Only / Write / Admin."
+        />
       </Section>
 
       <Section id="colors" title="Status & change colours">
@@ -281,6 +327,11 @@ function GuideBody() {
           <li><B>Official (green)</B> — approved and shared with the whole team.</li>
           <li><B>Built-in (grey)</B> — ships inside the application as the local fallback base.</li>
         </UL>
+        <Figure
+          src="./help/status-colors.png"
+          alt="Browser profiles column showing Pending, Local and Official badges"
+          caption="Status badges on profiles in the Browser: Pending (orange), Local (yellow) and Official (green)."
+        />
         <P><B>Change type</B> — what a proposal <em>does</em> (shown only in Synchronization and Admin review, in shades of blue):</P>
         <div className="flex flex-wrap gap-2">
           <Chip tone="border-sky-300 bg-sky-50 text-sky-700" label="Created" />
@@ -291,6 +342,11 @@ function GuideBody() {
           In a modified item's detail, changed fields are highlighted in blue with the previous value
           struck through; added values appear in light blue and removed ones in indigo.
         </P>
+        <Figure
+          src="./help/change-colors.png"
+          alt="Synchronization list coloured by change type with a highlighted rename"
+          caption="Synchronization: each change is coloured Created / Modified / Deleted. Here a rename shows the new name with the old value struck through."
+        />
       </Section>
 
       <Section id="browsing" title="Browsing the catalog">
@@ -316,6 +372,11 @@ function GuideBody() {
             standards at once. Each window is independent and reads the same local database.
           </li>
         </UL>
+        <Figure
+          src="./help/browser-miller.png"
+          alt="The Browser with Miller columns, a profile's details and a pinned comparison card"
+          caption="The Browser: drill Standards → Methods → Procedures → Zones → Profiles; the right side shows the profile (conditions, chart, dataset) and a pinned card for side-by-side comparison."
+        />
       </Section>
 
       <Section id="editing" title="Editing the database">
@@ -324,6 +385,11 @@ function GuideBody() {
           (Standards → nodes → profiles) with a contextual panel on the right that adapts to what you
           selected. <B>Save always applies to the object that is currently open.</B>
         </P>
+        <Figure
+          src="./help/edit-database.png"
+          alt="The unified Edit database view with the Miller and the profile editor"
+          caption="Edit database: one Miller on the left, the contextual editor on the right (a profile here). Status dots mark Local (yellow) and Official (green) items."
+        />
         <P><B>Standards & taxonomy</B></P>
         <UL>
           <li><B>+ New standard</B> — create a standard; it starts as <B>Local (yellow)</B>.</li>
@@ -380,10 +446,20 @@ function GuideBody() {
           Only genuine, unsent local work is listed here. Approved / official items and changes you
           have already sent do not reappear when the app refreshes.
         </P>
+        <Figure
+          src="./help/sync-send.png"
+          alt="Synchronization with two changes ticked and the Send to admin confirmation"
+          caption="Tick the changes to submit, then confirm Send to admin. The ticked items become Pending."
+        />
       </Section>
 
       <Section id="admin" title="Admin: review, history, users">
         <P>Administrators get an <B>Admin</B> section with three tabs.</P>
+        <Figure
+          src="./help/admin-review.png"
+          alt="Admin Review with the submission queue and Approve/Reject buttons"
+          caption="Admin → Review: the queue is coloured by change type; pick one and Approve (green) or Reject (red). Changed fields show the previous value struck through."
+        />
         <UL>
           <li>
             <B>Review</B> — the queue of submissions. Select one to see the change, then <B>Approve</B>{" "}
