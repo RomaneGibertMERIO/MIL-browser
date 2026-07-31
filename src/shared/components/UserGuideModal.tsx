@@ -60,7 +60,7 @@ export function UserGuideModal({ onClose }: { onClose: () => void }) {
       onMouseDown={onClose}
     >
       <div
-        className="flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+        className="flex h-[94vh] w-full max-w-[160rem] flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -92,7 +92,7 @@ export function UserGuideModal({ onClose }: { onClose: () => void }) {
                   <button
                     type="button"
                     onClick={() => goTo(s.id)}
-                    className="flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left text-sm text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                    className="flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left text-[1.05rem] text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
                   >
                     <span className="text-[11px] font-mono text-gray-300">{i + 1}</span>
                     <span>{s.title}</span>
@@ -104,7 +104,7 @@ export function UserGuideModal({ onClose }: { onClose: () => void }) {
 
           {/* Content */}
           <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
-            <div className="mx-auto max-w-4xl space-y-10 pb-16">
+            <div className="mx-auto w-full max-w-[110rem] space-y-10 pb-16">
               <GuideBody />
             </div>
           </div>
@@ -122,8 +122,8 @@ export function UserGuideModal({ onClose }: { onClose: () => void }) {
 function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <section id={`guide-${id}`} className="scroll-mt-4">
-      <h3 className="mb-3 border-b border-gray-100 pb-1.5 text-lg font-semibold text-gray-900">{title}</h3>
-      <div className="space-y-3 text-sm leading-relaxed text-gray-600">{children}</div>
+      <h3 className="mb-3 border-b border-gray-100 pb-1.5 text-[1.35rem] font-semibold text-gray-900">{title}</h3>
+      <div className="space-y-3 text-[1.05rem] leading-relaxed text-gray-600">{children}</div>
     </section>
   );
 }
@@ -146,7 +146,7 @@ function B({ children }: { children: ReactNode }) {
 
 function Tip({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+    <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-[1.05rem] text-blue-900">
       <Icon name="info" size={16} className="mt-0.5 flex-shrink-0 text-blue-500" />
       <div className="space-y-1">{children}</div>
     </div>
@@ -156,7 +156,7 @@ function Tip({ children }: { children: ReactNode }) {
 /** Coloured status/change chip used in the "colours" legend. */
 function Chip({ tone, label }: { tone: string; label: string }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${tone}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[0.9rem] font-semibold ${tone}`}>
       <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
       {label}
     </span>
@@ -182,7 +182,7 @@ function Figure({ src, alt, caption }: { src: string; alt: string; caption: stri
           if (fig instanceof HTMLElement) fig.style.display = "none";
         }}
       />
-      <figcaption className="border-t border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+      <figcaption className="border-t border-gray-100 bg-gray-50 px-3 py-2 text-[0.9rem] text-gray-500">
         {caption}
       </figcaption>
     </figure>
@@ -301,11 +301,6 @@ function GuideBody() {
             manage users and roles, and read the shared history.
           </li>
         </UL>
-        <Figure
-          src="./help/etiquette-admin.png"
-          alt="The Management rail as seen by an Admin, with the role shown at the bottom"
-          caption="An Admin sees every section in the rail (including Admin, with the pending count); the current role is shown at the bottom of the rail."
-        />
         <P>
           Your identity is your Windows account; it is resolved by the application itself and cannot
           be changed from the interface (it is what signs your submissions). Roles are granted by an
