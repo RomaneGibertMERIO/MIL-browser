@@ -140,6 +140,15 @@ export interface ElectronBridge {
 
   gitListSessions: (repoPath?: string) => Promise<SessionsResult>;
   gitSetRole: (payload: { repoPath?: string; username: string; role: UserRole }) => Promise<IpcResult>;
+
+  /**
+   * S'abonne au menu natif « Help → User Guide » (electron/main.ts). Le callback
+   * est appelé quand l'utilisateur ouvre le manuel depuis la barre de menus.
+   * Renvoie une fonction de désabonnement. Contrairement aux autres méthodes,
+   * elle n'invoque aucun canal IPC (elle ÉCOUTE via ipcRenderer.on) : le renderer
+   * réagit en ouvrant l'overlay du manuel.
+   */
+  onOpenUserGuide: (callback: () => void) => () => void;
 }
 
 /**

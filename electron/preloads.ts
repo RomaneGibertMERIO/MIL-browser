@@ -52,6 +52,16 @@ const bridge = {
 
   gitRejectDeletion: (payload: { repoPath: string; entity: "profile" | "standard"; id: string; reason: string }) =>
     ipcRenderer.invoke("git:reject-deletion", payload),
+
+  // Écoute du menu natif « Help → User Guide » (main.ts envoie sur ce canal via
+  // webContents.send). Ce n'est PAS un invoke : aucun handler ipcMain associé,
+  // le renderer se contente d'ouvrir l'overlay du manuel. Renvoie de quoi se
+  // désabonner (utilisé dans un useEffect côté renderer).
+  onOpenUserGuide: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("menu:open-user-guide", listener);
+    return () => ipcRenderer.removeListener("menu:open-user-guide", listener);
+  },
 };
 
 // Exposé sous les deux noms : "electron" est le nom courant, "electronAPI"

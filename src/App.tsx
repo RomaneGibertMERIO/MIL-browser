@@ -24,6 +24,7 @@ import { toast } from './shared/toast/toastStore';
 import { LoadingSpinner } from './shared/components/ui/LoadingSpinner';
 import { ErrorBanner } from './shared/components/ui/ErrorBanner';
 import { EmptyState } from './shared/components/ui/EmptyState';
+import { getElectronBridge } from './shared/electronBridge';
 
 
 
@@ -33,6 +34,14 @@ export default function App() {
   const ready = useBootstrapStore((s) => s.ready);
   const error = useBootstrapStore((s) => s.error);
   const mode  = useAppStore((s) => s.mode);
+
+  // Menu natif « Help → User Guide » (electron/main.ts) → ouverture de l'overlay
+  // du manuel. Le pont renvoie une fonction de désabonnement, nettoyée au
+  // démontage (et entre les doubles montages StrictMode).
+  useEffect(() => {
+    const api = getElectronBridge();
+    return api?.onOpenUserGuide?.(() => useAppStore.getState().setHelpOpen(true));
+  }, []);
 
   if (error !== null) {
     return (

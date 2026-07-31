@@ -59,6 +59,10 @@ export interface ApprovedHistoryItem {
 interface AppState {
   mode: AppMode;
   adminView: AdminView;
+  // Manuel utilisateur (overlay). Ouvert depuis le menu natif Help → User Guide
+  // (voir electron/main.ts) ; global pour être disponible dans le Browser ET le
+  // Management sans dupliquer d'entrée de navigation.
+  helpOpen: boolean;
   activeStandardId: string | null;
   activeNode: ActiveNode | null;
   gitRepoPath: string;
@@ -121,6 +125,7 @@ interface AppState {
 
   setMode: (mode: AppMode) => void;
   setAdminView: (view: AdminView) => void;
+  setHelpOpen: (open: boolean) => void;
   setActiveStandard: (standardId: string | null) => void;
   setActiveNode: (node: ActiveNode | null) => void;
   clearActiveNode: () => void;
@@ -342,6 +347,7 @@ let gitSyncInFlight: Promise<IpcResult> | null = null;
 export const useAppStore = create<AppState>((set, get) => ({
   mode: "assistant",
   adminView: "home",
+  helpOpen: false,
   activeStandardId: null,
   activeNode: null,
   gitRepoPath: "",
@@ -359,6 +365,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSyncError: (syncError) => set({ syncError }),
 
   setMode: (mode) => set({ mode }),
+  setHelpOpen: (helpOpen) => set({ helpOpen }),
   setAdminView: (adminView) => set({ adminView }),
   setActiveStandard: (activeStandardId) => set({ activeStandardId, activeNode: null }),
   setActiveNode: (activeNode) => set({ activeNode }),

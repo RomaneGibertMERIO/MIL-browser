@@ -7,12 +7,20 @@
  */
 
 import type { ReactNode } from "react";
+import { useAppStore } from "../../store/appStore";
+import { UserGuideModal } from "./UserGuideModal";
 
 export function AppFrame({ children }: { children: ReactNode }) {
+  // Manuel utilisateur : rendu ICI (coquille commune au Browser et au Management)
+  // pour être ouvrable partout depuis le menu natif Help → User Guide, et se
+  // fermer en revenant exactement là où l'utilisateur était.
+  const helpOpen = useAppStore((s) => s.helpOpen);
+  const setHelpOpen = useAppStore((s) => s.setHelpOpen);
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
       <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
       <AppFooter />
+      {helpOpen && <UserGuideModal onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

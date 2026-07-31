@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain } from "electron";
+import { app, BrowserWindow, shell, ipcMain, Menu, dialog } from "electron";
 import path from "path";
 import os from "os";
 import fs from "fs";
@@ -128,6 +128,60 @@ function buildRendererSearch(opts?: { standardId?: string }): string {
   return params.toString();
 }
 
+/**
+ * Barre de menus native de l'application.
+ *
+ * Sans appel explicite, Electron affiche son menu par défaut (File/Edit/View/
+ * Window/Help) dont le Help ne pointe que vers electronjs.org. On reconstruit le
+ * même menu — via les `role` standard, donc AUCUNE régression sur les raccourcis
+ * (copier/coller, annuler, zoom, plein écran, DevTools…) — et on remplace le
+ * sous-menu Help par le manuel de l'application (« User Guide », F1) plus un
+ * « About ». « User Guide » n'ouvre PAS de fenêtre séparée : il notifie le
+ * renderer (canal menu:open-user-guide) qui affiche l'overlay du manuel, pour
+ * que le contenu reste stylé comme l'app et disponible hors-ligne.
+ */
+function buildAppMenu(): void {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    { role: "fileMenu" },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+    {
+      label: "Help",
+      role: "help",
+      submenu: [
+        {
+          label: "User Guide",
+          accelerator: "F1",
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+            win?.webContents.send("menu:open-user-guide");
+          },
+        },
+        { type: "separator" },
+        {
+          label: "About MIL-Browser",
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+            void dialog.showMessageBox(win!, {
+              type: "info",
+              title: "About MIL-Browser",
+              message: `MIL-Browser v${app.getVersion()}`,
+              detail:
+                "THEON · Environmental Testing Knowledge Base\n\n" +
+                "Browse, edit and share MIL/STANAG environmental test standards and profiles.\n" +
+                "Open Help → User Guide (F1) for the full manual.",
+              buttons: ["OK"],
+              noLink: true,
+            });
+          },
+        },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow(opts?: { standardId?: string }) {
   const search = buildRendererSearch(opts);
   const win = new BrowserWindow({
@@ -189,7 +243,10 @@ function createWindow(opts?: { standardId?: string }) {
 }
 
 // Initialisation de l'application
-app.whenReady().then(() => createWindow());
+app.whenReady().then(() => {
+  buildAppMenu();
+  createWindow();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
