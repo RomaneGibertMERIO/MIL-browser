@@ -88,6 +88,17 @@ export const ProfileSchema = z.object({
    */
   proposalOrigin: z.enum(["create", "update"]).optional(),
 
+  /**
+   * Référence de diff portée jusqu'à la revue admin : l'état OFFICIEL d'avant la
+   * modification (ce depuis quoi l'auteur a édité). En mono-poste, l'admin EST
+   * l'auteur, dont la copie locale porte déjà la version soumise ; sans ce
+   * champ, la revue ne pouvait pas montrer l'ancienne valeur (nom/champs) — elle
+   * n'apparaissait que dans la page Sync (avant push, via l'événement). Purement
+   * additif et d'AFFICHAGE ; retiré à l'approbation. `unknown` pour éviter une
+   * récursion de type sur ProfileSchema.
+   */
+  proposalPrevious: z.unknown().optional(),
+
   // ── Retour de validation ──
   // Renseignés quand un administrateur refuse la proposition. Le profil
   // repasse alors en "local" chez son auteur, qui conserve son travail et

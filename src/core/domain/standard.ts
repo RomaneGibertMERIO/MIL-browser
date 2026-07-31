@@ -293,6 +293,10 @@ export const StandardPluginSchema = z.object({
   /** Nature de la proposition portée jusqu'à la revue (voir ProfileSchema). */
   proposalOrigin: z.enum(["create", "update"]).optional(),
 
+  /** Référence de diff (état officiel d'avant modif) portée jusqu'à la revue,
+   *  pour l'affichage du diff en mono-poste (voir ProfileSchema). Résumé léger. */
+  proposalPrevious: z.unknown().optional(),
+
   // ── Retour de validation (voir ProfileSchema pour la sémantique) ──
   rejectedBy: z.string().optional(),
   rejectedAt: z.string().optional(),

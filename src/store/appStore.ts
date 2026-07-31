@@ -431,15 +431,47 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const events = await db.syncEvents.toArray();
       const aggregatedMap = new Map<string, MockChangeItem>();
+      // Résidus détectés (événements « upsert » dont l'objet n'est plus un
+      // travail local) → purgés en fin de passe pour auto-guérir la base.
+      const staleEventIds: string[] = [];
+
+      // Statuts vivants pour la réconciliation anti-fantôme ci-dessous — deux
+      // lectures groupées plutôt que N `get` (cette fonction tourne à chaque
+      // mutation ET dans la boucle de pull).
+      const [allProfiles, allStandards] = await Promise.all([
+        db.profiles.toArray(),
+        db.standards.toArray(),
+      ]);
+      const liveStatusById = new Map<string, string | undefined>();
+      for (const p of allProfiles as any[]) liveStatusById.set(p.id, p.status);
+      for (const s of allStandards as any[]) if (s?.manifest?.id) liveStatusById.set(s.manifest.id, s.status);
 
       for (const event of events) {
+        // ── Réconciliation ANTI-FANTÔME (spec §13, test 10.11) ────────────
+        // La liste de synchro est reconstruite ICI à partir des seuls
+        // syncEvents. Un événement « upsert » (Created/Modified) n'est
+        // LÉGITIME que si l'objet vivant est encore un travail local NON
+        // synchronisé — c.-à-d. status "local" (ce qui inclut les demandes de
+        // suppression pendingDeletion, marquées "local"). Dès que l'objet est
+        // repassé "approved" (officiel, aligné sur le central) ou "pending"
+        // (déjà poussé à l'admin), ou qu'il a disparu, l'événement est un
+        // RÉSIDU : on ne l'affiche pas ET on le purge. C'est ce qui faisait
+        // « revenir » dans la Sync des profils jamais modifiés (approuvés) ou
+        // déjà envoyés (10.11), au gré des refresh. Les événements "delete"
+        // (pierres tombales) sont conservés tels quels : l'objet est absent par
+        // nature, son statut ne peut pas être croisé.
+        if (event.operation !== "delete" && liveStatusById.get(event.id) !== "local") {
+          staleEventIds.push(event.id);
+          continue;
+        }
+
         const payload = event.payload as any;
         const isStandard = event.entity === 'standard';
-        
-        const name = isStandard 
+
+        const name = isStandard
           ? (payload?.manifest?.name || payload?.manifest?.label || payload?.manifest?.id || "New Standard")
           : (payload?.name || `Profile ID: ${payload?.id}`);
-          
+
         const location = isStandard
           ? (payload?.manifest?.organization || "Global")
           : (payload?.standardId ? `${payload.standardId}` : "Root");
@@ -472,6 +504,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       set({ localStagedChanges: Array.from(aggregatedMap.values()) });
+
+      // Auto-nettoyage des résidus (idempotent). On s'abstient PENDANT une
+      // synchro interne (pull) : la boucle de pull écrit/supprime déjà les
+      // objets et leurs événements, et purger ici ferait double emploi avec sa
+      // propre réconciliation. Le refresh de fin de pull (isSyncingInternal
+      // remis à false) fera le ménage.
+      if (staleEventIds.length > 0 && !(db as any).isSyncingInternal) {
+        try {
+          await db.syncEvents.bulkDelete(staleEventIds);
+        } catch (err) {
+          console.warn("[sync] Purge des événements résiduels impossible :", err);
+        }
+      }
     } catch (err) {
       console.error("Erreur refreshLocalChanges :", err);
     }
@@ -651,9 +696,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const reconstructedCommits: AdminCommitRequest[] = [
         ...pendingProfiles.map((p: any) => {
-          // Version d'avant-pull capturée plus haut : référence du diff + permet
-          // de distinguer Created (aucune version officielle antérieure) de Modified.
-          const previous = previousById.get(p.id);
+          // Référence du diff. On PRÉFÈRE `proposalPrevious` (état officiel
+          // d'avant modif, porté par la proposition depuis la machine de
+          // l'auteur) : en mono-poste, previousById est la copie locale de
+          // l'admin, déjà égale à la version soumise, donc inutilisable pour le
+          // diff (10.4). Repli sur la capture d'avant-pull (2 machines / anciens
+          // formats sans proposalPrevious).
+          const previous = (p.proposalPrevious as any) ?? previousById.get(p.id);
           return {
             id: `commit-${p.id}`,
             author: p.author || "Contributor",
@@ -680,7 +729,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           };
         }),
         ...pendingStandards.map((s: any) => {
-          const previous = previousById.get(s.manifest.id);
+          // Voir le bloc profils : proposalPrevious prioritaire pour le diff en
+          // mono-poste, repli sur la capture d'avant-pull.
+          const previous = (s.proposalPrevious as any) ?? previousById.get(s.manifest.id);
           return {
             id: `commit-${s.manifest.id}`,
             author: s.lastModifiedBy || "Contributor",
@@ -822,6 +873,16 @@ export const useAppStore = create<AppState>((set, get) => ({
               // Porte la nature de la proposition jusqu'à la revue admin, pour un
               // libellé Created/Modified cohérent avec la Sync même en mono-poste.
               proposalOrigin: ((event as any).origin === "create" ? "create" : "update") as "create" | "update",
+              // Référence de diff (état officiel d'avant modif) portée jusqu'à la
+              // revue : sans elle, en mono-poste la copie locale de l'admin est
+              // déjà la version soumise → l'ancienne valeur (nom/champs) restait
+              // invisible dans la revue (visible seulement dans la Sync). 10.4.
+              // On l'APLATIT (retrait d'un éventuel proposalPrevious imbriqué)
+              // pour éviter toute accumulation exponentielle au fil des cycles
+              // d'édition/approbation.
+              proposalPrevious: (event as any).previous
+                ? { ...((event as any).previous as any), proposalPrevious: undefined }
+                : undefined,
             };
 
             const result = toIpcResult(
@@ -869,6 +930,9 @@ export const useAppStore = create<AppState>((set, get) => ({
               status: "pending",
               lastModifiedBy: state.systemUsername,
               proposalOrigin: (event as any).origin === "create" ? "create" : "update",
+              // Référence de diff (résumé officiel d'avant modif) pour la revue
+              // en mono-poste — voir profileToSend / 10.4.
+              proposalPrevious: (event as any).previous ?? undefined,
               manifest: {
                 ...hydrated.manifest,
                 isBuiltin: false
@@ -1041,7 +1105,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else if (entityType === "profile") {
         const targetProfile = await db.profiles.get(changeId);
         if (targetProfile) {
-          await upsertProfile({ ...targetProfile, status: nextStatus });
+          // On efface la référence de diff (proposalPrevious) une fois la
+          // proposition résolue : elle n'a de sens que le temps de la revue,
+          // et ne doit pas alourdir/salir l'enregistrement officiel.
+          await upsertProfile({ ...targetProfile, status: nextStatus, proposalPrevious: undefined });
         }
       } else {
         const targetStandard = await db.standards.get(changeId);
@@ -1049,6 +1116,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           const updatedStandard: any = {
             ...targetStandard,
             status: nextStatus,
+            proposalPrevious: undefined,
             manifest: {
               ...targetStandard.manifest,
               isBuiltin: false,
