@@ -4,7 +4,7 @@
  */
 
 import { Badge } from "./Badge";
-import { statusStyle } from "../../profileStatus";
+import { statusStyle, sourceStatusStyle } from "../../profileStatus";
 
 /** Coloured pill: "Local" (yellow) / "Pending" (orange) / "Official" (green). */
 export function StatusBadge({ status }: { status: string | undefined }) {
@@ -12,9 +12,22 @@ export function StatusBadge({ status }: { status: string | undefined }) {
   return <Badge variant={s.variant}>{s.label}</Badge>;
 }
 
-/** Small coloured dot for compact contexts (Miller rows, tree nodes). */
-export function StatusDot({ status, title }: { status: string | undefined; title?: string }) {
-  const s = statusStyle(status);
+/**
+ * Small coloured dot for compact contexts (Miller rows, tree nodes).
+ * Passe `source` pour un rendu SOURCE-AWARE (un « builtin » = pastille grise
+ * « Built-in », jamais confondu avec un vert officiel) — cf. EditProfileRow et
+ * StandardInfoPanel qui distinguent déjà le socle de l'officiel.
+ */
+export function StatusDot({
+  status,
+  source,
+  title,
+}: {
+  status: string | undefined;
+  source?: string;
+  title?: string;
+}) {
+  const s = source !== undefined ? sourceStatusStyle(source, status) : statusStyle(status);
   return (
     <span
       className={`inline-block w-1.5 h-1.5 rounded-full ${s.dot}`}

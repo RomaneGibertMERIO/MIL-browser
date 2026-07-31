@@ -90,7 +90,6 @@ export function EditDatabasePage() {
   const activeStandardId = useAppStore((s) => s.activeStandardId);
   const setActiveStandard = useAppStore((s) => s.setActiveStandard);
   const refreshLocalChanges = useAppStore((s) => s.refreshLocalChanges);
-  const repoMode = useAppStore((s) => s.repoMode);
 
   // ── Données ──────────────────────────────────────────────────────────────
   const standards = useStandards();
@@ -160,7 +159,14 @@ export function EditDatabasePage() {
     const out = new Map<string, string>();
     const visit = (n: TaxonomyNodeItem): number => {
       let best = 0;
-      for (const p of profByNode.get(n.id) ?? []) best = Math.max(best, RANK[p.status ?? "local"] ?? 0);
+      for (const p of profByNode.get(n.id) ?? []) {
+        // Le socle d'usine (builtin) n'est PAS un travail local : l'exclure du
+        // roll-up, sinon un nœud ne contenant que des profils built-in
+        // ressortirait en « Local » (jaune) à tort. Cohérent avec EditProfileRow
+        // qui affiche le socle en gris « Built-in », jamais en jaune.
+        if (p.source === "builtin") continue;
+        best = Math.max(best, RANK[p.status ?? "local"] ?? 0);
+      }
       for (const c of n.children) best = Math.max(best, visit(c));
       if (best > 0) out.set(n.id, LABEL[best]!);
       return best;
@@ -168,7 +174,6 @@ export function EditDatabasePage() {
     for (const r of tree) visit(r);
     return out;
   }, [tree, availableProfiles]);
-  const showStatus = repoMode === "shared";
 
   const selectedId = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1]! : null;
   // Nœud pour la NAVIGATION (arbre) et pour l'ÉDITION (tampon).
@@ -609,7 +614,16 @@ export function EditDatabasePage() {
                 standard={s}
                 selected={s.manifest.id === activeStandardId}
                 onSelect={() => selectStandard(s.manifest.id)}
-                statusDot={showStatus ? <StatusDot status={(s as { status?: string }).status} /> : null}
+                // Statut TOUJOURS visible (Local jaune / Pending orange / Official
+                // vert), et source-aware (socle d'usine → gris « Built-in »). Il
+                // n'était affiché qu'en mode partagé, d'où l'absence de jaune sur
+                // les standards en autonome alors que les profils l'affichaient.
+                statusDot={
+                  <StatusDot
+                    status={(s as { status?: string }).status}
+                    source={s.manifest.isBuiltin ? "builtin" : "user"}
+                  />
+                }
               />
             ))}
             <AddRow
@@ -626,7 +640,11 @@ export function EditDatabasePage() {
                   ? <p className="text-xs text-gray-400 text-center px-3 py-6">No items</p>
                   : colNodes.map((node) => {
                     const r = rollupByNode.get(node.id);
-                    const dot = showStatus && (r === "local" || r === "pending") ? <StatusDot status={r} /> : null;
+                    // Roll-up TOUJOURS visible (plus de gating sur le mode) : un
+                    // nœud portant du travail local/pending montre sa pastille,
+                    // comme les profils. « approved » (officiel) reste sans
+                    // pastille pour ne pas noyer l'arbre de vert.
+                    const dot = r === "local" || r === "pending" ? <StatusDot status={r} /> : null;
                     return (
                       <NodeRow
                         key={node.id}

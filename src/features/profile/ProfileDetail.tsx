@@ -120,6 +120,23 @@ export function ProfileDetail({ profile, schema, onBack, backLabel = "Back", dif
         </button>
       )}
 
+      {/* ── Name diff (mode diff uniquement) ──────────────────────────────
+           L'en-tête du ChangePanel affiche le nom COURANT, mais pas le fait
+           qu'il ait changé : un renommage était donc invisible. On surface ici
+           la ligne « Name » avec l'ancienne valeur barrée dès que le nom diffère
+           de la version précédente (renommage, y compris créé-puis-renommé). ── */}
+      {mode !== "none" && prev && prev.name !== profile.name && (
+        <p className="text-sm leading-relaxed">
+          <span className="mr-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Name
+          </span>
+          <span className={FIELD_MODIFIED}>
+            {profile.name || "—"}
+            <span className={`ml-1 text-xs ${OLD_VALUE}`}>{prev.name}</span>
+          </span>
+        </p>
+      )}
+
       {/* ── Header ───────────────────────────────────────────────────────
            Hors diff : carte d'en-tête complète (nom + statut + description +
            auteur). En mode diff : PAS de carte d'en-tête — l'en-tête coloré du

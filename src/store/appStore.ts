@@ -330,6 +330,15 @@ const NO_BRIDGE_ERROR =
   "The desktop bridge is unavailable: the app is running outside its desktop container. " +
   "No operation was performed on the central repository.";
 
+// Coalescence des synchros : un seul pull à la fois pour toute l'app. Plusieurs
+// déclencheurs peuvent tirer un triggerGitSync quasi simultanément (bootstrap +
+// setGitRepoPath au démarrage, bouton, etc.). Deux pulls concurrents faisaient
+// que le finally de l'un remettait db.isSyncingInternal à false pendant que
+// l'autre bouclait → upsertProfile/upsertStandard basculaient en branche
+// déterministe et staged des événements « Modified » fantômes pour des objets
+// intouchés. On réutilise le pull en cours au lieu d'en lancer un second.
+let gitSyncInFlight: Promise<IpcResult> | null = null;
+
 export const useAppStore = create<AppState>((set, get) => ({
   mode: "assistant",
   adminView: "home",
@@ -469,6 +478,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   triggerGitSync: async () => {
+    // Un pull déjà en cours ? On le réutilise (coalescence) au lieu d'en lancer
+    // un second en parallèle — voir gitSyncInFlight.
+    if (gitSyncInFlight) return gitSyncInFlight;
+    gitSyncInFlight = (async (): Promise<IpcResult> => {
     const api = getElectronBridge();
     if (api === null) {
       // Hors Electron : pas d'erreur affichée, c'est un mode dégradé légitime
@@ -512,6 +525,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ centralIsEmpty: (gitResult.pulledStandards?.length ?? 0) === 0 });
 
     if (gitResult.pulledProfiles && gitResult.pulledStandards) {
+      // Save/restore plutôt que reset en dur : combiné à la coalescence
+      // (gitSyncInFlight), garantit qu'aucun autre chemin ne se retrouve avec un
+      // isSyncingInternal remis à false pendant qu'on boucle — c'était la cause
+      // des événements « Modified » fantômes sur des objets pull intouchés.
+      const wasSyncing = (db as any).isSyncingInternal;
       (db as any).isSyncingInternal = true;
       const skipped: string[] = [];
       // Version OFFICIELLE locale AVANT que le pull ne l'écrase : sert de
@@ -608,7 +626,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
         await applyDeletions(gitResult.deletions ?? []);
       } finally {
-        (db as any).isSyncingInternal = false;
+        (db as any).isSyncingInternal = wasSyncing;
       }
 
       if (skipped.length > 0) {
@@ -700,6 +718,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
     await get().refreshLocalChanges();
     return { success: true };
+    })();
+    try {
+      return await gitSyncInFlight;
+    } finally {
+      gitSyncInFlight = null;
+    }
   },
 
   publishBaselineToCentral: async () => {
