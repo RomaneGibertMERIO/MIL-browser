@@ -60,7 +60,7 @@ export function UserGuideModal({ onClose }: { onClose: () => void }) {
       onMouseDown={onClose}
     >
       <div
-        className="flex h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+        className="flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -104,7 +104,7 @@ export function UserGuideModal({ onClose }: { onClose: () => void }) {
 
           {/* Content */}
           <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
-            <div className="mx-auto max-w-2xl space-y-10 pb-16">
+            <div className="mx-auto max-w-4xl space-y-10 pb-16">
               <GuideBody />
             </div>
           </div>
@@ -228,6 +228,11 @@ function GuideBody() {
             button at the top of the rail to go back.
           </li>
         </UL>
+        <Figure
+          src="./help/br-ws.png"
+          alt="The Browser workspace"
+          caption="The Browser: a read-only catalog of standards and profiles. Use Manage (top-right) to open the Management workspace."
+        />
         <P>
           The sections shown in the Management rail depend on your role and connection: <B>Edit
           database</B> and <B>Synchronization</B> require the <B>Write</B> role, and <B>Admin</B>{" "}
@@ -296,6 +301,11 @@ function GuideBody() {
             manage users and roles, and read the shared history.
           </li>
         </UL>
+        <Figure
+          src="./help/etiquette-admin.png"
+          alt="The Management rail as seen by an Admin, with the role shown at the bottom"
+          caption="An Admin sees every section in the rail (including Admin, with the pending count); the current role is shown at the bottom of the rail."
+        />
         <P>
           Your identity is your Windows account; it is resolved by the application itself and cannot
           be changed from the interface (it is what signs your submissions). Roles are granted by an
@@ -372,6 +382,16 @@ function GuideBody() {
             standards at once. Each window is independent and reads the same local database.
           </li>
         </UL>
+        <Figure
+          src="./help/br-toolbar.png"
+          alt="Close-up of the Browser top-right toolbar"
+          caption="Top-right toolbar (close-up): Search filters across every field; New window opens a second independent window; Manage switches to the Management workspace."
+        />
+        <Figure
+          src="./help/br-pin.png"
+          alt="Close-up of the Pin to compare button and a pinned card"
+          caption="Pins (close-up): press Pin to compare on a profile to open it as a card beside another, for side-by-side comparison."
+        />
         <Figure
           src="./help/browser-miller.png"
           alt="The Browser with Miller columns, a profile's details and a pinned comparison card"
